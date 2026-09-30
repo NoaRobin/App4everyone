@@ -10,6 +10,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import gsap from "gsap";
+import { Quality } from "./quality";
 
 /** Horloge minimale (remplace THREE.Clock, dépréciée). */
 class Tick {
@@ -84,11 +85,12 @@ export class KeyboardScene {
   private ray = new THREE.Raycaster();
   private clock = new Tick();
   private lastWave = 0;
+  private q = new Quality(() => { this.renderer.setPixelRatio(this.q.pixelRatio()); this.composer.setPixelRatio(this.q.pixelRatio()); this.resize(); });
 
   constructor(private host: HTMLElement, private opts: { reduced: boolean; onVirtualKey: (k: string) => void }) {
     const w = host.clientWidth, h = host.clientHeight;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(this.q.pixelRatio());
     this.renderer.setSize(w, h);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -255,7 +257,7 @@ export class KeyboardScene {
 
   private loop = () => {
     this.raf = requestAnimationFrame(this.loop);
-    if (document.hidden) return;
+    if (document.hidden || !this.q.gate(performance.now(), performance.now() - this.lastWave < 1500)) return;
     const dt = Math.min(this.clock.getDelta(), 0.05);
     const t = this.clock.elapsedTime;
     if (!this.opts.reduced) {
@@ -275,7 +277,7 @@ export class KeyboardScene {
       k.capMat.color.copy(base).lerp(this.accent, Math.min(0.5, g * 0.35));
       k.legendMat.opacity = 0.78 + Math.min(0.22, g * 0.3);
     });
-    this.composer.render();
+    if (this.q.bloom) this.composer.render(); else this.renderer.render(this.scene, this.camera);
   };
 
   private onPointer = (e: PointerEvent) => {

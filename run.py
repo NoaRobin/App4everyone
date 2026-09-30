@@ -154,7 +154,7 @@ def ensure_python(extras: list[str]) -> None:
             say(f"Installation des dépendances Python ({req.name})…")
             hint = PIP_HINT
             if "fabric" in req.name:
-                hint += "\npyodbc demande aussi le pilote « ODBC Driver 18 for SQL Server » (et unixODBC sous macOS/Linux)."
+                hint += "\nLe connecteur Fabric (mssql-python) s'installe par pip, sans droits administrateur : vérifiez l'accès à pypi.org (proxy)."
             run([str(PY), "-m", "pip", "install", "-q", "--disable-pip-version-check", "-r", str(req)], ROOT, what=f"installation de {req.name}", hint=hint)
             stamp.touch()
 

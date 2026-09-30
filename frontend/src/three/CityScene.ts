@@ -11,6 +11,7 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { Reflector } from "three/examples/jsm/objects/Reflector.js";
 import gsap from "gsap";
+import { Quality, type Level } from "./quality";
 
 /** Horloge minimale (remplace THREE.Clock, dépréciée). */
 class Tick {
@@ -105,6 +106,9 @@ export class CityScene {
   private downAt: { x: number; y: number } | null = null;
   private introDone = false;
   private introTween?: gsap.core.Tween;
+  private q = new Quality((l) => this.applyQuality(l));
+  private moon?: THREE.DirectionalLight;
+  private mirror?: THREE.Object3D;
   private districts: { fam: string; cx: number; cz: number; size: number; maxH: number }[] = [];
 
   constructor(private host: HTMLElement, opts: CityOptions) {
@@ -112,7 +116,7 @@ export class CityScene {
     this.maxA = Math.max(1, ...opts.funds.flatMap((f) => f.series));
     const w = host.clientWidth, h = host.clientHeight;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    this.renderer.setPixelRatio(this.q.pixelRatio());
     this.renderer.setSize(w, h);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -182,8 +186,9 @@ export class CityScene {
     s.add(new THREE.AmbientLight("#2a3858", 0.6));
     const moon = new THREE.DirectionalLight("#dfe6ff", 1.35);
     moon.position.set(-90, 160, 70);
-    moon.castShadow = true;
-    moon.shadow.mapSize.set(2048, 2048);
+    moon.castShadow = this.q.level > 0;
+    this.moon = moon;
+    moon.shadow.mapSize.set(1024, 1024);
     const sc = moon.shadow.camera as THREE.OrthographicCamera;
     sc.left = -130; sc.right = 130; sc.top = 130; sc.bottom = -130; sc.near = 10; sc.far = 420;
     moon.shadow.bias = -0.0004;
@@ -206,11 +211,13 @@ export class CityScene {
     gtex.colorSpace = THREE.SRGBColorSpace;
     this.disposables.push(gtex);
     // Sol miroir sombre (reflets des tours), voilé par un calque mat quadrillé
-    const w = Math.max(512, Math.floor(this.host.clientWidth * 0.5)), h = Math.max(512, Math.floor(this.host.clientHeight * 0.5));
+    const w = Math.max(384, Math.floor(this.host.clientWidth * 0.36)), h = Math.max(384, Math.floor(this.host.clientHeight * 0.36));
     const mirror = new Reflector(new THREE.PlaneGeometry(1600, 1600), { textureWidth: w, textureHeight: h, color: new THREE.Color("#5a6475"), clipBias: 0.003 });
     mirror.rotation.x = -Math.PI / 2;
     mirror.position.y = -0.02;
     s.add(mirror);
+    this.mirror = mirror;
+    mirror.visible = this.q.level > 0;
     this.disposables.push(mirror.geometry, { dispose: () => mirror.dispose() });
     const groundMat = new THREE.MeshStandardMaterial({ color: "#ffffff", map: gtex, roughness: 0.7, metalness: 0.2, transparent: true, opacity: 0.82 });
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), groundMat);
@@ -524,6 +531,7 @@ export class CityScene {
 
   private loop = () => {
     this.raf = requestAnimationFrame(this.loop);
+    if (!this.visible || document.hidden || !this.q.gate(performance.now(), !this.introDone || !!this.hovered || gsap.isTweening(this.camera.position))) return;
     const dt = Math.min(this.clock.getDelta(), 0.05);
     if (!this.visible || document.hidden) return;
     const now = performance.now();
@@ -571,7 +579,7 @@ export class CityScene {
       this.traffic.instanceMatrix.needsUpdate = true;
     }
     this.pick();
-    this.composer.render();
+    if (this.q.bloom) this.composer.render(); else this.renderer.render(this.scene, this.camera);
     this.placeLabels();
   };
 
@@ -642,6 +650,13 @@ export class CityScene {
     const w = this.host.clientWidth, h = this.host.clientHeight;
     const shift = w > 1000 ? -w * 0.14 : 0;
     this.camera.setViewOffset(w, h, shift, this.opts.story && w > 1000 ? -h * 0.04 : h * 0.02, w, h);
+  }
+
+  private applyQuality(l: Level) {
+    this.renderer.setPixelRatio(this.q.pixelRatio());
+    this.composer.setPixelRatio(this.q.pixelRatio());
+    if (l === 0) { if (this.moon) this.moon.castShadow = false; if (this.mirror) this.mirror.visible = false; }
+    this.resize();
   }
 
   private resize() {

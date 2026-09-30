@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Settings:
-    # "mock" (défaut) : données fictives au schéma exact ; "fabric" : Lakehouse via pyodbc.
+    # "mock" (défaut) : données fictives au schéma exact ; "fabric" : Lakehouse (SQL analytics endpoint).
     data_source: str
     fabric_server: str | None
     fabric_database: str | None
@@ -16,6 +16,8 @@ class Settings:
     history_years: int
     # Nombre de jours calendaires au-delà duquel une VL n'est plus reportée.
     stale_days: int
+    # Client SQL : "mssql-python" (défaut, rien à installer hors pip) ou "pyodbc" (pilote ODBC 18 requis).
+    fabric_client: str = "mssql-python"
     # Repérage des fonds Rothschild Martin Maurel (« RMM ») : aucune colonne dédiée dans le référentiel,
     # on cherche ce motif dans ces colonnes produit. À valider sur les données réelles.
     rmm_pattern: str = r"\bRMM\b|martin\s*maurel"
@@ -31,6 +33,7 @@ def load_settings() -> Settings:
         odbc_driver=os.getenv("FABRIC_ODBC_DRIVER", "ODBC Driver 18 for SQL Server"),
         history_years=int(os.getenv("APP_HISTORY_YEARS", "4")),
         stale_days=int(os.getenv("APP_STALE_DAYS", "12")),
+        fabric_client=(os.getenv("FABRIC_CLIENT") or "mssql-python").strip().lower(),
         **({"rmm_pattern": os.environ["APP_RMM_PATTERN"]} if os.getenv("APP_RMM_PATTERN") else {}),
         **({"rmm_columns": tuple(c.strip() for c in os.environ["APP_RMM_COLUMNS"].split(",") if c.strip())} if os.getenv("APP_RMM_COLUMNS") else {}),
     )

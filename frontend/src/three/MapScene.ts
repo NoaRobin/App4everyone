@@ -16,6 +16,7 @@ import { feature, mesh } from "topojson-client";
 import type { Feature, Geometry, MultiPolygon, Polygon } from "geojson";
 import type { Topology } from "topojson-specification";
 import gsap from "gsap";
+import { Quality } from "./quality";
 
 export type MapCountry = { country: string; iso: string; n_funds: number; n_shares: number; aum_registered: number };
 export type MapRoute = { domicile: string; domicile_iso: string; country: string; iso: string; value: number; n_funds: number };
@@ -84,12 +85,13 @@ export class MapScene {
   private data: { countries: MapCountry[]; routes: MapRoute[] };
   private downAt: { x: number; y: number } | null = null;
   private dotGeo = new THREE.SphereGeometry(0.2, 8, 6);
+  private q = new Quality(() => { this.renderer.setPixelRatio(this.q.pixelRatio()); this.composer.setPixelRatio(this.q.pixelRatio()); this.resize(); });
 
   constructor(private host: HTMLElement, world: Topology, data: { countries: MapCountry[]; routes: MapRoute[] }, private opts: MapOptions) {
     this.data = data;
     const w = host.clientWidth, h = host.clientHeight;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    this.renderer.setPixelRatio(this.q.pixelRatio());
     this.renderer.setSize(w, h);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -383,6 +385,7 @@ export class MapScene {
   // ---------------------------------------------------------------- boucle
   private loop = () => {
     this.raf = requestAnimationFrame(this.loop);
+    if (!this.visible || document.hidden || !this.q.gate(performance.now(), !!this.hot || gsap.isTweening(this.camera.position))) return;
     const dt = Math.min(this.clock.getDelta(), 0.05);
     if (!this.visible || document.hidden) return;
     this.controls.update();
@@ -408,7 +411,7 @@ export class MapScene {
       (a.dots.material as THREE.MeshBasicMaterial).visible = focus;
     }
     this.pick();
-    this.composer.render();
+    if (this.q.bloom) this.composer.render(); else this.renderer.render(this.scene, this.camera);
     this.placeLabels();
   };
 

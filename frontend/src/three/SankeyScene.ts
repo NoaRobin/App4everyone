@@ -10,6 +10,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import gsap from "gsap";
+import { Quality } from "./quality";
 
 export type SkNode = { id: string; label: string; col: number; value: number; n_funds: number; n_shares: number; family?: string; iso?: string; other?: boolean };
 export type SkLink = { source: number; target: number; value: number; family: string; n_funds: number; n_shares: number };
@@ -66,12 +67,13 @@ export class SankeyScene {
   private data: SkData;
   private downAt: { x: number; y: number } | null = null;
   private dist = 100;
+  private q = new Quality(() => { this.renderer.setPixelRatio(this.q.pixelRatio()); this.composer.setPixelRatio(this.q.pixelRatio()); this.resize(); });
 
   constructor(private host: HTMLElement, data: SkData, private opts: SankeyOptions) {
     this.data = data;
     const w = host.clientWidth, h = host.clientHeight;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    this.renderer.setPixelRatio(this.q.pixelRatio());
     this.renderer.setSize(w, h);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -308,6 +310,7 @@ export class SankeyScene {
   // ---------------------------------------------------------------- boucle
   private loop = () => {
     this.raf = requestAnimationFrame(this.loop);
+    if (!this.visible || document.hidden || !this.q.gate(performance.now(), !!this.hot || gsap.isTweening(this.clip))) return;
     const dt = Math.min(this.clock.getDelta(), 0.05);
     if (!this.visible || document.hidden) return;
     const k = this.opts.reduced ? 1 : 1 - Math.pow(0.002, dt);
@@ -329,7 +332,7 @@ export class SankeyScene {
       o.label.style.opacity = String(Math.min(1, o.cur < 1 ? 0.35 : 1));
     }
     this.pick();
-    this.composer.render();
+    if (this.q.bloom) this.composer.render(); else this.renderer.render(this.scene, this.camera);
     this.placeLabels();
   };
 

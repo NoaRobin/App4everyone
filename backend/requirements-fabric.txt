@@ -1,2 +1,5 @@
-# Connexion au Lakehouse Fabric (nécessite le pilote « ODBC Driver 18 for SQL Server »)
-pyodbc>=5.1
+# Connexion au Lakehouse Fabric : pilote Python officiel de Microsoft.
+# Sous Windows, aucun pilote ODBC à installer (tout est dans le paquet pip, sans droits administrateur).
+mssql-python>=1.4
+# Facultatif, seulement si FABRIC_CLIENT=pyodbc et que « ODBC Driver 18 for SQL Server » est installé :
+# pyodbc>=5.1

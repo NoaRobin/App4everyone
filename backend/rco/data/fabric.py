@@ -12,8 +12,27 @@ from .sql_guard import assert_read_only
 log = logging.getLogger(__name__)
 
 
+# Paramètres communs aux deux clients : Entra ID interactif (fenêtre Microsoft), chiffré, intention lecture seule.
+_COMMON = ("Authentication=ActiveDirectoryInteractive;"
+           "Encrypt=yes;TrustServerCertificate=no;"
+           "ApplicationIntent=ReadOnly;")
+
+
+def connection_string(settings: Settings, client: str) -> str:
+    s = settings
+    base = f"Server={s.fabric_server};Database={s.fabric_database};" + _COMMON
+    # mssql-python embarque son propre pilote : il refuse la clé Driver
+    return base if client == "mssql-python" else f"Driver={{{s.odbc_driver}}};" + base
+
+
 class FabricSource:
-    """Exécute uniquement des SELECT, via pyodbc et une authentification Entra ID interactive."""
+    """
+    Exécute uniquement des SELECT sur le SQL analytics endpoint, avec une authentification Entra ID interactive.
+
+    Client par défaut : **mssql-python**, le pilote Python officiel de Microsoft (`pip install`, aucun pilote ODBC
+    à installer sous Windows, donc aucune intervention du service informatique). `FABRIC_CLIENT=pyodbc` permet de
+    revenir à pyodbc lorsque le pilote « ODBC Driver 18 for SQL Server » est installé sur le poste.
+    """
 
     def __init__(self, settings: Settings):
         if not settings.fabric_server or not settings.fabric_database:
@@ -25,18 +44,19 @@ class FabricSource:
 
     def _connection(self):
         if self._conn is None:
-            import pyodbc  # import tardif : inutile en mode données fictives
+            client = self._settings.fabric_client
+            if client == "pyodbc":
+                import pyodbc  # imports tardifs : inutiles en mode données fictives
 
-            s = self._settings
-            conn_str = (
-                f"Driver={{{s.odbc_driver}}};"
-                f"Server={s.fabric_server};"
-                f"Database={s.fabric_database};"
-                "Authentication=ActiveDirectoryInteractive;"
-                "Encrypt=yes;TrustServerCertificate=no;"
-                "ApplicationIntent=ReadOnly;"
-            )
-            self._conn = pyodbc.connect(conn_str, readonly=True)
+                self._conn = pyodbc.connect(connection_string(self._settings, "pyodbc"), readonly=True)
+            else:
+                try:
+                    import mssql_python
+                except ImportError as e:  # pragma: no cover - dépend du poste
+                    raise RuntimeError("Le paquet mssql-python n'est pas installé : lancez « run.bat --fabric », "
+                                       "qui l'installe (pip, sans droits administrateur).") from e
+                self._conn = mssql_python.connect(connection_string(self._settings, "mssql-python"))
+            log.info("Connecté au Lakehouse Fabric (client %s)", client)
         return self._conn
 
     def query(self, sql: str, params: Sequence[Any] = ()) -> pd.DataFrame:
@@ -51,6 +71,11 @@ class FabricSource:
         # Ne jamais logger le contenu : seulement la volumétrie.
         log.info("Requête exécutée : %d lignes", len(rows))
         return pd.DataFrame.from_records([tuple(r) for r in rows], columns=cols)
+
+    def close(self) -> None:
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
 
     def table(self, name: str, columns: Sequence[str], since: tuple[str, Any] | None = None) -> pd.DataFrame:
         sql, params = build_select(name, columns, since)

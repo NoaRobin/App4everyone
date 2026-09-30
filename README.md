@@ -54,7 +54,7 @@ démarre le serveur et ouvre le navigateur. Les données fictives sont utilisée
 | Option | Effet |
 |---|---|
 | `--mock` | force les données fictives (même si `.env` indique Fabric) |
-| `--fabric` | données du Lakehouse Fabric (installe alors pyodbc) |
+| `--fabric` | données du Lakehouse Fabric (installe alors le connecteur `mssql-python`, par pip, sans droits administrateur) |
 | `--doctor` | diagnostic du poste : Python, accès aux paquets, proxy, Node.js, port |
 | `--port 8080` | autre port (si le port demandé est pris, le suivant libre est choisi automatiquement) |
 | `--test` | lance les tests |
@@ -97,8 +97,15 @@ FABRIC_SQL_SERVER=<serveur du SQL analytics endpoint>
 FABRIC_SQL_DATABASE=<base>
 ```
 
-La connexion utilise `pyodbc` avec `Authentication=ActiveDirectoryInteractive` : une fenêtre Microsoft Entra ID s'ouvre au
-premier chargement. Aucun secret n'est stocké. L'application charge l'historique au démarrage (4 ans par défaut,
+La connexion passe par **`mssql-python`**, le pilote Python officiel de Microsoft : sous Windows il embarque tout le
+nécessaire, **aucun pilote ODBC à installer, aucune validation informatique** (`run.bat --fabric` l'installe par pip).
+Authentification `ActiveDirectoryInteractive` : une fenêtre Microsoft Entra ID s'ouvre au premier chargement, avec votre
+compte habituel. Si le pilote « ODBC Driver 18 for SQL Server » est déjà installé, `FABRIC_CLIENT=pyodbc` permet d'utiliser
+pyodbc à la place.
+
+Où trouver l'adresse : dans Fabric, ouvrir le Lakehouse `LKH_RFPTeam_Bronze`, passer sur « SQL analytics endpoint »,
+puis ⚙ Paramètres → chaîne de connexion SQL (`xxxx.datawarehouse.fabric.microsoft.com`). Le réseau doit laisser sortir le
+port 1433 (le même que celui utilisé par SSMS ou Power BI Desktop en connexion directe). Aucun secret n'est stocké. L'application charge l'historique au démarrage (4 ans par défaut,
 `APP_HISTORY_YEARS`), le garde en mémoire et ne l'écrit jamais sur disque.
 
 ## Garanties
@@ -153,6 +160,13 @@ Fond de carte : Natural Earth (domaine public) via le paquet `world-atlas` (lice
 Palettes des graphiques d'analyse (catégorielle et rampe du SRI) vérifiées par script : luminance, chroma, séparation
 pour les daltonismes et contraste sur le fond sombre.
 
+## Fluidité
+
+Les scènes 3D (ville, clavier, carte, Sankey) partagent un gouverneur de qualité (`frontend/src/three/quality.ts`) :
+elles ne se dessinent que lorsqu'elles sont à l'écran, passent à 30 images/s au repos, et si le poste peine, la qualité
+baisse d'elle-même d'un cran (résolution 1:1, puis sans halo lumineux, ombres ni reflets), sans que la lisibilité change.
+Aucun flou d'arrière-plan n'est appliqué sur ce qui est collant ou en mouvement.
+
 ## Charte graphique
 
 Interface sombre partout, sur la charte Rothschild & Co : Rothschild Blue `#1C355E` (fond et surfaces), blanc `#FFFFFF`,
@@ -186,7 +200,7 @@ les hausses et baisses portent toujours un signe et une flèche. Tout est dans `
 backend/rco/
   config.py            variables d'environnement
   data/  sql_guard.py  garde-fou lecture seule
-         fabric.py     connexion pyodbc (Entra ID interactif)
+         fabric.py     connexion mssql-python ou pyodbc (Entra ID interactif)
          mock.py       données fictives au schéma exact
          schema.json   noms et types des colonnes (aucune donnée)
   domain/ model.py     jointures, matrices d'encours à date, collecte

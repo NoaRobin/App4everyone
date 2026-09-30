@@ -270,3 +270,18 @@
 .country__page, .instr__page { padding-top: 40px; }
 .instr__page .grid { margin-top: 0 !important; }
 @media (max-width: 900px) { .country__tools { align-items: flex-start; } }
+
+/* ==========================================================================
+   Fluidité : pas de flou d'arrière-plan sur ce qui est collant ou en mouvement
+   (le navigateur devrait recalculer le flou à chaque image, au-dessus des scènes 3D).
+   Des fonds presque opaques donnent le même rendu, sans le coût.
+   ========================================================================== */
+.hdr.is-scrolled, .hdr--night.is-scrolled, .axbar, .spaces, .rep__az, .city__district, .city__fam, .city__time, .city__list,
+.kbd__bar, .kbd__results, .fundbar, .pastbar, .chap__panel { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.hdr.is-scrolled, .hdr--night.is-scrolled { background: rgba(6, 11, 21, .95) !important; }
+.axbar, .rep__az { background: rgba(6, 11, 21, .97); }
+.spaces { background: rgba(6, 11, 21, .8); }
+.city__district { background: rgba(7, 13, 24, .82); }
+.kbd__results { background: rgba(10, 18, 32, .96); }
+.fundbar { background: rgba(12, 24, 44, .97); }
+@media (max-width: 1000px) { .chap__panel { background: rgba(6, 11, 21, .86); } }
