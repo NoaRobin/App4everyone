@@ -10,6 +10,8 @@ import { BarList, FlowBars, RangeTabs, TimeChart, fmtIndex, sliceRange } from ".
 import { CountryTiles } from "../components/CountryTiles";
 import { Bridge, CalendarBars, DivLegend, Mosaic, divColor } from "../components/viz";
 import { ShareChooser } from "../components/ShareChooser";
+import { FicheSearch } from "../components/FicheSearch";
+import { fieldId, fundEntries } from "../lib/fiche";
 import * as I from "../components/Icon";
 
 const TOC = [
@@ -37,6 +39,14 @@ function FundView({ f }: { f: FundDetail }) {
     return () => io.disconnect();
   }, [f.id]);
   const [stuck, setStuck] = useState(false);
+  const entries = useMemo(() => fundEntries(f), [f]);
+  const sugg = useMemo(() => {
+    const s = ["cut-off", "frais"];
+    if (f.shares.length > 1 && f.shares[1]?.class) s.push(`minimum part ${f.shares[1].class}`);
+    s.push("dépositaire", "Italie", "volatilité");
+    if (f.esg.exclusions.some((x) => x.value)) s.push("tabac");
+    return s;
+  }, [f]);
   useEffect(() => {
     const el = document.getElementById("synthese");
     if (!el) return;
@@ -52,6 +62,7 @@ function FundView({ f }: { f: FundDetail }) {
         <span className="fundbar__v num">{eur(f.aum)}</span>
         <span className="fundbar__d small">YTD <Delta v={f.var?.YTD?.pct} /></span>
         {f.performance && <span className="fundbar__d small">Perf. YTD <Delta v={f.performance.fund.YTD} /></span>}
+        <div className="fundbar__search"><FicheSearch entries={entries} subject={f.name} compact /></div>
         <a href="#synthese" className="fundbar__top small" tabIndex={stuck ? 0 : -1}>Haut de fiche ↑</a>
       </div>
       <header className="fund__hero" id="synthese">
@@ -66,7 +77,7 @@ function FundView({ f }: { f: FundDetail }) {
                 {h.legal_form && <span className="tag">{h.legal_form}</span>}
                 {!f.referenced && <span className="tag tag--warn"><I.Alert size={13} /> Hors référentiel produits</span>}
               </div>
-              <h1 className="fund__name">{f.name}</h1>
+              <h1 className="fund__name hero-title">{f.name}</h1>
               <p className="fund__sub">
                 {[h.expertise, h.range && `Gamme ${h.range}`, h.asset_class].filter(Boolean).join(" · ")}
               </p>
@@ -78,6 +89,7 @@ function FundView({ f }: { f: FundDetail }) {
                 {h.creation && <div><dt>Création</dt><dd className="num">{fdate(h.creation)}</dd></div>}
                 {h.maturity && <div><dt>Échéance</dt><dd className="num">{fdate(h.maturity)}</dd></div>}
               </dl>
+              <div className="fund__ask"><FicheSearch entries={entries} subject={f.name} suggestions={sugg} /></div>
             </div>
             <div className="fund__aum">
               <div className="eyebrow">Encours au {fdate(f.date)}</div>
@@ -439,7 +451,7 @@ export function CharSection({ sections, validations }: { sections: Sec[]; valida
             <h3 className="h3">{s.title}</h3>
             <dl>
               {s.items.map((it) => (
-                <div key={it.label} className={`kv${it.kind === "long" ? " kv--long" : ""}`}>
+                <div key={it.label} id={fieldId(s.title, it.label)} className={`kv${it.kind === "long" ? " kv--long" : ""}`}>
                   <dt className="kv__k">{it.label}</dt>
                   <dd className="kv__v">{renderValue(it.kind, it.value)}</dd>
                 </div>

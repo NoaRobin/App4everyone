@@ -49,7 +49,7 @@ function dice(a: string, b: string): number {
   return (2 * common) / (A.length + B.length);
 }
 
-function wordScore(t: string, w: string): number {
+export function wordScore(t: string, w: string): number {
   if (w === t) return 1;
   if (w.startsWith(t)) return t.length === 1 ? 0.5 : 0.88;
   if (t.length >= 3 && w.includes(t)) return 0.6;

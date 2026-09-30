@@ -94,8 +94,8 @@ export function TimeChart({ series, height = 300, format = eur, yLabel, baseline
           const ar = s.fill ? area().curve(curveMonotoneX).y0(y(Math.max(0, y.domain()[0])))(pts) ?? "" : null;
           return (
             <g key={s.key}>
-              {ar && <path d={ar} fill={s.color} opacity={0.1} />}
-              <path d={ln} fill="none" stroke={s.color} strokeWidth={2} strokeDasharray={s.dashed ? "5 4" : undefined} strokeLinejoin="round" />
+              {ar && <path className="area" d={ar} fill={s.color} opacity={0.1} />}
+              <path className={s.dashed ? undefined : "draw"} d={ln} fill="none" stroke={s.color} strokeWidth={2} strokeDasharray={s.dashed ? "5 4" : undefined} strokeLinejoin="round" />
             </g>
           );
         })}

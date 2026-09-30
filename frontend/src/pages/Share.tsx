@@ -9,6 +9,8 @@ import { BigMoney, Bool, CopyCode, Crumbs, Delta, ErrorState, FamilyTag, Loading
 import { RangeTabs, TimeChart, fmtIndex, sliceRange } from "../components/charts";
 import { CharSection } from "./Fund";
 import { Bridge } from "../components/viz";
+import { FicheSearch } from "../components/FicheSearch";
+import { shareEntries2 } from "../lib/fiche";
 import { eur, pctRaw } from "../lib/format";
 import * as I from "../components/Icon";
 
@@ -34,7 +36,7 @@ export default function Share() {
   const active = s.registrations.filter((r) => r.active);
   return (
     <div className="fund" style={{ ["--fc" as string]: famVar(fam) }}>
-      <header className="fund__hero fund__hero--share">
+      <header className="fund__hero fund__hero--share" id="synthese">
         <div className="fund__hero-in">
           <Crumbs items={[{ label: "Fonds", to: "/fonds" }, ...(s.fund ? [{ label: s.fund.name, to: `/fonds/${encodeURIComponent(s.fund.id)}` }] : []), { label: `Part ${s.class ?? ""}` }]} />
           <div className="fund__hero-grid">
@@ -45,7 +47,7 @@ export default function Share() {
                 {s.hedged && <span className="tag">Couverte en {s.ccy}</span>}
                 {s.status && <span className="tag">{s.status}</span>}
               </div>
-              <h1 className="fund__name">{s.name}</h1>
+              <h1 className="fund__name hero-title">{s.name}</h1>
               <div className="row" style={{ gap: 14, marginTop: 14 }}>
                 <CopyCode code={s.isin} />
                 {s.fund && <Link to={`/fonds/${encodeURIComponent(s.fund.id)}`} className="arrow-link">Fiche du fonds <I.Arrow size={16} /></Link>}
@@ -59,6 +61,7 @@ export default function Share() {
                 <div><dt>Heure limite</dt><dd className="num">{s.cutoff ?? "—"} · règlement {s.settlement ?? "—"}</dd></div>
                 <div><dt>Commission de surperformance</dt><dd><Bool v={s.perf_fee} /></dd></div>
               </dl>
+              <div className="fund__ask"><FicheSearch entries={shareEntries2(s)} subject={s.name} suggestions={["cut-off", "frais", "Allemagne", "Allfunds", "dépositaire", "performance 1 an"]} /></div>
             </div>
             <div className="fund__aum">
               <div className="eyebrow">Encours de la part au {fdate(s.date)}</div>
@@ -72,7 +75,7 @@ export default function Share() {
       <div className="fund__body fund__body--single">
         <div className="fund__main">
           {p && (
-            <section className="section reveal" aria-labelledby="h-perf">
+            <section className="section reveal" id="perf" aria-labelledby="h-perf">
               <div className="section__head"><div><div className="eyebrow">Performance</div><h2 className="h2" id="h-perf">Performance de la part</h2></div>
                 <RangeTabs value={range} onChange={setRange} options={[{ key: "1y", label: "1 an" }, { key: "3y", label: "3 ans" }, { key: "all", label: "Tout" }]} /></div>
               <div className="card card--flat">
@@ -91,7 +94,7 @@ export default function Share() {
             </section>
           )}
           {s.var && (
-            <section className="section reveal" aria-labelledby="h-enc">
+            <section className="section reveal" id="enc" aria-labelledby="h-enc">
               <div className="section__head"><div><div className="eyebrow">Encours</div><h2 className="h2" id="h-enc">Encours de la part</h2></div></div>
               <div className="grid grid-2">
                 <div className="card card--flat"><TimeChart series={[{ key: "a", label: "Encours", color: "var(--fc)", points: sliceRange(s.aum_series, "3y"), fill: true }]} ariaLabel={`Encours de ${s.name}`} height={260} /></div>
@@ -102,7 +105,7 @@ export default function Share() {
               </div>
             </section>
           )}
-          <section className="section reveal" aria-labelledby="h-reg">
+          <section className="section reveal" id="reg" aria-labelledby="h-reg">
             <div className="section__head"><div><div className="eyebrow">Distribution</div><h2 className="h2" id="h-reg">Enregistrée dans {active.length} pays</h2></div></div>
             <div className="grid grid-2">
               <div className="table-wrap">

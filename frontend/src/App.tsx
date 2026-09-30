@@ -3,6 +3,7 @@ import { Route, Routes, useLocation } from "react-router-dom";
 import { Header } from "./components/Header";
 import { CommandPalette } from "./components/CommandPalette";
 import { Footer } from "./components/Footer";
+import { Cursor, Curtain } from "./components/Motion";
 
 const Home = lazy(() => import("./pages/Home"));
 const FundsSearch = lazy(() => import("./pages/FundsSearch"));
@@ -56,6 +57,8 @@ export function App() {
       </main>
       {loc.pathname !== "/fonds" && <Footer night />}
       <CommandPalette />
+      <Curtain />
+      <Cursor />
     </>
   );
 }

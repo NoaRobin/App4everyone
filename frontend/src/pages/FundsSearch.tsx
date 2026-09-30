@@ -5,6 +5,7 @@ import { famHex } from "../lib/families";
 import { useReducedMotion, webglAvailable } from "../lib/motion";
 import { SearchResults, useResultNav } from "../components/SearchResults";
 import * as I from "../components/Icon";
+import { useReveal } from "../components/ui";
 import type { KeyboardScene as KS } from "../three/KeyboardScene";
 
 /** Rubrique Fonds : un clavier et une barre de recherche, rien d'autre. */
@@ -24,6 +25,7 @@ export default function FundsSearch() {
   qRef.current = q;
 
   useEffect(() => { closePalette(); input.current?.focus(); }, [closePalette]);
+  useReveal(1);
 
   useEffect(() => {
     if (!host.current || !webglAvailable()) return;
@@ -62,7 +64,7 @@ export default function FundsSearch() {
       <div className="kbd__stage" ref={host} />
       <div className="kbd__glow" aria-hidden="true" />
       <div className="kbd__top">
-        <h1 className="kbd__title">Quel fonds cherchez-vous&nbsp;?</h1>
+        <h1 className="kbd__title hero-title">Quel fonds cherchez-vous&nbsp;?</h1>
         <div className="kbd__bar">
           <I.Search size={22} />
           <input ref={input} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { onKeyDown(e); if (e.key === "Escape") setQ(""); }}

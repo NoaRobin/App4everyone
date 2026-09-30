@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import gsap from "gsap";
 import * as I from "./Icon";
 import { eur, eurParts, pct, date as fdate } from "../lib/format";
 import { FAMILY_LABEL, famVar } from "../lib/families";
 import { prefersReducedMotion } from "../lib/motion";
+import { animatePage } from "../lib/gsap";
 import type { FamilyKey, Variation } from "../lib/types";
 
 export function Delta({ v, kind = "pct", className = "" }: { v: number | null | undefined; kind?: "pct" | "eur"; className?: string }) {
@@ -20,25 +21,49 @@ export function Delta({ v, kind = "pct", className = "" }: { v: number | null | 
   );
 }
 
-/** Grand chiffre éditorial qui se « compte » à l'apparition. */
+/**
+ * Grand chiffre éditorial en « compteur mécanique » : chaque chiffre roule jusqu'à sa valeur.
+ * À chaque changement (date d'arrêté, frise de la ville), seuls les chiffres qui changent tournent.
+ */
 export function BigMoney({ v, className = "", unitClass = "" }: { v: number | null | undefined; className?: string; unitClass?: string }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const [shown, setShown] = useState(prefersReducedMotion() ? v ?? 0 : 0);
-  useEffect(() => {
-    if (v == null) return;
-    if (prefersReducedMotion()) { setShown(v); return; }
-    const o = { x: shown || v * 0.82 };
-    const tw = gsap.to(o, { x: v, duration: 1.6, ease: "expo.out", onUpdate: () => setShown(o.x) });
-    return () => { tw.kill(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [v]);
   if (v == null) return <span className={className}>—</span>;
-  const p = eurParts(shown);
-  const final = eur(v);
+  const p = eurParts(v);
   return (
-    <span ref={ref} className={`num ${className}`} aria-label={final}>
-      <span aria-hidden="true">{p.value}</span>
+    <span className={`num ${className}`} aria-label={eur(v)} role="text">
+      <Roll text={p.value} />
       <span aria-hidden="true" className={unitClass} style={{ marginLeft: ".18em" }}>{p.unit}</span>
+    </span>
+  );
+}
+
+export function Roll({ text }: { text: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const first = useRef(true);
+  const chars = text.split("");
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const cols = Array.from(el.querySelectorAll<HTMLElement>(".roll__col"));
+    const reduced = prefersReducedMotion();
+    cols.forEach((c, i) => {
+      const d = Number(c.dataset.d);
+      const target = -d * 10;
+      if (reduced) { gsap.set(c, { yPercent: target }); return; }
+      if (first.current) {
+        gsap.fromTo(c, { yPercent: -((d + 5 + i * 3) % 10) * 10 - 100 * 0 }, { yPercent: target, duration: 1.6 + (cols.length - i) * 0.08, ease: "expo.out", delay: 0.1 + i * 0.05 });
+      } else {
+        gsap.to(c, { yPercent: target, duration: 0.7, ease: "power3.out", delay: (cols.length - i) * 0.02 });
+      }
+    });
+    first.current = false;
+  }, [text]);
+  // Les colonnes sont indexées depuis la droite pour que les unités restent alignées quand le nombre de chiffres change
+  const n = chars.length;
+  return (
+    <span ref={ref} className="roll" aria-hidden="true">
+      {chars.map((ch, i) => /\d/.test(ch)
+        ? <span key={`d${n - i}`} className="roll__d"><span className="roll__col" data-d={ch}>{"0123456789".split("").map((x) => <span key={x}>{x}</span>)}</span><span className="roll__ghost">{ch}</span></span>
+        : <span key={`s${n - i}`} className="roll__s">{ch}</span>)}
     </span>
   );
 }
@@ -143,21 +168,13 @@ export function Stat({ label, children, sub }: { label: string; children: ReactN
   );
 }
 
-/** Révèle les éléments `.reveal` lorsqu'ils entrent dans l'écran. */
+/** Anime la page (révélations, titres, courbes, barres) une fois les données affichées. */
 export function useReveal(dep: unknown) {
   useEffect(() => {
-    const els = document.querySelectorAll<HTMLElement>(".reveal:not(.is-in)");
-    if (prefersReducedMotion() || !("IntersectionObserver" in window)) {
-      els.forEach((e) => e.classList.add("is-in"));
-      return;
-    }
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((en) => {
-        if (en.isIntersecting) { en.target.classList.add("is-in"); io.unobserve(en.target); }
-      });
-    }, { rootMargin: "0px 0px -8% 0px" });
-    els.forEach((e) => io.observe(e));
-    return () => io.disconnect();
+    if (dep == null) return;
+    let undo: (() => void) | undefined;
+    const id = requestAnimationFrame(() => { undo = animatePage(); });
+    return () => { cancelAnimationFrame(id); undo?.(); };
   }, [dep]);
 }
 

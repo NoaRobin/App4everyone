@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { magnetic } from "../lib/gsap";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import * as I from "./Icon";
 import { useApp } from "../lib/context";
@@ -24,6 +25,8 @@ export function Header() {
     window.addEventListener("scroll", on, { passive: true });
     return () => window.removeEventListener("scroll", on);
   }, []);
+  const searchBtn = useRef<HTMLButtonElement>(null);
+  useEffect(() => magnetic(searchBtn.current, 0.18), []);
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
   return (
     <header className={`hdr hdr--night${scrolled ? " is-scrolled" : ""}`}>
@@ -39,7 +42,7 @@ export function Header() {
           ))}
         </nav>
         <div className="hdr__tools">
-          <button type="button" className="hdr__search" onClick={() => openPalette()} aria-label="Rechercher un fonds, une part, un ISIN, un gérant…">
+          <button ref={searchBtn} type="button" className="hdr__search" onClick={() => openPalette()} aria-label="Rechercher un fonds, une part, un ISIN, un gérant…">
             <I.Search size={17} />
             <span className="hdr__search-t">Rechercher</span>
             <kbd>{isMac ? "⌘" : "Ctrl"} K</kbd>

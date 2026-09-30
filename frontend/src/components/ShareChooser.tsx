@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { eur, nav as fnav, pct, pctRaw } from "../lib/format";
 import type { ShareBrief } from "../lib/types";
 import { CopyCode, Stars } from "./ui";
+import { slug } from "../lib/fiche";
 
 type F = { investor: string | null; ccy: string | null; distribution: string | null };
 
@@ -54,7 +55,7 @@ export function ShareChooser({ shares, fundAum }: { shares: ShareBrief[]; fundAu
         {ordered.map((s) => {
           const good = ok(s);
           return (
-            <article key={s.id} className={`sharecard${good ? "" : " is-off"}${hover === s.id ? " is-hover" : ""}`} onMouseEnter={() => setHover(s.id)} onMouseLeave={() => setHover(null)}
+            <article key={s.id} id={`part-${slug(s.id)}`} className={`sharecard${good ? "" : " is-off"}${hover === s.id ? " is-hover" : ""}`} onMouseEnter={() => setHover(s.id)} onMouseLeave={() => setHover(null)}
               onClick={() => nav(`/parts/${encodeURIComponent(s.id)}`)}>
               <header className="sharecard__h">
                 <span className="sharecard__class">{s.class ?? "—"}</span>

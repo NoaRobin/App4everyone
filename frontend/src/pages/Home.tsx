@@ -8,6 +8,8 @@ import { useReducedMotion, webglAvailable } from "../lib/motion";
 import type { CityData, FamilyKey, FundRow, Overview } from "../lib/types";
 import { BigMoney, Delta, useReveal } from "../components/ui";
 import { Bridge } from "../components/viz";
+import { Ticker } from "../components/Motion";
+import { bridgeStory } from "../lib/gsap";
 import { BarList, Sparkline, StackedArea } from "../components/charts";
 import * as I from "../components/Icon";
 import type { CityScene as CitySceneT } from "../three/CityScene";
@@ -21,6 +23,7 @@ export default function Home() {
     <>
       <CityHero data={city.data} ov={ov.data} />
       <div className="home">
+        {city.data && <Ticker funds={city.data.funds.map((f) => ({ id: f.id, name: f.name, family: f.family, aum: f.aum, var_YTD: f.var_YTD, referenced: true }))} />}
         {ov.data && <Synthesis ov={ov.data} />}
       </div>
     </>
@@ -178,6 +181,8 @@ function CityList({ data, mi }: { data: CityData; mi: number }) {
 
 // ------------------------------------------------------------------ synthèse
 function Synthesis({ ov }: { ov: Overview }) {
+  const storyRef = useRef<HTMLElement>(null);
+  useEffect(() => bridgeStory(storyRef.current), []);
   const nav = useNavigate();
   const [period, setPeriod] = useState<"1M" | "YTD" | "1A">("YTD");
   const fams = FAMILY_ORDER.map((k) => ov.families.find((f) => f.key === k)).filter(Boolean) as Overview["families"];
@@ -185,7 +190,7 @@ function Synthesis({ ov }: { ov: Overview }) {
   const v = ov.var[period];
   return (
     <div className="page page--home" id="synthese">
-      <section className="section reveal" aria-labelledby="h-var">
+      <section ref={storyRef} className="section" aria-labelledby="h-var">
         <div className="section__head">
           <div>
             <div className="eyebrow">Ce qui a bougé</div>
@@ -204,8 +209,8 @@ function Synthesis({ ov }: { ov: Overview }) {
             <div><Delta v={v?.pct} /> <span className="muted small">depuis le {v?.start ? v.start.split("-").reverse().join("/") : "—"}</span></div>
           </div>
           <div className="home__var-decomp" style={{ gridColumn: "span 2" }}>
-            <Bridge v={v} end={ov.date} height={300} label="Encours de la maison" />
-            <p className="small muted" style={{ marginTop: 14 }}>
+            <div data-scrub=""><Bridge v={v} end={ov.date} height={300} label="Encours de la maison" /></div>
+            <p className="small muted home__var-note" style={{ marginTop: 14 }}>
               La <b>collecte nette estimée</b> correspond aux souscriptions moins les rachats, déduits de la variation du nombre de parts valorisée à la VL.
               L'<b>effet marché</b> est le reste de la variation : l'évolution des VL et des changes.
             </p>
