@@ -1,5 +1,5 @@
-fastapi>=0.110
-uvicorn>=0.29
-pandas>=2.1
-numpy>=1.26
-pyodbc>=5.1
+# Dépendances de l'application (suffisantes pour les données fictives)
+fastapi>=0.110,<1
+uvicorn>=0.29,<1
+pandas>=2.1,<4
+numpy>=1.26,<3

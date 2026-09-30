@@ -27,7 +27,6 @@ venv/
 
 # Front
 node_modules/
-frontend/dist/
 .vite/
 
 # Outils
