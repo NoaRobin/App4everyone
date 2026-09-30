@@ -9,9 +9,18 @@ dividendes, indices, inventaires) croisé avec **Product Info** (référentiel f
 
 ## Ce que l'on y trouve
 
+Le site a **deux espaces**, commutés par le sélecteur de l'en-tête :
+
+- **Panorama** (`/`) — la maison en chiffres, racontée au défilement. Une ville 3D reste en fond (un immeuble par fonds,
+  volume ∝ encours, quatre quartiers = quatre familles) et la caméra se déplace de chapitre en chapitre :
+  la maison · quatre ans d'histoire (la ville grandit mois par mois au fil du défilement) · les quatre familles
+  (vol vers chaque quartier) · d'où vient la croissance (encours de départ + collecte + effet marché = encours d'arrivée)
+  · le monde (pays de commercialisation, tableau à palettes) · l'entrée vers l'espace métiers.
+- **Espace métiers** (`/metiers` et toutes les rubriques ci-dessous) — pour aller chercher une information vite.
+
 | Rubrique | Question à laquelle elle répond |
 |---|---|
-| **Accueil — la ville** | Combien gérons-nous, qu'est-ce qui a bougé ? Une ville 3D : un immeuble par fonds, volume ∝ encours, quatre quartiers = quatre familles de gestion. Machine à remonter le temps sur tout l'historique. |
+| **Accueil métiers** | Une grande barre de recherche, vos fiches épinglées et consultées récemment (mémorisées sur le poste, identifiants et libellés seulement), les questions de tous les jours, le répertoire de tous les fonds de A à Z, les contrôles à surveiller. |
 | **Fonds** | Un clavier 3D et une barre de recherche : nom, ISIN, gérant, gamme, pays… tolérante aux accents et aux fautes. |
 | **Fiche fonds** | Tout sur un fonds : encours et leur décomposition (collecte / marché), performance vs indice, parts, portefeuille, ESG, distribution, caractéristiques, contrôles. |
 | **Encours** | Répartition par famille, gamme, classe d'actifs, expertise, gérant, SFDR, SRI, domicile, devise, type de part… Chaque ligne ouvre la liste des fonds. |
@@ -22,6 +31,8 @@ dividendes, indices, inventaires) croisé avec **Product Info** (référentiel f
 
 La recherche universelle est accessible partout (`Ctrl K` / `⌘ K` ou `/`). Elle comprend les combinaisons
 (« article 9 italie », « encours fixed income », « fonds de Claire Vasseur ») et répond directement : nombre de fonds et encours.
+Elle comprend aussi les questions posées sur une fiche : « cut-off Europe Valeur » ouvre la fiche du fonds avec la recherche
+« cut-off » déjà lancée (heure limite de chaque part).
 
 ## Démarrer
 
@@ -62,7 +73,7 @@ Lancez d'abord `python run.py --doctor`, puis :
 | `python` introuvable sous Windows | Python absent du PATH | utiliser `run.bat` (il essaie `py` puis `python`) |
 | « Mode Fabric : … ne sont pas définis » | `.env` configuré pour Fabric | `python run.py --mock` |
 | Page « Not Found » | serveur lancé à la main sans l'interface | lancer via `run.py`, ou `git pull` pour récupérer `frontend/dist` |
-| Page blanche dans le navigateur | ancien navigateur | Edge, Chrome ou Firefox récents (WebGL requis pour la ville ; sinon vue liste) |
+| Page blanche dans le navigateur | ancien navigateur | Edge, Chrome ou Firefox récents (WebGL requis pour la ville 3D ; sans WebGL, le panorama reste lisible sans la ville) |
 
 ### Étape par étape (sans le lanceur)
 
@@ -145,8 +156,10 @@ les hausses et baisses portent toujours un signe et une flèche. Tout est dans `
 
 | Vue | Où | Ce qu'elle rend évident |
 |---|---|---|
-| Ville 3D | Accueil | Le poids de chaque fonds et de chaque famille, et son évolution dans le temps |
-| Pont des encours | Accueil, fiche fonds, fiche part, sélection | D'où vient la variation : encours de départ → collecte → marché → encours d'arrivée (axe tronqué signalé) |
+| Ville 3D | Panorama | Le poids de chaque fonds et de chaque famille, et son évolution dans le temps |
+| Équation de l'année | Panorama | Encours au 31/12 + collecte + effet marché = encours du jour, barres proportionnelles |
+| Tableau à palettes | Panorama | Les pays de commercialisation, par nombre de parts enregistrées |
+| Pont des encours | Fiche fonds, fiche part, sélection | D'où vient la variation : encours de départ → collecte → marché → encours d'arrivée (axe tronqué signalé) |
 | Mosaïque | Sélection, Encours, fiche fonds | Qui pèse (surface) et qui progresse (couleur) ; pour un portefeuille, ce qui a été renforcé, allégé ou acheté |
 | Risque / rendement | Sélection, Risques | Performance et volatilité sur 1 an, taille = encours |
 | Comparateur de parts | Fiche fonds | Quelle part proposer : filtres client / devise / revenus, frais les plus bas signalés |
@@ -169,10 +182,11 @@ backend/rco/
   service.py / api.py  réponses de l'API (FastAPI) et service du front
 frontend/src/
   three/  CityScene.ts, KeyboardScene.ts   scènes Three.js
-  pages/  Home, FundsSearch, Fund, Share, Encours, Selection, Holdings, Instrument, Distribution, Country, Risk
-  lib/    search.ts (recherche tolérante), format.ts (formats français), api.ts, context.tsx
+  pages/  Panorama, Workspace, FundsSearch, Fund, Share, Encours, Selection, Holdings, Instrument, Distribution, Country, Risk
+  lib/    search.ts (recherche tolérante), desk.ts (épingles, récents), format.ts (formats français), api.ts, context.tsx
 ```
 
 Accessibilité : navigation clavier complète, lien d'évitement, focus visible, graphiques pilotables au clavier (flèches),
-alternative en liste de la ville 3D, respect de `prefers-reduced-motion` (aucune animation, état final immédiat),
+chiffres du panorama portés par le texte (la ville est décorative), répertoire des fonds en tableau dans l'espace métiers,
+respect de `prefers-reduced-motion` (aucune animation ni mouvement de caméra au défilement : plans fixes, état final immédiat),
 repli sans WebGL.

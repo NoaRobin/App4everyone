@@ -30,7 +30,11 @@ export type CityOptions = {
   onHover: (f: CityFund | null, x: number, y: number) => void;
   onSelect: (f: CityFund) => void;
   formatAum: (v: number) => string;
+  /** Mode récit : la caméra est pilotée par le défilement de la page (pas de zoom ni de rotation à la souris). */
+  story?: boolean;
 };
+
+export type Shot = { pos: THREE.Vector3; target: THREE.Vector3 };
 
 const H_MAX = 62;
 const S_MAX = 8.6;
@@ -41,7 +45,7 @@ const QUAD: Record<string, [number, number]> = { aid: [-1, -1], ae: [1, -1], fi:
 type Building = {
   f: CityFund; mesh: THREE.Mesh; crown: THREE.Mesh; mats: THREE.MeshStandardMaterial[]; crownMat: THREE.MeshStandardMaterial;
   tex: THREE.Texture[]; x: number; z: number; cur: number; target: number; grow: number; dim: number; dimTarget: number;
-  base: THREE.Color; hover: number; label?: HTMLDivElement; labelW?: number;
+  base: THREE.Color; hover: number; crownK: number; label?: HTMLDivElement; labelW?: number;
 };
 
 function facadeCanvas(seed: number, tint: string): { color: HTMLCanvasElement; glow: HTMLCanvasElement } {
@@ -100,6 +104,8 @@ export class CityScene {
   private clock = new Tick();
   private downAt: { x: number; y: number } | null = null;
   private introDone = false;
+  private introTween?: gsap.core.Tween;
+  private districts: { fam: string; cx: number; cz: number; size: number; maxH: number }[] = [];
 
   constructor(private host: HTMLElement, opts: CityOptions) {
     this.opts = opts;
@@ -135,6 +141,16 @@ export class CityScene {
     this.controls.target.set(0, 17, 0);
     this.controls.rotateSpeed = 0.55;
     this.controls.zoomSpeed = 0.7;
+    if (opts.story) {
+      this.controls.enableZoom = false;
+      this.controls.enableRotate = false;
+      this.controls.minDistance = 5;
+      this.controls.maxDistance = 3000;
+      this.controls.minPolarAngle = 0;
+      this.controls.maxPolarAngle = 1.54;
+      // La page doit continuer à défiler au doigt et à la molette
+      this.renderer.domElement.style.touchAction = "pan-y";
+    }
     this.controls.addEventListener("start", () => { this.idleSince = Infinity; });
     this.controls.addEventListener("end", () => { this.idleSince = performance.now(); });
 
@@ -249,6 +265,7 @@ export class CityScene {
       extent = Math.max(extent, AVENUE / 2 + plateSize);
       // Socle du quartier et liseré lumineux dans la couleur de la famille
       const px = ox + dirx * plateSize / 2, pz = oz + dirz * plateSize / 2;
+      this.districts.push({ fam, cx: px, cz: pz, size: plateSize, maxH: this.hFor(famMax) });
       const plateMat = new THREE.MeshStandardMaterial({ color: "#0f1b2d", roughness: 0.8, metalness: 0.1 });
       const plate = new THREE.Mesh(new THREE.BoxGeometry(plateSize + 1, 0.5, plateSize + 1), plateMat);
       plate.position.set(px, 0.25, pz);
@@ -290,14 +307,17 @@ export class CityScene {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.userData.i = this.buildings.length;
-        const crownMat = new THREE.MeshStandardMaterial({ color: night, emissive: night, emissiveIntensity: 1.6, roughness: 0.3 });
+        // Les teintes claires (rose, or) saturent le bloom de près : leur couronne brille moins fort
+        const lum = night.r * 0.2126 + night.g * 0.7152 + night.b * 0.0722;
+        const crownK = Math.min(1, 0.22 / Math.max(lum, 0.01));
+        const crownMat = new THREE.MeshStandardMaterial({ color: night, emissive: night, emissiveIntensity: 1.6 * crownK, roughness: 0.3 });
         const crown = new THREE.Mesh(crownGeo, crownMat);
         crown.position.set(x, 0.5, z);
         this.scene.add(mesh, crown);
         this.disposables.push(side1, side2, top, crownMat, ...tex);
         const a = f.series[this.opts.monthIndex] ?? f.aum;
         this.buildings.push({ f, mesh, crown, mats: [side1, side2, top], crownMat, tex, x, z, cur: this.opts.reduced ? a : 0, target: a,
-          grow: this.opts.reduced ? 1 : 0, dim: 0, dimTarget: 0, base, hover: 0 });
+          grow: this.opts.reduced ? 1 : 0, dim: 0, dimTarget: 0, base, hover: 0, crownK });
       });
     }
     this.extentR = extent;
@@ -415,10 +435,55 @@ export class CityScene {
     });
   }
 
+  /** Plans de caméra pour le récit : vue d'ensemble, vue zénithale, rasante, et un plan par quartier. */
+  shots(): { home: Shot; high: Shot; low: Shot; fam: Record<string, Shot> } {
+    const R = this.extentR;
+    const home = { pos: this.homeView(), target: new THREE.Vector3(0, 17, 0) };
+    const high = { pos: new THREE.Vector3(R * 0.35, R * 5.6, R * 1.35), target: new THREE.Vector3(0, 0, 0) };
+    const low = { pos: new THREE.Vector3(R * 1.75, 7, R * 2.05), target: new THREE.Vector3(-R * 0.1, 24, -R * 0.1) };
+    const fam: Record<string, Shot> = {};
+    for (const d of this.districts) {
+      const len = Math.hypot(d.cx, d.cz) || 1;
+      // Vue de trois quarts, depuis l'extérieur du quartier vers le centre de la ville
+      const a = Math.atan2(d.cz / len, d.cx / len) + 0.42;
+      const dist = d.size * 1.55 + d.maxH * 1.05 + 30;
+      fam[d.fam] = {
+        target: new THREE.Vector3(d.cx, d.maxH * 0.38, d.cz),
+        pos: new THREE.Vector3(d.cx + Math.cos(a) * dist, d.maxH * 0.9 + 26, d.cz + Math.sin(a) * dist),
+      };
+    }
+    return { home, high, low, fam };
+  }
+
+  /** Tourne un plan autour de son point visé (angle en radians) et l'éloigne d'un facteur k. */
+  orbit(s: Shot, angle: number, k = 1): Shot {
+    const pos = s.pos.clone().sub(s.target).applyAxisAngle(new THREE.Vector3(0, 1, 0), angle).multiplyScalar(k).add(s.target);
+    return { pos, target: s.target.clone() };
+  }
+
+  /** Objets que le récit anime directement (position de la caméra et point visé). */
+  get rig() { return { pos: this.camera.position, target: this.controls.target }; }
+
+  /** Place la caméra sans animation (mode « animations réduites »). */
+  cut(s: Shot) {
+    this.camera.position.copy(s.pos);
+    this.controls.target.copy(s.target);
+  }
+
+  /** Termine l'entrée en scène (quand le lecteur commence à défiler). */
+  endIntro() {
+    if (this.introDone) return;
+    // Uniquement l'entrée en scène : la frise du récit anime aussi la caméra
+    this.introTween?.kill();
+    this.buildings.forEach((b) => { gsap.killTweensOf(b); b.grow = 1; this.applyScale(b); });
+    this.introDone = true;
+  }
+
   dispose() {
     cancelAnimationFrame(this.raf);
     gsap.killTweensOf(this.camera.position);
     gsap.killTweensOf(this.controls.target);
+    this.buildings.forEach((b) => gsap.killTweensOf(b));
     this.ro.disconnect();
     this.io.disconnect();
     document.removeEventListener("visibilitychange", this.onVis);
@@ -445,7 +510,7 @@ export class CityScene {
     }
     const far = end.clone().multiplyScalar(1.9);
     this.camera.position.copy(far);
-    gsap.to(this.camera.position, { x: end.x, y: end.y, z: end.z, duration: 3.4, ease: "power3.inOut", onComplete: () => { this.introDone = true; this.idleSince = performance.now(); } });
+    this.introTween = gsap.to(this.camera.position, { x: end.x, y: end.y, z: end.z, duration: 3.4, ease: "power3.inOut", onComplete: () => { this.introDone = true; this.idleSince = performance.now(); } });
     const order = [...this.buildings].sort((a, b) => (a.x ** 2 + a.z ** 2) - (b.x ** 2 + b.z ** 2));
     order.forEach((b, i) => gsap.to(b, { grow: 1, duration: 1.6, delay: 0.5 + i * 0.035, ease: "expo.out" }));
   }
@@ -453,7 +518,7 @@ export class CityScene {
   /** Point de vue d'arrivée : cadre toute la ville selon la taille de l'écran. */
   private homeView(): THREE.Vector3 {
     const aspect = this.host.clientWidth / Math.max(1, this.host.clientHeight);
-    const d = this.extentR * (aspect < 1 ? 6.1 : aspect < 1.4 ? 6.2 : 5.5);
+    const d = this.extentR * (aspect < 1 ? 6.1 : aspect < 1.4 ? 6.2 : 5.5) * (this.opts.story ? 0.86 : 1);
     return new THREE.Vector3(d * 0.52, d * 0.5, d * 0.69);
   }
 
@@ -462,7 +527,7 @@ export class CityScene {
     const dt = Math.min(this.clock.getDelta(), 0.05);
     if (!this.visible || document.hidden) return;
     const now = performance.now();
-    if (this.introDone && !this.opts.reduced && now - this.idleSince > 6000) {
+    if (this.introDone && !this.opts.reduced && !this.opts.story && now - this.idleSince > 6000) {
       this.controls.autoRotate = true;
       this.controls.autoRotateSpeed = 0.28;
     } else this.controls.autoRotate = false;
@@ -479,12 +544,12 @@ export class CityScene {
         const c = b.base.clone().lerp(new THREE.Color("#1a2232"), b.dim * 0.85);
         s1.color.copy(c); s2.color.copy(c); top.color.copy(c.clone().multiplyScalar(0.7));
         s1.emissiveIntensity = s2.emissiveIntensity = 1.0 * (1 - b.dim * 0.8);
-        b.crownMat.emissiveIntensity = 1.6 * (1 - b.dim * 0.85);
+        b.crownMat.emissiveIntensity = 1.6 * b.crownK * (1 - b.dim * 0.85);
       }
       const hoverT = this.hovered === b ? 1 : 0;
       if (Math.abs(b.hover - hoverT) > 0.001) {
         b.hover += (hoverT - b.hover) * Math.min(1, k * 2.5);
-        b.crownMat.emissiveIntensity = (1.6 + b.hover * 3.2) * (1 - b.dim * 0.85);
+        b.crownMat.emissiveIntensity = (1.6 + b.hover * 3.2) * b.crownK * (1 - b.dim * 0.85);
         const [s1, s2] = b.mats;
         s1.emissiveIntensity = s2.emissiveIntensity = (1.0 + b.hover * 1.2) * (1 - b.dim * 0.8);
       }
@@ -576,7 +641,7 @@ export class CityScene {
   private applyOffset() {
     const w = this.host.clientWidth, h = this.host.clientHeight;
     const shift = w > 1000 ? -w * 0.14 : 0;
-    this.camera.setViewOffset(w, h, shift, h * 0.02, w, h);
+    this.camera.setViewOffset(w, h, shift, this.opts.story && w > 1000 ? -h * 0.04 : h * 0.02, w, h);
   }
 
   private resize() {

@@ -33,8 +33,8 @@ export function animatePage(root: ParentNode = document): () => void {
     // Sections : fondu court, par lots
     const sections = fresh<HTMLElement>(".reveal");
     sections.forEach((e) => e.classList.add("is-in"));
-    gsap.set(sections, { opacity: 0, y: 16 });
-    ScrollTrigger.batch(sections, { start: "top 88%", once: true, onEnter: (b) => gsap.to(b, { opacity: 1, y: 0, duration: 0.9, stagger: 0.08, overwrite: true }) });
+    if (sections.length) gsap.set(sections, { opacity: 0, y: 16 });
+    if (sections.length) ScrollTrigger.batch(sections, { start: "top 88%", once: true, onEnter: (b) => gsap.to(b, { opacity: 1, y: 0, duration: 0.9, stagger: 0.08, overwrite: true }) });
 
     // Titres de section : lignes révélées derrière un masque
     fresh<HTMLElement>(".section__head .h2, .motion-title").forEach((el) => {

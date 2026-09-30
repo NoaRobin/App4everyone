@@ -27,20 +27,28 @@ export function Header() {
   }, []);
   const searchBtn = useRef<HTMLButtonElement>(null);
   useEffect(() => magnetic(searchBtn.current, 0.18), []);
+  const pano = loc.pathname === "/";
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
   return (
-    <header className={`hdr hdr--night${scrolled ? " is-scrolled" : ""}`}>
+    <header className={`hdr hdr--night${scrolled ? " is-scrolled" : ""}${pano ? " hdr--pano" : ""}`}>
       <a href="#contenu" className="skip-link">Aller au contenu</a>
       <div className="hdr__in">
-        <Link to="/" className="brand" aria-label="Rothschild & Co — accueil, la ville des encours">
+        <Link to="/" className="brand" aria-label="Rothschild & Co — accueil, le panorama des encours">
           <span className="brand__name">Rothschild&nbsp;&amp;&nbsp;Co</span>
           <span className="brand__sub">Asset Management · Fonds &amp; encours</span>
         </Link>
-        <nav aria-label="Navigation principale" className={`nav${menu ? " is-open" : ""}`}>
-          {NAV.map((n) => (
-            <NavLink key={n.to} to={n.to} className={({ isActive }) => `nav__a${isActive ? " is-active" : ""}`}>{n.label}</NavLink>
-          ))}
+        <nav className="spaces" aria-label="Espaces">
+          <Link to="/" className={`spaces__a${pano ? " is-on" : ""}`} aria-current={pano ? "page" : undefined}>Panorama</Link>
+          <Link to="/metiers" className={`spaces__a${!pano ? " is-on" : ""}`} aria-current={loc.pathname === "/metiers" ? "page" : undefined}>Espace métiers</Link>
+          <span className="spaces__k" aria-hidden="true" data-on={pano ? "0" : "1"} />
         </nav>
+        {!pano && (
+          <nav aria-label="Navigation de l'espace métiers" className={`nav${menu ? " is-open" : ""}`}>
+            {NAV.map((n) => (
+              <NavLink key={n.to} to={n.to} className={({ isActive }) => `nav__a${isActive ? " is-active" : ""}`}>{n.label}</NavLink>
+            ))}
+          </nav>
+        )}
         <div className="hdr__tools">
           <button ref={searchBtn} type="button" className="hdr__search" onClick={() => openPalette()} aria-label="Rechercher un fonds, une part, un ISIN, un gérant…">
             <I.Search size={17} />
@@ -57,7 +65,7 @@ export function Header() {
             </label>
           )}
           {meta?.is_mock && <span className="mockbadge" title="L'application tourne sur des données fictives au schéma exact du Lakehouse">Données fictives</span>}
-          <button type="button" className="hdr__burger" aria-expanded={menu} aria-label="Menu" onClick={() => setMenu((m) => !m)}><span /><span /></button>
+          {!pano && <button type="button" className="hdr__burger" aria-expanded={menu} aria-label="Menu" onClick={() => setMenu((m) => !m)}><span /><span /></button>}
         </div>
       </div>
       {date && (

@@ -20,7 +20,9 @@ type Prepared = { e: SearchEntry; words: string[]; sub: string[]; codes: string[
 
 export type Hit = { entry: SearchEntry; score: number };
 export type Answer = { title: string; filters: Record<string, string>; labels: string[]; count: number; aum: number; href: string; wantsAum: boolean };
-export type Results = { hits: Hit[]; groups: { type: string; label: string; hits: Hit[] }[]; answer: Answer | null; tokens: string[] };
+/** Question posée sur une fiche : « cut-off Europe Valeur » → la fiche du fonds, recherche « cut-off » déjà lancée. */
+export type Ask = { entry: SearchEntry; question: string; href: string };
+export type Results = { hits: Hit[]; groups: { type: string; label: string; hits: Hit[] }[]; answer: Answer | null; tokens: string[]; ask?: Ask | null };
 
 export function osa(a: string, b: string, max: number): number {
   if (Math.abs(a.length - b.length) > max) return max + 1;
@@ -93,7 +95,7 @@ export class SearchIndex {
     this.facets = entries.filter((e) => e.key && e.t !== "fonds");
   }
 
-  search(q: string): Results {
+  search(q: string, withAsk = true): Results {
     const nq = norm(q);
     if (!nq) return { hits: [], groups: [], answer: null, tokens: [] };
     let tokens = nq.split(" ").filter((t) => t && !STOP.has(t));
@@ -157,7 +159,29 @@ export class SearchIndex {
       groups.push({ type, label: TYPE_LABEL[type] ?? type, hits: hs });
     }
     const answer = this.answer(nq, wantsAum);
-    return { hits: kept, groups, answer, tokens };
+    const ask = withAsk && !kept.length && !answer ? this.ask(q) : null;
+    return { hits: kept, groups, answer, tokens, ask };
+  }
+
+  /**
+   * Aucune correspondance directe : la requête est peut-être une question sur une fiche.
+   * On cherche le plus long groupe de mots (au début ou à la fin) qui désigne un fonds ou une part ;
+   * le reste devient la question posée dans la fiche.
+   */
+  ask(q: string): Ask | null {
+    const words = q.trim().split(/\s+/).filter(Boolean);
+    if (words.length < 2) return null;
+    for (let n = words.length - 1; n >= 1; n--) {
+      for (const [subj, rest] of [[words.slice(-n), words.slice(0, -n)], [words.slice(0, n), words.slice(n)]]) {
+        const r = this.search(subj.join(" "), false);
+        const top = r.hits[0];
+        if (!top || !["fonds", "part"].includes(top.entry.t) || top.score < 0.8) continue;
+        const question = rest.join(" ").replace(/^(le|la|les|du|de|des|d'|sur)\s+/i, "").trim();
+        if (!question) continue;
+        return { entry: top.entry, question, href: `${hrefFor(top.entry)}?q=${encodeURIComponent(question)}` };
+      }
+    }
+    return null;
   }
 
   /** Détecte des critères (famille, SFDR, pays, gérant, gamme…) et calcule la réponse. */

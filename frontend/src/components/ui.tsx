@@ -7,6 +7,7 @@ import { FAMILY_LABEL, famVar } from "../lib/families";
 import { prefersReducedMotion } from "../lib/motion";
 import { animatePage } from "../lib/gsap";
 import type { FamilyKey, Variation } from "../lib/types";
+import { togglePin, useIsPinned, type DeskItem } from "../lib/desk";
 
 export function Delta({ v, kind = "pct", className = "" }: { v: number | null | undefined; kind?: "pct" | "eur"; className?: string }) {
   if (v == null || !isFinite(v)) return <span className={`delta delta--flat ${className}`}>—</span>;
@@ -204,4 +205,15 @@ export function ExportCsv({ rows, columns, filename }: { rows: Record<string, un
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
   return <button type="button" className="btn btn--ghost" onClick={onClick}><I.Download size={16} /> Exporter</button>;
+}
+
+/** Étoile d'épinglage : la fiche rejoint « Votre bureau » dans l'espace métiers. */
+export function PinButton({ item }: { item: DeskItem }) {
+  const on = useIsPinned(item.kind, item.id);
+  return (
+    <button type="button" className={`pin${on ? " is-on" : ""}`} aria-pressed={on} onClick={() => togglePin(item)}
+      title={on ? "Retirer de votre bureau" : "Épingler sur votre bureau (espace métiers)"}>
+      <I.Star size={15} filled={on} /><span>{on ? "Épinglé" : "Épingler"}</span>
+    </button>
+  );
 }

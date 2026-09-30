@@ -134,7 +134,7 @@ function ControlsTab() {
           const isOpen = open === c.key;
           const ok = c.count === 0;
           return (
-            <div key={c.key} className={`ctl${ok ? " ctl--ok" : ` ctl--${c.severity}`}`}>
+            <div key={c.key} id={`ctl-${c.key}`} className={`ctl${ok ? " ctl--ok" : ` ctl--${c.severity}`}`}>
               <button type="button" className="ctl__h" aria-expanded={isOpen} disabled={ok} onClick={() => setOpen(isOpen ? null : c.key)}>
                 <span className="ctl__icon">{ok ? <I.Check size={20} /> : SEV[c.severity].icon}</span>
                 <span className="ctl__t"><span className="strong">{c.title}</span><span className="small muted">{c.description}</span></span>

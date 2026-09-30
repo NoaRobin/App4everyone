@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useApi } from "../lib/api";
 import { useApp } from "../lib/context";
 import { date as fdate, nav as fnav, pct, PERIOD_LABEL, PERIOD_SHORT } from "../lib/format";
@@ -13,14 +13,21 @@ import { FicheSearch } from "../components/FicheSearch";
 import { shareEntries2 } from "../lib/fiche";
 import { eur, pctRaw } from "../lib/format";
 import * as I from "../components/Icon";
+import { recordVisit } from "../lib/desk";
+import { PinButton } from "../components/ui";
 
 export default function Share() {
   const { id = "" } = useParams();
+  const askQ = useSearchParams()[0].get("q");
   const { api } = useApp();
   const { data: s, error } = useApi<ShareDetail>(api(`/api/shares/${encodeURIComponent(id)}`));
   const [range, setRange] = useState("3y");
   useReveal(s);
-  useEffect(() => { if (s) document.title = `${s.name} — Rothschild & Co`; }, [s]);
+  useEffect(() => {
+    if (!s) return;
+    document.title = `${s.name} — Rothschild & Co`;
+    recordVisit({ kind: "part", id: s.id, label: s.name, sub: [s.isin, s.fund?.name].filter(Boolean).join(" · "), family: s.fund?.family });
+  }, [s]);
   if (error) return <div className="page"><ErrorState error={error} /></div>;
   if (!s) return <div className="page"><Loading h={520} /></div>;
   const fam = s.fund?.family ?? "nc";
@@ -46,6 +53,7 @@ export default function Share() {
                 {s.main && <span className="tag">Part principale</span>}
                 {s.hedged && <span className="tag">Couverte en {s.ccy}</span>}
                 {s.status && <span className="tag">{s.status}</span>}
+                <PinButton item={{ kind: "part", id: s.id, label: s.name, sub: [s.isin, s.fund?.name].filter(Boolean).join(" · "), family: s.fund?.family }} />
               </div>
               <h1 className="fund__name hero-title">{s.name}</h1>
               <div className="row" style={{ gap: 14, marginTop: 14 }}>
@@ -61,7 +69,7 @@ export default function Share() {
                 <div><dt>Heure limite</dt><dd className="num">{s.cutoff ?? "—"} · règlement {s.settlement ?? "—"}</dd></div>
                 <div><dt>Commission de surperformance</dt><dd><Bool v={s.perf_fee} /></dd></div>
               </dl>
-              <div className="fund__ask"><FicheSearch entries={shareEntries2(s)} subject={s.name} suggestions={["cut-off", "frais", "Allemagne", "Allfunds", "dépositaire", "performance 1 an"]} /></div>
+              <div className="fund__ask"><FicheSearch initial={askQ} entries={shareEntries2(s)} subject={s.name} suggestions={["cut-off", "frais", "Allemagne", "Allfunds", "dépositaire", "performance 1 an"]} /></div>
             </div>
             <div className="fund__aum">
               <div className="eyebrow">Encours de la part au {fdate(s.date)}</div>

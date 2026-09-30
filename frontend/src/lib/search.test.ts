@@ -77,3 +77,23 @@ describe("liens", () => {
     expect(hrefFor(E[6])).toBe("/distribution/Italie");
   });
 });
+
+describe("questions sur une fiche", () => {
+  const idx = new SearchIndex([
+    { t: "fonds", id: "F1", label: "Europe Valeur", sub: "Convictions", family: "ae", aum: 3e9, terms: ["europe valeur"] },
+    { t: "fonds", id: "F2", label: "Monétaire Euro", family: "fi", aum: 2e9, terms: [] },
+  ] as never);
+  it("reconnaît le fonds et garde la question", () => {
+    const r = idx.search("cut-off europe valeur");
+    expect(r.hits.length).toBe(0);
+    expect(r.ask?.entry.id).toBe("F1");
+    expect(r.ask?.question).toBe("cut-off");
+    expect(r.ask?.href).toBe("/fonds/F1?q=cut-off");
+  });
+  it("accepte le fonds en premier", () => {
+    expect(idx.search("monetaire euro frais courants").ask?.question).toBe("frais courants");
+  });
+  it("ne propose rien sans fonds reconnu", () => {
+    expect(idx.search("cut-off xyzabc").ask ?? null).toBeNull();
+  });
+});

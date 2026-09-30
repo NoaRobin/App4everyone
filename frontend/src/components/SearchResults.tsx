@@ -12,6 +12,7 @@ export function flatten(r: Results | null): Flat[] {
   if (!r) return [];
   const out: Flat[] = [];
   if (r.answer) out.push({ kind: "answer", href: r.answer.href });
+  if (r.ask) out.push({ kind: "answer", href: r.ask.href });
   r.groups.forEach((g) => g.hits.forEach((h) => out.push({ kind: "hit", entry: h.entry, href: hrefFor(h.entry) })));
   return out;
 }
@@ -82,7 +83,21 @@ export function SearchResults({ results, active, setActive, onGo, night = false,
           })}
         </div>
       ))}
-      {!results.answer && !results.groups.length && results.tokens.length > 0 && (
+      {results.ask && (() => {
+        i++;
+        const a = results.ask;
+        const idx = i;
+        return (
+          <div role="option" id={`${idPrefix}-${idx}`} aria-selected={active === idx} data-i={idx}
+            className={`sres__answer${active === idx ? " is-active" : ""}`} onMouseEnter={() => setActive(idx)} onClick={() => go(a.href)}>
+            <div className="eyebrow">Question sur {a.entry.t === "part" ? "une part" : "un fonds"}</div>
+            <div className="sres__answer-t">« {a.question} » dans la fiche {a.entry.label}</div>
+            <div className="sres__answer-v"><span className="muted">{a.entry.sub}</span></div>
+            <span className="sres__go">Ouvrir la fiche et chercher <I.Arrow size={15} /></span>
+          </div>
+        );
+      })()}
+      {!results.answer && !results.ask && !results.groups.length && results.tokens.length > 0 && (
         <div className="sres__none">
           Aucun résultat. Essayez un nom de fonds, un ISIN, un gérant, une gamme ou un pays — par exemple « <i>article 9 italie</i> ».
         </div>

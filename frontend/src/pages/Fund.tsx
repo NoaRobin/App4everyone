@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useApi } from "../lib/api";
 import { useApp } from "../lib/context";
 import { date as fdate, eur, longDate, nav as fnav, num, pct, pctRaw, PERIOD_LABEL, PERIOD_SHORT, plural } from "../lib/format";
 import { FAMILY_LABEL, famVar } from "../lib/families";
 import type { FundDetail, Section as Sec } from "../lib/types";
-import { BigMoney, Bool, CopyCode, Crumbs, Delta, ErrorState, ExportCsv, FamilyTag, Loading, SriScale, Stars, useReveal } from "../components/ui";
+import { PinButton, BigMoney, Bool, CopyCode, Crumbs, Delta, ErrorState, ExportCsv, FamilyTag, Loading, SriScale, Stars, useReveal } from "../components/ui";
 import { BarList, FlowBars, RangeTabs, TimeChart, fmtIndex, sliceRange } from "../components/charts";
 import { CountryTiles } from "../components/CountryTiles";
 import { Bridge, CalendarBars, DivLegend, Mosaic, divColor } from "../components/viz";
@@ -13,6 +13,7 @@ import { ShareChooser } from "../components/ShareChooser";
 import { FicheSearch } from "../components/FicheSearch";
 import { fieldId, fundEntries } from "../lib/fiche";
 import * as I from "../components/Icon";
+import { recordVisit } from "../lib/desk";
 
 const TOC = [
   ["synthese", "Synthèse"], ["encours", "Encours"], ["performance", "Performance"], ["parts", "Parts"], ["portefeuille", "Portefeuille"],
@@ -24,7 +25,11 @@ export default function Fund() {
   const { api } = useApp();
   const { data, error } = useApi<FundDetail>(api(`/api/funds/${encodeURIComponent(id)}`));
   useReveal(data);
-  useEffect(() => { if (data) document.title = `${data.name} — Rothschild & Co`; }, [data]);
+  useEffect(() => {
+    if (!data) return;
+    document.title = `${data.name} — Rothschild & Co`;
+    recordVisit({ kind: "fonds", id: data.id, label: data.name, sub: FAMILY_LABEL[data.family], family: data.family });
+  }, [data]);
   if (error) return <div className="page"><ErrorState error={error} /></div>;
   if (!data) return <div className="page"><Loading h={560} /></div>;
   return <FundView f={data} />;
@@ -32,6 +37,7 @@ export default function Fund() {
 
 function FundView({ f }: { f: FundDetail }) {
   const h = f.headline;
+  const askQ = useSearchParams()[0].get("q");
   const [active, setActive] = useState("synthese");
   useEffect(() => {
     const io = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting && setActive(e.target.id)), { rootMargin: "-30% 0px -65% 0px" });
@@ -76,6 +82,7 @@ function FundView({ f }: { f: FundDetail }) {
                 {h.domicile && <Link to={`/selection?domicile=${encodeURIComponent(h.domicile)}`} className="tag tag--link">{h.domicile}</Link>}
                 {h.legal_form && <span className="tag">{h.legal_form}</span>}
                 {!f.referenced && <span className="tag tag--warn"><I.Alert size={13} /> Hors référentiel produits</span>}
+                <PinButton item={{ kind: "fonds", id: f.id, label: f.name, sub: FAMILY_LABEL[f.family], family: f.family }} />
               </div>
               <h1 className="fund__name hero-title">{f.name}</h1>
               <p className="fund__sub">
@@ -89,7 +96,7 @@ function FundView({ f }: { f: FundDetail }) {
                 {h.creation && <div><dt>Création</dt><dd className="num">{fdate(h.creation)}</dd></div>}
                 {h.maturity && <div><dt>Échéance</dt><dd className="num">{fdate(h.maturity)}</dd></div>}
               </dl>
-              <div className="fund__ask"><FicheSearch entries={entries} subject={f.name} suggestions={sugg} /></div>
+              <div className="fund__ask"><FicheSearch initial={askQ} entries={entries} subject={f.name} suggestions={sugg} /></div>
             </div>
             <div className="fund__aum">
               <div className="eyebrow">Encours au {fdate(f.date)}</div>

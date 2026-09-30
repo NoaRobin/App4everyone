@@ -5,7 +5,8 @@ import { CommandPalette } from "./components/CommandPalette";
 import { Footer } from "./components/Footer";
 import { Cursor, Curtain } from "./components/Motion";
 
-const Home = lazy(() => import("./pages/Home"));
+const Panorama = lazy(() => import("./pages/Panorama"));
+const Workspace = lazy(() => import("./pages/Workspace"));
 const FundsSearch = lazy(() => import("./pages/FundsSearch"));
 const Fund = lazy(() => import("./pages/Fund"));
 const Share = lazy(() => import("./pages/Share"));
@@ -19,7 +20,7 @@ const Risk = lazy(() => import("./pages/Risk"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const TITLES: [RegExp, string][] = [
-  [/^\/$/, "La ville des encours"], [/^\/fonds$/, "Rechercher un fonds"], [/^\/encours/, "Encours"], [/^\/selection/, "Sélection de fonds"],
+  [/^\/$/, "Panorama"], [/^\/metiers/, "Espace métiers"], [/^\/fonds$/, "Rechercher un fonds"], [/^\/encours/, "Encours"], [/^\/selection/, "Sélection de fonds"],
   [/^\/portefeuilles/, "Portefeuilles"], [/^\/distribution/, "Distribution"], [/^\/risques/, "Risques & contrôles"],
 ];
 
@@ -40,7 +41,8 @@ export function App() {
       <main id="contenu" tabIndex={-1}>
         <Suspense fallback={<div className="page"><div className="skeleton" style={{ height: 420 }} /></div>}>
           <Routes>
-            <Route path="/" element={<Home />} />
+            <Route path="/" element={<Panorama />} />
+            <Route path="/metiers" element={<Workspace />} />
             <Route path="/fonds" element={<FundsSearch />} />
             <Route path="/fonds/:id" element={<Fund />} />
             <Route path="/parts/:id" element={<Share />} />

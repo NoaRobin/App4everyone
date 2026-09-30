@@ -21,10 +21,10 @@ export function revealAnchor(anchor: string) {
  * « Une question sur ce fonds ? » — recherche instantanée dans toutes les informations de la fiche.
  * Raccourci « / » lorsque la barre est visible (la recherche universelle reste sur Ctrl K).
  */
-export function FicheSearch({ entries, subject, compact = false, suggestions = [] }:
-  { entries: FicheEntry[]; subject: string; compact?: boolean; suggestions?: string[] }) {
-  const [q, setQ] = useState("");
-  const [open, setOpen] = useState(false);
+export function FicheSearch({ entries, subject, compact = false, suggestions = [], initial }:
+  { entries: FicheEntry[]; subject: string; compact?: boolean; suggestions?: string[]; initial?: string | null }) {
+  const [q, setQ] = useState(initial ?? "");
+  const [open, setOpen] = useState(!!initial);
   const [active, setActive] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
@@ -32,6 +32,8 @@ export function FicheSearch({ entries, subject, compact = false, suggestions = [
   const results = useMemo(() => searchFiche(entries, dq, compact ? 6 : 8), [entries, dq, compact]);
   const id = compact ? "fs-c" : "fs-h";
   useEffect(() => setActive(0), [dq]);
+  // Question arrivée depuis la recherche générale : la barre est prête, les réponses affichées
+  useEffect(() => { if (initial) input.current?.focus({ preventScroll: true }); }, [initial]);
 
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
