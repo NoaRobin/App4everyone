@@ -202,6 +202,7 @@ kbd { font-family: var(--sans); font-size: 11px; font-weight: 600; padding: 3px 
 /* ============================================================ La ville */
 body.is-night { background: var(--night); }
 .city { position: relative; height: 100vh; min-height: 640px; background: radial-gradient(120% 90% at 50% 30%, #0f1d33 0%, var(--night) 60%); color: var(--on-night); overflow: hidden; }
+.city__view { position: absolute; inset: 0; }
 .city__stage { position: absolute; inset: 0; }
 .city__stage canvas { width: 100% !important; height: 100% !important; cursor: grab; }
 .city__stage canvas:active { cursor: grabbing; }
@@ -256,9 +257,11 @@ body.is-night { background: var(--night); }
 .city__list td { position: relative; }
 .city__list-bar { position: absolute; left: 16px; bottom: 5px; height: 2px; border-radius: 1px; max-width: calc(100% - 32px); }
 @media (max-width: 900px) {
-  .city { height: auto; min-height: 100vh; padding-bottom: 20px; }
+  .city { height: auto; min-height: 100vh; padding-bottom: 20px; display: flex; flex-direction: column; }
+  .city__hero { order: -1; width: auto; }
+  .city__view { position: relative; height: 58vh; min-height: 360px; }
+  .city__district { display: none; }
   .city__hero { position: relative; left: auto; top: auto; padding: calc(var(--header-h) + 24px) var(--gutter) 0; }
-  .city__stage { position: relative; height: 62vh; }
   .city__legend { width: auto; }
   .city__time { position: relative; left: auto; bottom: auto; transform: none; margin: 16px auto 0; }
   .city__scroll { display: none; }
@@ -418,3 +421,6 @@ button.link { background-color: transparent; border: 0; padding: 0; color: inher
 .t--groups td:first-child { min-width: 240px; }
 .t td .sri { gap: 2px; } .t td .sri__c { width: 16px; height: 18px; font-size: 10px; border-radius: 4px; }
 .t td:first-child { min-width: 200px; }
+
+@media (max-width: 560px) { .city__range-l span { display: none; } .city__range-l { justify-content: center; } .city__toggle { padding: 0 10px; } .city__time { gap: 10px; border-radius: 22px; } }
+.enc__grid > .card { min-width: 0; overflow-x: auto; }

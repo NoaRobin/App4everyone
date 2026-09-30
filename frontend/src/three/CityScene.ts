@@ -191,7 +191,7 @@ export class CityScene {
     this.disposables.push(gtex);
     // Sol miroir sombre (reflets des tours), voilé par un calque mat quadrillé
     const w = Math.max(512, Math.floor(this.host.clientWidth * 0.5)), h = Math.max(512, Math.floor(this.host.clientHeight * 0.5));
-    const mirror = new Reflector(new THREE.PlaneGeometry(900, 900), { textureWidth: w, textureHeight: h, color: new THREE.Color("#5a6475"), clipBias: 0.003 });
+    const mirror = new Reflector(new THREE.PlaneGeometry(1600, 1600), { textureWidth: w, textureHeight: h, color: new THREE.Color("#5a6475"), clipBias: 0.003 });
     mirror.rotation.x = -Math.PI / 2;
     mirror.position.y = -0.02;
     s.add(mirror);
@@ -264,7 +264,7 @@ export class CityScene {
       lab.className = "city__district";
       lab.innerHTML = `<span class="dot" style="background:${this.opts.colors[fam]?.night}"></span>${this.opts.familyLabels[fam] ?? fam}`;
       layer.appendChild(lab);
-      this.districtLabels.push({ el: lab, fam, pos: new THREE.Vector3(ox + dirx * (plateSize + 1.5), 0.6, oz + dirz * (plateSize + 1.5)) });
+      this.districtLabels.push({ el: lab, fam, pos: fam === "aid" ? new THREE.Vector3(ox + dirx * (plateSize + 2), 0.6, oz + dirz * 1.5) : new THREE.Vector3(ox + dirx * (plateSize + 1.5), 0.6, oz + dirz * (plateSize + 1.5)) });
 
       list.forEach((f, idx) => {
         const [ci, cj] = cells[idx];
@@ -453,7 +453,7 @@ export class CityScene {
   /** Point de vue d'arrivée : cadre toute la ville selon la taille de l'écran. */
   private homeView(): THREE.Vector3 {
     const aspect = this.host.clientWidth / Math.max(1, this.host.clientHeight);
-    const d = this.extentR * (aspect < 1 ? 7.6 : aspect < 1.4 ? 6.4 : 5.5);
+    const d = this.extentR * (aspect < 1 ? 6.1 : aspect < 1.4 ? 6.2 : 5.5);
     return new THREE.Vector3(d * 0.52, d * 0.5, d * 0.69);
   }
 

@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useApi } from "../lib/api";
 import { useApp } from "../lib/context";
 import { eur, monthYear, pct, PERIOD_LABEL, plural } from "../lib/format";
-import { FAMILY_LABEL, FAMILY_ORDER, famHex, famVar } from "../lib/families";
+import { FAMILY_LABEL, FAMILY_ORDER, FAMILY_SHORT, famHex, famVar } from "../lib/families";
 import { useReducedMotion, webglAvailable } from "../lib/motion";
 import type { CityData, FamilyKey, FundRow, Overview } from "../lib/types";
 import { BigMoney, Decomposition, Delta, useReveal } from "../components/ui";
@@ -51,7 +51,7 @@ function CityHero({ data, ov }: { data: CityData | null; ov: Overview | null }) 
       const byId = new Map(data.funds.map((f) => [f.id, f]));
       scene.current = new CityScene(host.current, {
         funds: data.funds, monthIndex: data.months.length - 1, reduced, colors,
-        familyLabels: FAMILY_LABEL, labelLayer: labels.current, formatAum: eur,
+        familyLabels: FAMILY_SHORT, labelLayer: labels.current, formatAum: eur,
         onHover: (f, x, y) => setTip(f ? { f: byId.get(f.id)!, x, y } : null),
         onSelect: (f) => { scene.current?.flyTo(f.id).then(() => nav(`/fonds/${encodeURIComponent(f.id)}`)); },
       });
@@ -84,9 +84,11 @@ function CityHero({ data, ov }: { data: CityData | null; ov: Overview | null }) 
 
   return (
     <section className="city" aria-label="La ville des encours : chaque immeuble est un fonds">
-      <div className="city__stage" ref={host} />
-      <div className="city__labels" ref={labels} aria-hidden="true" />
-      <div className="city__vignette" aria-hidden="true" />
+      <div className="city__view">
+        <div className="city__stage" ref={host} />
+        <div className="city__labels" ref={labels} aria-hidden="true" />
+        <div className="city__vignette" aria-hidden="true" />
+      </div>
       {(!gl || listView) && data && <CityList data={data} mi={mi} />}
 
       <div className="city__hero">
@@ -103,7 +105,7 @@ function CityHero({ data, ov }: { data: CityData | null; ov: Overview | null }) 
             ))}
           </div>
         )}
-        {ov && <p className="city__lede">{plural(ov.n_funds, "fonds", "fonds")} · {plural(ov.n_parts, "part")} investies. Chaque immeuble est un fonds&nbsp;: son volume est proportionnel à son encours.</p>}
+        {ov && <p className="city__lede">{isNow ? <>{plural(ov.n_funds, "fonds", "fonds")} · {plural(ov.n_parts, "part")} investies.</> : <>{plural(data?.funds.filter((f) => (f.series[mi] ?? 0) > 0).length ?? 0, "fonds", "fonds")} à cette date.</>} Chaque immeuble est un fonds&nbsp;: son volume est proportionnel à son encours.</p>}
         <div className="city__legend" role="group" aria-label="Familles de gestion — survoler ou choisir pour mettre en valeur un quartier">
           {FAMILY_ORDER.filter((k) => famTotals[k]).map((k) => (
             <button key={k} type="button" className="city__fam" aria-pressed={focus === k}
@@ -138,7 +140,7 @@ function CityHero({ data, ov }: { data: CityData | null; ov: Overview | null }) 
       )}
 
       {tip && (
-        <div className="city__tip" style={{ transform: `translate(-50%, -100%) translate(${tip.x}px, ${tip.y - 14}px)` }} role="status">
+        <div className="city__tip" style={{ transform: tip.y < 260 ? `translate(-50%, 0) translate(${tip.x}px, ${tip.y + 40}px)` : `translate(-50%, -100%) translate(${tip.x}px, ${tip.y - 14}px)` }} role="status">
           <div className="city__tip-f"><span className="dot" style={{ background: famVar(tip.f.family, true) }} />{FAMILY_LABEL[tip.f.family]}</div>
           <div className="city__tip-n">{tip.f.name}</div>
           <div className="city__tip-v num">{eur(tip.f.series[mi])}</div>

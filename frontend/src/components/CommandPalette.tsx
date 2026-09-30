@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as I from "./Icon";
 import { useApp } from "../lib/context";
@@ -13,7 +13,8 @@ export function CommandPalette() {
   const input = useRef<HTMLInputElement>(null);
   const last = useRef<HTMLElement | null>(null);
   const nav = useNavigate();
-  const results = useMemo(() => (index && q.trim() ? index.search(q) : null), [index, q]);
+  const dq = useDeferredValue(q);
+  const results = useMemo(() => (index && dq.trim() ? index.search(dq) : null), [index, dq]);
   const { active, setActive, onKeyDown, flat } = useResultNav(results, closePalette);
 
   useEffect(() => {

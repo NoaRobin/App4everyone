@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/context";
 import { famHex } from "../lib/families";
@@ -16,7 +16,8 @@ export default function FundsSearch() {
   const kb = useRef<KS | null>(null);
   const reduced = useReducedMotion();
   const nav = useNavigate();
-  const results = useMemo(() => (index && q.trim() ? index.search(q) : null), [index, q]);
+  const dq = useDeferredValue(q);
+  const results = useMemo(() => (index && dq.trim() ? index.search(dq) : null), [index, dq]);
   const { active, setActive, onKeyDown, flat } = useResultNav(results, () => undefined);
   const nFunds = entries.filter((e) => e.t === "fonds" && (e.aum ?? 0) > 0).length;
   const qRef = useRef(q);
@@ -71,7 +72,7 @@ export default function FundsSearch() {
           {q && <button type="button" className="kbd__clear" onClick={() => { setQ(""); input.current?.focus(); }} aria-label="Effacer"><I.Close size={18} /></button>}
         </div>
         <div className="kbd__hint small">
-          {has ? <span>{results!.hits.length ? `${results!.hits.length} résultat${results!.hits.length > 1 ? "s" : ""}` : "Aucun résultat"} · <kbd>↑</kbd><kbd>↓</kbd> puis <kbd>Entrée</kbd></span>
+          {has ? <span>{results!.answer ? "Réponse directe" : results!.hits.length ? `${results!.hits.length} résultat${results!.hits.length > 1 ? "s" : ""}` : "Aucun résultat"} · <kbd>↑</kbd><kbd>↓</kbd> puis <kbd>Entrée</kbd></span>
             : <span>Tolérante aux accents et aux fautes · essayez « <button type="button" className="link" onClick={() => setQ("article 9 italie")}>article 9 italie</button> » ou « <button type="button" className="link" onClick={() => setQ("vaseur")}>vaseur</button> »</span>}
           <Link to="/selection" className="link kbd__all" onClick={(e) => { e.preventDefault(); nav("/selection"); }}>Parcourir les {nFunds || ""} fonds <I.Arrow size={13} /></Link>
         </div>
