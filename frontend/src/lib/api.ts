@@ -2,13 +2,28 @@ import { useEffect, useState } from "react";
 
 const cache = new Map<string, Promise<unknown>>();
 
+/** Erreur renvoyée par le serveur : { error, message, hint?, detail? } (JSON). */
+export type ApiError = Error & { status?: number; code?: string; hint?: string; detail?: string };
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function load<T>(url: string): Promise<T> {
+  // Pendant le chargement des données (503 « model_loading »), on patiente et on réessaie (jusqu'à 15 minutes)
+  for (let i = 0; ; i++) {
+    const r = await fetch(url, { headers: { Accept: "application/json" } });
+    if (r.ok) return r.json() as Promise<T>;
+    let body: { error?: string; message?: string; hint?: string; detail?: string } = {};
+    try { body = await r.json(); } catch { /* réponse non JSON */ }
+    if (r.status === 503 && body.error === "model_loading" && i < 300) { await sleep(3000); continue; }
+    const msg = body.message ?? (r.status === 404 ? "Introuvable" : "Erreur de chargement");
+    throw Object.assign(new Error(msg), { status: r.status, code: body.error, hint: body.hint, detail: body.detail }) as ApiError;
+  }
+}
+
 export function fetchJson<T>(url: string): Promise<T> {
   let p = cache.get(url) as Promise<T> | undefined;
   if (!p) {
-    p = fetch(url, { headers: { Accept: "application/json" } }).then(async (r) => {
-      if (!r.ok) throw Object.assign(new Error(r.status === 404 ? "Introuvable" : "Erreur de chargement"), { status: r.status });
-      return r.json() as Promise<T>;
-    });
+    p = load<T>(url);
     p.catch(() => cache.delete(url));
     cache.set(url, p);
   }

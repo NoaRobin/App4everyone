@@ -132,11 +132,14 @@ export function Loading({ label = "Chargement", h = 320 }: { label?: string; h?:
 }
 
 export function ErrorState({ error }: { error: Error }) {
-  const nf = (error as Error & { status?: number }).status === 404;
+  const e = error as Error & { status?: number; code?: string; hint?: string };
+  const nf = e.status === 404;
+  const backend = !nf && !!e.code;
   return (
     <div className="empty" role="alert">
       <p className="h3" style={{ marginBottom: 8 }}>{nf ? "Cette page n'existe pas ou plus." : "Les données n'ont pas pu être chargées."}</p>
-      <p className="small">{nf ? "Utilisez la recherche pour retrouver un fonds, une part ou un gérant." : "Vérifiez votre connexion puis réessayez."}</p>
+      {backend && <p className="small strong">{e.message}</p>}
+      <p className="small">{nf ? "Utilisez la recherche pour retrouver un fonds, une part ou un gérant." : e.hint || "Vérifiez votre connexion puis réessayez."}</p>
       <Link to="/fonds" className="btn btn--ghost" style={{ marginTop: 12 }}><I.Search size={16} /> Rechercher</Link>
     </div>
   );

@@ -10,6 +10,7 @@ Règles clés (toutes couvertes par des tests) :
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
@@ -167,15 +168,23 @@ class Model:
 PERIODS = ["1J", "1S", "1M", "3M", "YTD", "1A", "3A"]
 
 
+def _load(source: Any, name: str, columns: list[str], since: tuple[str, Any] | None = None) -> pd.DataFrame:
+    """Lit une table en journalisant sa durée et sa volumétrie (jamais son contenu)."""
+    t0 = time.perf_counter()
+    df = source.table(name, columns, since=since) if since else source.table(name, columns)
+    log.info("Table %s : %d lignes × %d colonnes en %.1f s", name, len(df), df.shape[1], time.perf_counter() - t0)
+    return df
+
+
 def build_model(source: Any, stale_days: int = 12, history_years: int = 4, is_mock: bool = False) -> Model:
     ref = getattr(source, "reference_date", date.today())
     since = date(ref.year - history_years, 1, 1)
-    products = source.table(S.PRODUCT, S.columns(S.PRODUCT))
-    shares = source.table(S.SHARE, S.columns(S.SHARE))
-    countries = source.table(S.COUNTRY, S.columns(S.COUNTRY))
-    aum = source.table(S.AUM, AUM_COLS, since=("DATE_VL", since))
-    holdings = source.table(S.HOLDINGS, S.columns(S.HOLDINGS), since=("DATE_INVENTAIRE", ref - timedelta(days=200)))
-    dq = source.table(S.DQ, S.columns(S.DQ))
+    products = _load(source, S.PRODUCT, S.columns(S.PRODUCT))
+    shares = _load(source, S.SHARE, S.columns(S.SHARE))
+    countries = _load(source, S.COUNTRY, S.columns(S.COUNTRY))
+    aum = _load(source, S.AUM, AUM_COLS, since=("DATE_VL", since))
+    holdings = _load(source, S.HOLDINGS, S.columns(S.HOLDINGS), since=("DATE_INVENTAIRE", ref - timedelta(days=200)))
+    dq = _load(source, S.DQ, S.columns(S.DQ))
     return assemble(ref, products, shares, countries, aum, holdings, dq, stale_days, is_mock)
 
 

@@ -54,7 +54,8 @@ démarre le serveur et ouvre le navigateur. Les données fictives sont utilisée
 | Option | Effet |
 |---|---|
 | `--mock` | force les données fictives (même si `.env` indique Fabric) |
-| `--fabric` | données du Lakehouse Fabric (installe alors le connecteur `mssql-python`, par pip, sans droits administrateur) |
+| `--fabric` | données du Lakehouse Fabric (installe `mssql-python` par pip seulement s'il manque, sans droits administrateur) |
+| `--fabric-check` | teste la configuration Fabric et `SELECT 1`, vérifie tables et colonnes, sans charger les données |
 | `--doctor` | diagnostic du poste : Python, accès aux paquets, proxy, Node.js, port |
 | `--port 8080` | autre port (si le port demandé est pris, le suivant libre est choisi automatiquement) |
 | `--test` | lance les tests |
@@ -89,24 +90,32 @@ puis `npm run build` pour régénérer `frontend/dist`.
 
 ### Brancher le Lakehouse Fabric
 
-Copier `.env.example` en `.env` (jamais commité) ou définir les variables d'environnement :
+1. Fichier `.env` à la racine (jamais commité) :
+   ```
+   APP_DATA_SOURCE=fabric
+   FABRIC_SQL_SERVER=<adresse réelle>.datawarehouse.fabric.microsoft.com
+   FABRIC_SQL_DATABASE=LKH_RFPTeam_Bronze
+   ```
+   Les valeurs d'exemple (`<…>`, `xxxx…`, « votre serveur »…) sont refusées au lancement.
+2. Test de la connexion, sans charger les données : `python run.py --fabric-check`
+   (configuration → connecteur → connexion et `SELECT 1` → présence des tables et colonnes en `SELECT TOP 0`, aucune ligne lue).
+3. Lancement : `python run.py --fabric --port 8080 --no-browser`
 
-```
-APP_DATA_SOURCE=fabric
-FABRIC_SQL_SERVER=<serveur du SQL analytics endpoint>
-FABRIC_SQL_DATABASE=<base>
-```
+Connecteur : **`mssql-python`**, le pilote Python officiel de Microsoft ; sous Windows il embarque tout le nécessaire,
+**aucun pilote ODBC à installer** (ODBC Driver 18 n'est jamais vérifié). `FABRIC_CLIENT=pyodbc` reste possible si le pilote
+ODBC 18 est installé. Authentification `ActiveDirectoryInteractive` : une fenêtre Microsoft Entra ID s'ouvre au premier
+chargement. Une seule connexion et un seul chargement du modèle par processus. Délais réglables : `FABRIC_LOGIN_TIMEOUT`
+(120 s, fenêtre Microsoft comprise) et `FABRIC_QUERY_TIMEOUT` (600 s par requête).
 
-La connexion passe par **`mssql-python`**, le pilote Python officiel de Microsoft : sous Windows il embarque tout le
-nécessaire, **aucun pilote ODBC à installer, aucune validation informatique** (`run.bat --fabric` l'installe par pip).
-Authentification `ActiveDirectoryInteractive` : une fenêtre Microsoft Entra ID s'ouvre au premier chargement, avec votre
-compte habituel. Si le pilote « ODBC Driver 18 for SQL Server » est déjà installé, `FABRIC_CLIENT=pyodbc` permet d'utiliser
-pyodbc à la place.
+Environnement Python : `RCO_VENV` s'il pointe vers un Python valide, sinon `%USERPROFILE%\venv-rco` s'il existe, sinon un
+environnement géré (`%LOCALAPPDATA%\RCoFonds`, ou `%USERPROFILE%\venv-rco` avec le Python du Microsoft Store, qui virtualise
+`%LOCALAPPDATA%`). Un environnement valide n'est jamais recréé ; les dépendances ne sont installées que si elles manquent.
 
-Où trouver l'adresse : dans Fabric, ouvrir le Lakehouse `LKH_RFPTeam_Bronze`, passer sur « SQL analytics endpoint »,
-puis ⚙ Paramètres → chaîne de connexion SQL (`xxxx.datawarehouse.fabric.microsoft.com`). Le réseau doit laisser sortir le
-port 1433 (le même que celui utilisé par SSMS ou Power BI Desktop en connexion directe). Aucun secret n'est stocké. L'application charge l'historique au démarrage (4 ans par défaut,
-`APP_HISTORY_YEARS`), le garde en mémoire et ne l'écrit jamais sur disque.
+Suivi : `GET /api/health` (état du serveur et du modèle, ne déclenche rien), `GET /api/health/fabric` (`SELECT 1`).
+Toutes les erreurs sont renvoyées en JSON `{error, message, hint}` : `fabric_config`, `fabric_driver`, `fabric_connection`,
+`fabric_auth`, `fabric_timeout`, `fabric_query` (table ou colonne nommée), `model_loading` (503 pendant le chargement).
+Les journaux indiquent, par table, la durée et le nombre de lignes, jamais leur contenu. L'historique (4 ans par défaut,
+`APP_HISTORY_YEARS`) est gardé en mémoire et jamais écrit sur disque.
 
 ## Garanties
 

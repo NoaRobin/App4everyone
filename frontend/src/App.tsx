@@ -4,6 +4,7 @@ import { Header } from "./components/Header";
 import { CommandPalette } from "./components/CommandPalette";
 import { Footer } from "./components/Footer";
 import { Cursor, Curtain } from "./components/Motion";
+import { BackendStatus } from "./components/BackendStatus";
 
 const Panorama = lazy(() => import("./pages/Panorama"));
 const Workspace = lazy(() => import("./pages/Workspace"));
@@ -38,6 +39,7 @@ export function App() {
   return (
     <>
       <Header />
+      <BackendStatus />
       <main id="contenu" tabIndex={-1}>
         <Suspense fallback={<div className="page"><div className="skeleton" style={{ height: 420 }} /></div>}>
           <Routes>

@@ -3,54 +3,203 @@ from __future__ import annotations
 
 import logging
 import math
-from datetime import date
+import threading
 import time
+import traceback
+from datetime import date
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import load_settings
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from .config import fabric_config_problems, load_settings
+from .data.fabric import FabricConfigError, FabricError
 from .data.sources import make_source
 from .domain.model import build_model
 from .service import FUND_DIMS, SHARE_DIMS, Service
 
 log = logging.getLogger("rco")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
+# Bibliothèques d'authentification Microsoft : seulement les avertissements (leurs journaux HTTP détaillés sont inutiles ici)
+for _noisy in ("azure", "msal", "urllib3"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 app = FastAPI(title="Rothschild & Co — Fonds & encours", docs_url=None, redoc_url=None)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
-_service: Service | None = None
 
 
-def service() -> Service:
-    global _service
-    if _service is None:
+# ---------------------------------------------------------------- cycle de vie du modèle
+class ServiceUnavailable(Exception):
+    """Le modèle n'est pas (encore) disponible : chargement en cours ou échec du dernier chargement."""
+
+    def __init__(self, code: str, message: str, status: int = 503, **extra):
+        super().__init__(message)
+        self.code, self.message, self.status, self.extra = code, message, status, extra
+
+
+class _State:
+    """Un seul modèle par processus, construit une seule fois (verrou), avec son état consultable."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.service: Service | None = None
+        self.source = None
+        self.state = "idle"          # idle | loading | ready | error
+        self.started: float | None = None
+        self.loaded_in: float | None = None
+        self.error: dict | None = None
+        self.failed_at: float | None = None
+        self.builds = 0              # nombre de constructions effectivement lancées (tests)
+
+
+_S = _State()
+RETRY_AFTER_S = 30  # après un échec, pas de nouvelle tentative (ni de nouvelle fenêtre Microsoft) avant ce délai
+
+
+def _source(settings):
+    """Source de données unique du processus (la connexion Fabric est partagée par le modèle et /api/health/fabric)."""
+    if _S.source is None:
+        _S.source = make_source(settings)
+    return _S.source
+
+
+def service(wait: bool = True) -> Service:
+    if _S.service is not None:
+        return _S.service
+    if not wait:
+        if _S.state == "loading":
+            raise ServiceUnavailable("model_loading", "Chargement des données en cours…", 503,
+                                     elapsed_s=round(time.time() - (_S.started or time.time()), 1))
+    acquired = _S.lock.acquire(blocking=wait)
+    if not acquired:
+        raise ServiceUnavailable("model_loading", "Chargement des données en cours…", 503)
+    try:
+        if _S.service is not None:
+            return _S.service
+        if _S.state == "error" and _S.failed_at and time.time() - _S.failed_at < RETRY_AFTER_S:
+            raise ServiceUnavailable(_S.error.get("error", "model_error"), _S.error.get("message", "Chargement impossible."),
+                                     _S.error.get("status", 503), **{k: v for k, v in _S.error.items() if k not in ("error", "message", "status")})
         s = load_settings()
+        _S.state, _S.started, _S.error = "loading", time.time(), None
+        _S.builds += 1
         t0 = time.time()
-        model = build_model(make_source(s), stale_days=s.stale_days, history_years=s.history_years, is_mock=s.data_source != "fabric")
-        _service = Service(model, s.rmm_columns, s.rmm_pattern)
-        log.info("Modèle chargé en %.1f s (%d fonds, %d parts)", time.time() - t0, len(model.funds), len(model.link))
-    return _service
+        log.info("Construction du modèle (source %s)…", s.data_source)
+        try:
+            src = _source(s)
+            model = build_model(src, stale_days=s.stale_days, history_years=s.history_years, is_mock=s.data_source != "fabric")
+            svc = Service(model, s.rmm_columns, s.rmm_pattern)
+        except FabricError as e:
+            _S.state, _S.failed_at = "error", time.time()
+            _S.error = {**e.to_dict(), "status": e.status}
+            log.error("Chargement du modèle impossible : %s — %s", e.code, e.message)
+            raise
+        except Exception as e:
+            _S.state, _S.failed_at = "error", time.time()
+            _S.error = {"error": "model_error", "message": "Le chargement des données a échoué.", "detail": type(e).__name__, "status": 500}
+            log.error("Chargement du modèle impossible (%s)\n%s", type(e).__name__, "".join(traceback.format_tb(e.__traceback__)))
+            raise
+        _S.loaded_in = time.time() - t0
+        _S.service, _S.state = svc, "ready"
+        log.info("Modèle chargé en %.1f s (%d fonds, %d parts)", _S.loaded_in, len(model.funds), len(model.link))
+        return svc
+    finally:
+        _S.lock.release()
+
+
+def _api_service() -> Service:
+    """Pour les routes : ne bloque pas pendant un chargement (réponse 503 « chargement en cours » immédiate)."""
+    return service(wait=_S.state not in ("loading",))
 
 
 @app.on_event("startup")
 def _warm_up():
     """Charge le modèle et précalcule les vues principales en tâche de fond."""
-    import threading
-
     def run():
-        svc = service()
+        try:
+            svc = service()
+        except Exception:
+            return  # l'erreur est conservée dans l'état et renvoyée par /api/health et les routes
         for fn in (svc.overview, svc.city, svc._fund_table, svc.search_index, svc.controls, svc.risk, svc.holdings, svc.distribution):
             try:
                 fn(None)
-            except Exception:  # un échec de préchauffage ne doit pas empêcher le démarrage
-                log.exception("Préchauffage")
-    threading.Thread(target=run, daemon=True).start()
+            except Exception as e:  # un échec de préchauffage ne doit pas empêcher le démarrage
+                log.error("Préchauffage %s : %s", getattr(fn, "__name__", "?"), type(e).__name__)
+    threading.Thread(target=run, daemon=True, name="rco-warmup").start()
+
+
+# ---------------------------------------------------------------- erreurs JSON
+@app.exception_handler(ServiceUnavailable)
+def _unavailable(_: Request, e: ServiceUnavailable):
+    headers = {"Retry-After": "3"} if e.code == "model_loading" else {}
+    return JSONResponse({"error": e.code, "message": e.message, **e.extra}, status_code=e.status, headers=headers)
+
+
+@app.exception_handler(FabricError)
+def _fabric_error(_: Request, e: FabricError):
+    return JSONResponse(e.to_dict(), status_code=e.status)
+
+
+@app.exception_handler(StarletteHTTPException)
+def _http_error(_: Request, e: StarletteHTTPException):
+    code = {404: "not_found", 405: "method_not_allowed"}.get(e.status_code, "http_error")
+    return JSONResponse({"error": code, "message": str(e.detail)}, status_code=e.status_code)
+
+
+@app.exception_handler(RequestValidationError)
+def _validation_error(_: Request, e: RequestValidationError):
+    return JSONResponse({"error": "bad_request", "message": "Paramètres invalides.",
+                         "detail": [".".join(map(str, x.get("loc", []))) for x in e.errors()]}, status_code=422)
+
+
+@app.exception_handler(Exception)
+def _internal_error(request: Request, e: Exception):
+    # Type et emplacement seulement : le message d'une exception peut contenir des valeurs métier
+    log.error("Erreur %s sur %s\n%s", type(e).__name__, request.url.path, "".join(traceback.format_tb(e.__traceback__)))
+    return JSONResponse({"error": "internal", "message": "Erreur interne du serveur.", "detail": type(e).__name__}, status_code=500)
+
+
+# ---------------------------------------------------------------- santé
+@app.get("/api/health")
+def health():
+    """État du serveur et du modèle, sans jamais déclencher de chargement ni de connexion."""
+    s = load_settings()
+    body = {"status": "ok", "source": s.data_source, "model": {"state": _S.state}}
+    if s.data_source == "fabric":
+        body["fabric"] = {"client": s.fabric_client, "server": s.fabric_server, "database": s.fabric_database,
+                          "config_problems": fabric_config_problems(s)}
+    if _S.state == "loading" and _S.started:
+        body["model"]["elapsed_s"] = round(time.time() - _S.started, 1)
+    if _S.state == "ready":
+        body["model"]["loaded_in_s"] = round(_S.loaded_in or 0, 1)
+    if _S.state == "error" and _S.error:
+        body["model"]["error"] = {k: v for k, v in _S.error.items() if k != "status"}
+    return JSONResponse(body, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/health/fabric")
+def health_fabric():
+    """Test de la connexion Fabric (SELECT 1), sans charger le modèle."""
+    s = load_settings()
+    if s.data_source != "fabric":
+        return JSONResponse({"status": "skipped", "source": s.data_source, "message": "Application en données fictives (APP_DATA_SOURCE=mock)."},
+                            headers={"Cache-Control": "no-store"})
+    problems = fabric_config_problems(s)
+    if problems:
+        raise FabricConfigError(" ".join(problems))
+    src = _source(s)
+    if getattr(src, "busy", lambda: False)():
+        return JSONResponse({"status": "busy", "client": s.fabric_client, "model": _S.state,
+                             "message": "Connexion Fabric active : chargement des tables en cours."}, headers={"Cache-Control": "no-store"})
+    latency = src.ping()
+    return JSONResponse({"status": "ok", "client": s.fabric_client, "server": s.fabric_server, "database": s.fabric_database,
+                         "latency_ms": round(latency, 1), "model": _S.state}, headers={"Cache-Control": "no-store"})
 
 
 def _sanitize(o):
@@ -77,22 +226,22 @@ def _ok(payload):
 
 @app.get("/api/meta")
 def meta():
-    return _ok(service().meta())
+    return _ok(_api_service().meta())
 
 
 @app.get("/api/overview")
 def overview(date: str | None = None):
-    return _ok(service().overview(date))
+    return _ok(_api_service().overview(date))
 
 
 @app.get("/api/city")
 def city(date: str | None = None):
-    return _ok(service().city(date))
+    return _ok(_api_service().city(date))
 
 
 @app.get("/api/search-index")
 def search_index(date: str | None = None):
-    return _ok(service().search_index(date))
+    return _ok(_api_service().search_index(date))
 
 
 _FILTERS = ["family", "range", "asset_class", "expertise", "manager", "sfdr", "sri", "domicile", "legal_form", "currency", "amf", "country", "q"]
@@ -101,34 +250,34 @@ _FILTERS = ["family", "range", "asset_class", "expertise", "manager", "sfdr", "s
 @app.get("/api/funds")
 def funds(request: Request, date: str | None = None):
     f = {k: v for k, v in request.query_params.items() if k in _FILTERS and v}
-    return _ok(service().funds(date, f))
+    return _ok(_api_service().funds(date, f))
 
 
 @app.get("/api/funds/{fid}")
 def fund(fid: str, date: str | None = None):
-    return _ok(service().fund(fid, date))
+    return _ok(_api_service().fund(fid, date))
 
 
 @app.get("/api/shares/{sid}")
 def share(sid: str, date: str | None = None):
-    return _ok(service().share(sid, date))
+    return _ok(_api_service().share(sid, date))
 
 
 @app.get("/api/breakdown/{dim}")
 def breakdown(dim: str, date: str | None = None):
     if dim not in FUND_DIMS and dim not in SHARE_DIMS:
         raise HTTPException(404, "Axe inconnu")
-    return _ok(service().breakdown(date, dim))
+    return _ok(_api_service().breakdown(date, dim))
 
 
 @app.get("/api/holdings")
 def holdings(date: str | None = None):
-    return _ok(service().holdings(date))
+    return _ok(_api_service().holdings(date))
 
 
 @app.get("/api/instruments")
 def instrument(key: str = Query(...), date: str | None = None):
-    return _ok(service().instrument(key, date))
+    return _ok(_api_service().instrument(key, date))
 
 
 def _no_rmm(v: str | None) -> bool:
@@ -138,22 +287,22 @@ def _no_rmm(v: str | None) -> bool:
 
 @app.get("/api/distribution")
 def distribution(date: str | None = None, rmm: str | None = None):
-    return _ok(service().distribution(date, _no_rmm(rmm)))
+    return _ok(_api_service().distribution(date, _no_rmm(rmm)))
 
 
 @app.get("/api/countries/{name}")
 def country(name: str, date: str | None = None, rmm: str | None = None):
-    return _ok(service().country(name, date, _no_rmm(rmm)))
+    return _ok(_api_service().country(name, date, _no_rmm(rmm)))
 
 
 @app.get("/api/risk")
 def risk(date: str | None = None):
-    return _ok(service().risk(date))
+    return _ok(_api_service().risk(date))
 
 
 @app.get("/api/controls")
 def controls(date: str | None = None):
-    return _ok(service().controls(date))
+    return _ok(_api_service().controls(date))
 
 
 # ---------------------------------------------------------------- interface (build Vite)
