@@ -1,0 +1,48 @@
+Corrige le lancement Fabric de ce projet sans me poser de question.
+
+État actuel :
+
+- FastAPI + frontend TypeScript.
+- Windows avec Python 3.13 Microsoft Store.
+- L’environnement fonctionnel est C:\Users\RP119879\venv-rco.
+- mssql-python est installé et importable.
+- Je ne peux pas installer ODBC Driver 18.
+- Le projet doit utiliser mssql-python, pas pyodbc.
+- Le lancement attendu est :
+  python run.py --fabric --port 8080 --no-browser
+- Le fichier .env contient APP_DATA_SOURCE=fabric, FABRIC_SQL_SERVER et FABRIC_SQL_DATABASE.
+- /api/meta retourne parfois HTTP 500.
+- run.py essaie parfois de recréer un environnement cassé sous LocalAppData.
+- Le modèle semble parfois se charger plusieurs fois simultanément.
+
+Applique directement ces corrections :
+
+1. Dans run.py, réutilise RCO_VENV s’il pointe vers un Python valide.
+2. Si RCO_VENV n’est pas défini, utilise automatiquement C:\Users\RP119879\venv-rco si ce Python existe.
+3. Ne recrée jamais un environnement valide.
+4. En mode Fabric, vérifie mssql_python et installe requirements-fabric.txt uniquement s’il manque.
+5. Ne vérifie pas ODBC Driver 18 si mssql-python est utilisé.
+6. Refuse les placeholders dans FABRIC_SQL_SERVER.
+7. Ajoute --fabric-check pour tester la configuration et SELECT 1 sans charger le modèle.
+8. Dans fabric.py, conserve mssql-python par défaut et n’ajoute aucune clé Driver à sa chaîne de connexion.
+9. Ajoute des timeouts et des erreurs explicites pour connexion, authentification et requêtes.
+10. Dans api.py, protège l’initialisation du service avec un verrou afin qu’un seul modèle soit construit.
+11. Ajoute /api/health et /api/health/fabric.
+12. Fais retourner des erreurs JSON propres plutôt qu’un simple HTTP 500.
+13. Ajoute des logs par table avec durée et nombre de lignes, sans données métier.
+14. Ne modifie pas les calculs métier ni le frontend sauf pour afficher une erreur backend.
+15. Ajoute les tests nécessaires.
+
+À la fin, donne-moi uniquement :
+- les fichiers modifiés ;
+- les corrections réalisées ;
+- les commandes PowerShell exactes ;
+- le résultat attendu de chaque commande.
+
+Teste notamment :
+
+python run.py --fabric-check
+python run.py --fabric --port 8080 --no-browser
+Invoke-RestMethod "http://127.0.0.1:8080/api/health"
+Invoke-RestMethod "http://127.0.0.1:8080/api/health/fabric"
+Invoke-RestMethod "http://127.0.0.1:8080/api/meta"
