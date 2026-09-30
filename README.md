@@ -25,47 +25,54 @@ La recherche universelle est accessible partout (`Ctrl K` / `⌘ K` ou `/`). Ell
 
 ## Démarrer
 
-Prérequis : Python 3.11+, Node 20+ ; pour Fabric, le pilote *ODBC Driver 18 for SQL Server*.
+Prérequis : **Python 3.10 ou plus récent**, c'est tout. L'interface est livrée déjà compilée (`frontend/dist`) :
+Node.js n'est nécessaire que pour modifier le front. Pour Fabric, il faut en plus le pilote *ODBC Driver 18 for SQL Server*.
 
 ### En une commande
 
 | Système | Commande |
 |---|---|
-| Windows | double-cliquer sur `run.bat` (ou `run.bat --fabric`) |
-| macOS / Linux | `./run.sh` (ou `./run.sh --fabric`) |
+| Windows | double-cliquer sur `run.bat` |
+| macOS / Linux | `./run.sh` |
 | Partout | `python run.py` |
 
-Le lanceur crée l'environnement Python (`.venv`), installe les dépendances, compile l'interface si elle a changé,
-démarre le serveur et ouvre le navigateur sur http://127.0.0.1:8000. Options :
+Le lanceur crée l'environnement Python (`.venv`), installe les dépendances (quelques minutes la première fois),
+démarre le serveur et ouvre le navigateur. Les données fictives sont utilisées par défaut.
 
 | Option | Effet |
 |---|---|
-| `--fabric` | données du Lakehouse Fabric (sinon données fictives) |
-| `--dev` | mode développement : front sur :5173 avec rechargement à chaud, API relancée à chaque modification |
-| `--test` | lance les tests back-end et front-end |
-| `--port 8080` | autre port |
-| `--rebuild` | force la recompilation de l'interface |
+| `--mock` | force les données fictives (même si `.env` indique Fabric) |
+| `--fabric` | données du Lakehouse Fabric (installe alors pyodbc) |
+| `--doctor` | diagnostic du poste : Python, accès aux paquets, proxy, Node.js, port |
+| `--port 8080` | autre port (si le port demandé est pris, le suivant libre est choisi automatiquement) |
+| `--test` | lance les tests |
+| `--dev` / `--rebuild` | modifier le front (Node.js 20+ requis) |
 | `--no-browser` | n'ouvre pas le navigateur |
 
-### Étape par étape
+### Ça ne démarre pas ?
+
+Lancez d'abord `python run.py --doctor`, puis :
+
+| Symptôme | Cause probable | Solution |
+|---|---|---|
+| « Échec : installation de requirements.txt » | proxy d'entreprise | `set HTTPS_PROXY=http://proxy:port` (Windows) ou `export HTTPS_PROXY=…`, puis relancer |
+| « Python 3.10 ou plus récent est requis » | Python trop ancien | installer Python depuis python.org (cocher « Add to PATH ») |
+| `python` introuvable sous Windows | Python absent du PATH | utiliser `run.bat` (il essaie `py` puis `python`) |
+| « Mode Fabric : … ne sont pas définis » | `.env` configuré pour Fabric | `python run.py --mock` |
+| Page « Not Found » | serveur lancé à la main sans l'interface | lancer via `run.py`, ou `git pull` pour récupérer `frontend/dist` |
+| Page blanche dans le navigateur | ancien navigateur | Edge, Chrome ou Firefox récents (WebGL requis pour la ville ; sinon vue liste) |
+
+### Étape par étape (sans le lanceur)
 
 ```bash
-# 1. Back-end
 cd backend
-python -m pip install -r requirements-dev.txt
-
-# 2. Front-end (compilé une fois, servi par le back-end)
-cd ../frontend
-npm install
-npm run build
-
-# 3. Lancer
-cd ../backend
+python -m pip install -r requirements.txt          # + requirements-fabric.txt pour Fabric
 python -m uvicorn rco.api:app --host 127.0.0.1 --port 8000
-# → http://127.0.0.1:8000
+# → http://127.0.0.1:8000  (l'interface compilée est servie depuis frontend/dist)
 ```
 
-Développement du front avec rechargement à chaud : `npm run dev` dans `frontend/` (http://localhost:5173, l'API est relayée vers le port 8000).
+Développement du front : `cd frontend && npm install && npm run dev` (http://localhost:5173, API relayée vers le port 8000),
+puis `npm run build` pour régénérer `frontend/dist`.
 
 ### Brancher le Lakehouse Fabric
 
