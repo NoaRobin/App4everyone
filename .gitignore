@@ -1,0 +1,37 @@
+# Secrets & configuration locale
+.env
+.env.*
+!.env.example
+
+# Exports de données — ne jamais commiter de données réelles
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.parquet
+*.feather
+*.pkl
+*.db
+*.sqlite
+exports/
+data_exports/
+snapshots/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Front
+node_modules/
+frontend/dist/
+.vite/
+
+# Outils
+.DS_Store
+.idea/
+.vscode/
+screenshots/
