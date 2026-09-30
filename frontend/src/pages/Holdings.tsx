@@ -1,11 +1,13 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApi } from "../lib/api";
 import { useApp } from "../lib/context";
-import { date as fdate, eur, pctRaw } from "../lib/format";
+import { date as fdate, eur, eurParts, num, pctRaw, plural } from "../lib/format";
+import { CATEGORICAL, OTHER } from "../lib/families";
 import { norm } from "../lib/search";
 import { ErrorState, Loading, useReveal } from "../components/ui";
-import { BarList } from "../components/charts";
+import { Mosaic } from "../components/viz";
+import { Head, PageHero, Strip } from "../components/Editorial";
 import * as I from "../components/Icon";
 
 type Resp = {
@@ -15,67 +17,113 @@ type Resp = {
   by_class: { label: string; amount_eur: number; weight: number }[]; by_ccy: { label: string; amount_eur: number; weight: number }[];
 };
 
+/** Regroupe au-delà des 5 premiers (palette catégorielle limitée, jamais recyclée). */
+function top5<T extends { label: string; amount_eur: number; weight: number }>(rows: T[]): { label: string; amount_eur: number; weight: number }[] {
+  const s = [...rows].sort((a, b) => b.amount_eur - a.amount_eur);
+  if (s.length <= 6) return s;
+  const rest = s.slice(5);
+  return [...s.slice(0, 5), { label: `Autres (${rest.length})`, amount_eur: rest.reduce((x, r) => x + r.amount_eur, 0), weight: rest.reduce((x, r) => x + r.weight, 0) }];
+}
+
 export default function Holdings() {
   const { api, entries } = useApp();
   const { data, error } = useApi<Resp>(api("/api/holdings"));
   const [q, setQ] = useState("");
+  const input = useRef<HTMLInputElement>(null);
   const nav = useNavigate();
   useReveal(data);
   const lines = useMemo(() => entries.filter((e) => e.t === "ligne"), [entries]);
   const found = useMemo(() => {
     const n = norm(q);
     if (n.length < 2) return [];
-    return lines.filter((l) => norm(l.label).includes(n) || l.terms.some((t) => norm(t).replace(/\s/g, "").includes(n.replace(/\s/g, "")))).slice(0, 12);
+    return lines.filter((l) => norm(l.label).includes(n) || l.terms.some((t) => norm(t).replace(/\s/g, "").includes(n.replace(/\s/g, "")))).slice(0, 10);
   }, [q, lines]);
+  // Couleur d'une classe d'actifs : fixée par son rang dans l'inventaire de la maison
+  const classColor = useMemo(() => {
+    const order = [...(data?.by_class ?? [])].sort((a, b) => b.amount_eur - a.amount_eur).map((c) => c.label);
+    return (label: string | null | undefined) => { const i = order.indexOf(label ?? ""); return i >= 0 && i < CATEGORICAL.length ? CATEGORICAL[i] : OTHER; };
+  }, [data]);
   if (error) return <div className="page"><ErrorState error={error} /></div>;
   if (!data) return <div className="page"><Loading h={520} /></div>;
+  const tp = eurParts(data.total_eur);
+  const classes = top5(data.by_class);
+  const ccys = top5(data.by_ccy);
+  const maxShared = Math.max(1, ...data.most_shared.map((x) => x.n_funds));
+  const go = (key: string) => nav(`/portefeuilles/ligne?key=${encodeURIComponent(key)}`);
   return (
-    <div className="page">
-      <div className="enc__head">
-        <div>
-          <div className="eyebrow">Portefeuilles · derniers inventaires{data.dates[0] ? ` (au ${fdate(data.dates[0])})` : ""}</div>
-          <h1 className="h1">Ce que nous détenons</h1>
-          <p className="lede" style={{ marginTop: 14 }}>{data.n_instruments.toLocaleString("fr-FR")} lignes dans {data.n_funds} fonds, pour {eur(data.total_eur)} d'actifs inventoriés.</p>
-        </div>
-      </div>
-      <div className="hsearch">
-        <I.Search size={20} />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Quels fonds détiennent… (nom d'émetteur, ISIN)" aria-label="Rechercher une ligne en portefeuille" />
-      </div>
-      {found.length > 0 && (
-        <ul className="hsearch__res" role="list">
-          {found.map((l) => (
-            <li key={l.id}><button type="button" onClick={() => nav(`/portefeuilles/ligne?key=${encodeURIComponent(l.id)}`)}>
-              <span className="strong">{l.label}</span><span className="small muted">{l.sub}</span><span className="num">{eur(l.aum)}</span><I.Arrow size={15} />
-            </button></li>
-          ))}
-        </ul>
-      )}
-      {q.length >= 2 && !found.length && <p className="small muted" style={{ marginTop: 10 }}>Aucune ligne ne correspond à « {q} ».</p>}
+    <div className="hold">
+      <PageHero
+        eyebrow={<>Portefeuilles · derniers inventaires{data.dates[0] ? ` au ${fdate(data.dates[0])}` : ""}</>}
+        title="Ce que nous détenons"
+        lede="Toutes les lignes des derniers inventaires, fonds par fonds. Cherchez un émetteur ou un ISIN pour savoir quels fonds le détiennent, et pour quel poids."
+        figures={[
+          { label: "Actifs inventoriés", value: tp.value, unit: tp.unit, aria: eur(data.total_eur) },
+          { label: "Lignes distinctes", value: num(data.n_instruments) },
+          { label: "Fonds inventoriés", value: String(data.n_funds) },
+          { label: "Classes d'actifs", value: String(data.by_class.length) },
+        ]}
+      />
+      <div className="page hold__page">
+        <section className="section hold__ask" aria-labelledby="h-ask">
+          <Head id="ask" eyebrow="La question" title="Quels fonds détiennent… ?" />
+          <div className={`desk__bar${found.length ? " is-open" : ""}`}>
+            <I.Search size={22} />
+            <input ref={input} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && found[0]) go(found[0].id); if (e.key === "Escape") setQ(""); }}
+              placeholder="Nom d'émetteur, ISIN…" aria-label="Rechercher une ligne en portefeuille" autoComplete="off" spellCheck={false} />
+            {q && <button type="button" className="kbd__clear" onClick={() => { setQ(""); input.current?.focus(); }} aria-label="Effacer"><I.Close size={18} /></button>}
+            {found.length > 0 && (
+              <ul className="desk__results hold__res" role="list">
+                {found.map((l) => (
+                  <li key={l.id}><button type="button" onClick={() => go(l.id)}>
+                    <span className="hold__res-n">{l.label}</span><span className="small muted">{l.sub}</span><span className="num">{eur(l.aum)}</span><I.Arrow size={15} />
+                  </button></li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {q.length >= 2 && !found.length && <p className="small muted" style={{ marginTop: 10 }}>Aucune ligne ne correspond à « {q} ».</p>}
+          <div className="desk__ideas">
+            <span className="small muted">Les plus partagées</span>
+            {data.most_shared.slice(0, 4).map((x) => <button key={x.key} type="button" className="chip" onClick={() => go(x.key)}>{x.name}</button>)}
+          </div>
+        </section>
 
-      <div className="grid grid-2 reveal" style={{ marginTop: 40 }}>
-        <div className="card card--flat">
-          <h2 className="h3" style={{ marginBottom: 14 }}>Répartition par classe d'actifs</h2>
-          <BarList items={data.by_class} value={(x) => x.amount_eur} label={(x) => x.label} right={(x) => <span>{eur(x.amount_eur)} <span className="muted">· {pctRaw(x.weight, 1)}</span></span>} color={() => "var(--ink)"} />
-        </div>
-        <div className="card card--flat">
-          <h2 className="h3" style={{ marginBottom: 14 }}>Répartition par devise</h2>
-          <BarList items={data.by_ccy.slice(0, 10)} value={(x) => x.amount_eur} label={(x) => x.label} right={(x) => <span>{eur(x.amount_eur)} <span className="muted">· {pctRaw(x.weight, 1)}</span></span>} color={() => "var(--ink-2)"} />
-        </div>
-      </div>
-      <div className="grid grid-2 reveal" style={{ marginTop: 24 }}>
-        <div className="card card--flat">
-          <h2 className="h3" style={{ marginBottom: 4 }}>Principales lignes de la maison</h2>
-          <p className="small muted" style={{ marginBottom: 14 }}>Montant cumulé tous fonds confondus.</p>
-          <BarList items={data.instruments.slice(0, 20)} value={(x) => x.amount_eur} label={(x) => x.name} sub={(x) => `${x.asset_class ?? ""} · ${x.n_funds} fonds`}
-            color={() => "var(--gold)"} onSelect={(x) => nav(`/portefeuilles/ligne?key=${encodeURIComponent(x.key)}`)} />
-        </div>
-        <div className="card card--flat">
-          <h2 className="h3" style={{ marginBottom: 4 }}>Lignes les plus partagées</h2>
-          <p className="small muted" style={{ marginBottom: 14 }}>Détenues par le plus grand nombre de fonds.</p>
-          <BarList items={data.most_shared} value={(x) => x.n_funds} label={(x) => x.name} right={(x) => <span>{x.n_funds} fonds <span className="muted">· {eur(x.amount_eur)}</span></span>}
-            color={() => "var(--ink-2)"} onSelect={(x) => nav(`/portefeuilles/ligne?key=${encodeURIComponent(x.key)}`)} />
-        </div>
+        <section className="section reveal" aria-labelledby="h-ana">
+          <Head id="ana" eyebrow="L'anatomie" title="De quoi sont faits nos portefeuilles"
+            lede="Montants cumulés de tous les inventaires, en euros. Au-delà de cinq catégories, le reste est regroupé." />
+          <h3 className="hold__sub">Par classe d'actifs</h3>
+          <Strip items={classes} value={(x) => x.amount_eur} label={(x) => x.label} color={(x) => (x.label.startsWith("Autres") ? OTHER : classColor(x.label))}
+            detail={(x) => `${eur(x.amount_eur)} · ${pctRaw(x.weight, 1)}`} ariaLabel="Répartition des actifs par classe" />
+          <h3 className="hold__sub">Par devise</h3>
+          <Strip items={ccys} value={(x) => x.amount_eur} label={(x) => x.label} color={(x, i) => (x.label.startsWith("Autres") ? OTHER : CATEGORICAL[i] ?? OTHER)}
+            detail={(x) => `${eur(x.amount_eur)} · ${pctRaw(x.weight, 1)}`} ariaLabel="Répartition des actifs par devise" />
+        </section>
+
+        <section className="section reveal" aria-labelledby="h-lines">
+          <Head id="lines" eyebrow="Les lignes de la maison" title="Nos 40 premières positions"
+            lede="Surface : montant détenu, tous fonds confondus. Couleur : classe d'actifs. Cliquez une case pour voir les fonds qui la détiennent." />
+          <Mosaic height={480} onSelect={(x) => go(x.key)} share={false}
+            items={data.instruments.slice(0, 40).map((x) => ({ key: x.key, label: x.name, value: x.amount_eur, color: classColor(x.asset_class),
+              sub: `${x.asset_class ?? "—"} · ${plural(x.n_funds, "fonds", "fonds")}`, ariaExtra: `${x.asset_class ?? ""}, détenue par ${plural(x.n_funds, "fonds", "fonds")}` }))}
+            legend={<div className="legend" style={{ marginTop: 12 }}>{classes.map((c) => <span key={c.label} className="legend__i"><span className="dot" style={{ background: c.label.startsWith("Autres") ? OTHER : classColor(c.label) }} />{c.label}</span>)}</div>} />
+        </section>
+
+        <section className="section reveal" aria-labelledby="h-shared">
+          <Head id="shared" eyebrow="Les convictions communes" title="Les lignes les plus partagées"
+            lede="Un point par fonds qui détient la ligne." />
+          <ol className="dots">
+            {data.most_shared.map((x, i) => (
+              <li key={x.key}>
+                <button type="button" className="dots__row" onClick={() => go(x.key)}>
+                  <span className="dots__i num">{String(i + 1).padStart(2, "0")}</span>
+                  <span className="dots__n">{x.name}</span>
+                  <span className="dots__m" aria-hidden="true">{Array.from({ length: maxShared }, (_, k) => <i key={k} className={k < x.n_funds ? "is-on" : ""} />)}</span>
+                  <span className="dots__v num">{plural(x.n_funds, "fonds", "fonds")}<span className="muted small"> · {eur(x.amount_eur)}</span></span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </section>
       </div>
     </div>
   );

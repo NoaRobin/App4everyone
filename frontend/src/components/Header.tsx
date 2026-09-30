@@ -39,7 +39,7 @@ export function Header() {
         </Link>
         <nav className="spaces" aria-label="Espaces">
           <Link to="/" className={`spaces__a${pano ? " is-on" : ""}`} aria-current={pano ? "page" : undefined}>Panorama</Link>
-          <Link to="/metiers" className={`spaces__a${!pano ? " is-on" : ""}`} aria-current={loc.pathname === "/metiers" ? "page" : undefined}>Espace métiers</Link>
+          <Link to="/metiers" className={`spaces__a${!pano ? " is-on" : ""}`} aria-current={loc.pathname === "/metiers" ? "page" : undefined}><span className="spaces__x">Espace </span>métiers</Link>
           <span className="spaces__k" aria-hidden="true" data-on={pano ? "0" : "1"} />
         </nav>
         {!pano && (

@@ -1,7 +1,8 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { useApi } from "../lib/api";
 import { useApp } from "../lib/context";
-import { date as fdate, eur, pctRaw } from "../lib/format";
+import { date as fdate, eur, eurParts, pctRaw } from "../lib/format";
+import { PageHero } from "../components/Editorial";
 import { FAMILY_LABEL, famVar } from "../lib/families";
 import type { FamilyKey } from "../lib/types";
 import { CopyCode, Crumbs, ErrorState, Loading } from "../components/ui";
@@ -18,17 +19,20 @@ export default function Instrument() {
   if (error) return <div className="page"><ErrorState error={error} /></div>;
   if (!data) return <div className="page"><Loading h={420} /></div>;
   return (
-    <div className="page">
-      <Crumbs items={[{ label: "Portefeuilles", to: "/portefeuilles" }, { label: data.name }]} />
-      <div className="enc__head">
-        <div>
-          <div className="eyebrow">{[data.asset_class, data.debt, data.ccy].filter(Boolean).join(" · ")}</div>
-          <h1 className="h1">{data.name}</h1>
-          <div className="row" style={{ marginTop: 14 }}><CopyCode code={data.isin} /></div>
-        </div>
-        <div className="enc__total"><div className="eyebrow">Détenu par la maison</div><div className="enc__total-v num">{eur(data.total_eur)}</div>
-          <div className="small muted">dans {data.funds.length} fonds</div></div>
-      </div>
+    <div className="instr">
+      <PageHero
+        top={<Crumbs items={[{ label: "Portefeuilles", to: "/portefeuilles" }, { label: data.name }]} />}
+        eyebrow={[data.asset_class, data.debt, data.ccy].filter(Boolean).join(" · ") || "Ligne en portefeuille"}
+        title={data.name}
+        lede={<>Les fonds de la maison qui détiennent cette ligne dans leur dernier inventaire, avec son poids dans chacun.</>}
+        aside={<CopyCode code={data.isin} />}
+        figures={[
+          { label: "Détenu par la maison", value: eurParts(data.total_eur).value, unit: eurParts(data.total_eur).unit, aria: eur(data.total_eur) },
+          { label: "Fonds détenteurs", value: String(data.funds.length) },
+          { label: "Poids maximal", value: data.funds.length ? pctRaw(Math.max(...data.funds.map((f) => f.weight)), 2).replace(/\s%$/, "") : "—", unit: "%" },
+        ]}
+      />
+      <div className="page instr__page">
       <div className="grid grid-2" style={{ marginTop: 24 }}>
         <div className="card card--flat">
           <h2 className="h3" style={{ marginBottom: 14 }}>Montant détenu par fonds</h2>
@@ -44,6 +48,7 @@ export default function Instrument() {
             ))}</tbody>
           </table>
         </div>
+      </div>
       </div>
     </div>
   );

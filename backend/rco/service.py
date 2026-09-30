@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from .config import Settings
 from .domain import analytics as A
 from .domain import fields as F
 from .domain import holdings as H
@@ -40,9 +41,13 @@ def _str(x: Any) -> str | None:
 
 
 class Service:
-    def __init__(self, model: Model):
+    def __init__(self, model: Model, rmm_columns: tuple[str, ...] | None = None, rmm_pattern: str | None = None):
         self.m = model
         self._registrations = self._build_registrations()
+        cfg = Settings.__dataclass_fields__
+        self.rmm_columns = rmm_columns or cfg["rmm_columns"].default
+        self.rmm_pattern = rmm_pattern or cfg["rmm_pattern"].default
+        self.rmm = L.rmm_funds(model.funds, self.rmm_columns, self.rmm_pattern)
 
     # ------------------------------------------------------------------ utilitaires
     def end(self, d: str | None) -> pd.Timestamp:
@@ -389,11 +394,15 @@ class Service:
         c["fund_id"] = c["pi_shareid"].map(m.shares["ProductID"]) if "ProductID" in m.shares else None
         return c
 
-    @lru_cache(maxsize=16)
-    def distribution(self, d: str | None) -> dict:
-        m, end = self.m, self.end(d)
+    def _active_regs(self, exclude_rmm: bool) -> pd.DataFrame:
         regs = self._registrations
         act = regs[regs["active"]]
+        return act[~act["fund_id"].isin(self.rmm)] if exclude_rmm else act
+
+    @lru_cache(maxsize=16)
+    def distribution(self, d: str | None, exclude_rmm: bool = False) -> dict:
+        m, end = self.m, self.end(d)
+        act = self._active_regs(exclude_rmm)
         share_aum = self._share_aum_by_ref(end)
         out = []
         for (cty, iso), g in act.groupby(["country_fr", "iso"]):
@@ -401,14 +410,100 @@ class Service:
             out.append({"country": cty, "iso": iso, "n_shares": len(sids), "n_funds": int(g["fund_id"].nunique()),
                         "aum_registered": float(sum(share_aum.get(s, 0.0) for s in sids))})
         out.sort(key=lambda x: -x["n_shares"])
+        shares = m.shares
+        if exclude_rmm and "ProductID" in shares:
+            shares = shares[~shares["ProductID"].isin(self.rmm)]
         plat = []
         for col, lab in F.PLATFORMS:
-            if col in m.shares:
-                flags = m.shares[col].map(L.to_bool)
-                sids = m.shares.index[flags.fillna(False).astype(bool)]
+            if col in shares:
+                flags = shares[col].map(L.to_bool)
+                sids = shares.index[flags.fillna(False).astype(bool)]
                 plat.append({"label": lab, "n_shares": int(len(sids)), "aum": float(sum(share_aum.get(s, 0.0) for s in sids))})
+        rmm_live = [f for f in self.rmm if f in m.funds.index]
         return {"date": end.date().isoformat(), "countries": out, "platforms": plat,
-                "n_shares_registered": int(act["pi_shareid"].nunique())}
+                "n_shares_registered": int(act["pi_shareid"].nunique()), "n_funds_registered": int(act["fund_id"].nunique()),
+                "sankey": self._sankey(act), "routes": self._routes(act), "timeline": self._timeline(act), "exclude_rmm": exclude_rmm,
+                "rmm": {"n_funds": len(rmm_live), "funds": sorted(m.funds.loc[rmm_live, "name"].astype(str).tolist()),
+                        "rule": {"columns": list(self.rmm_columns), "pattern": self.rmm_pattern}}}
+
+    def _timeline(self, act: pd.DataFrame) -> dict:
+        """Ouverture au fil des ans : enregistrements actifs par année d'enregistrement et pays ouverts cette année-là."""
+        if act.empty:
+            return {"years": [], "undated": 0}
+        y = pd.to_datetime(act["Registration_Date"], errors="coerce").dt.year
+        df = pd.DataFrame({"y": y.values, "cty": act["country_fr"].values, "iso": act["iso"].values, "fid": act["fund_id"].values})
+        undated = int(df["y"].isna().sum())
+        df = df.dropna(subset=["y"])
+        df["y"] = df["y"].astype(int)
+        first = df.groupby("cty")["y"].min()
+        years, cum = [], 0
+        for yr in range(int(df["y"].min()), int(df["y"].max()) + 1) if len(df) else []:
+            g = df[df["y"] == yr]
+            cum += len(g)
+            years.append({"year": yr, "new": int(len(g)), "cumulative": cum, "n_funds": int(g["fid"].nunique()),
+                          "opened": sorted(first[first == yr].index.tolist())})
+        return {"years": years, "undated": undated}
+
+    def _routes(self, act: pd.DataFrame) -> list[dict]:
+        """Pour la carte : enregistrements actifs par pays de domiciliation du fonds et pays d'enregistrement."""
+        m = self.m
+        if act.empty or "Domiciliation" not in m.funds:
+            return []
+        dom = act["fund_id"].map(m.funds["Domiciliation"].map(_str))
+        df = pd.DataFrame({"sid": act["pi_shareid"].values, "fid": act["fund_id"].values, "cty": act["country_fr"].values,
+                           "iso": act["iso"].values, "dom": dom.values}).dropna(subset=["dom"])
+        out = []
+        for (d, c, iso), g in df.groupby(["dom", "cty", "iso"]):
+            out.append({"domicile": d, "domicile_iso": L.country(d)[1], "country": c, "iso": iso,
+                        "value": int(len(g)), "n_funds": int(g["fid"].nunique())})
+        return sorted(out, key=lambda r: -r["value"])
+
+    def _sankey(self, act: pd.DataFrame, top: int = 11) -> dict:
+        """
+        Flux famille de gestion → domiciliation du fonds → pays d'enregistrement.
+        Unité : un enregistrement actif (une part autorisée dans un pays). Additive d'une colonne à l'autre,
+        contrairement aux encours qui, eux, ne se répartissent pas par pays dans les données.
+        """
+        m = self.m
+        if act.empty:
+            return {"unit": "enregistrements", "nodes": [], "links": []}
+        df = pd.DataFrame({"sid": act["pi_shareid"].values, "fid": act["fund_id"].values, "cty": act["country_fr"].values, "iso": act["iso"].values})
+        df["fam"] = df["fid"].map(m.funds["family"]).fillna("nc")
+        dom = m.funds["Domiciliation"].map(_str) if "Domiciliation" in m.funds else pd.Series(dtype=object)
+        df["dom"] = df["fid"].map(dom).fillna("Domiciliation non renseignée")
+        counts = df.groupby("cty")["sid"].count().sort_values(ascending=False)
+        keep = set(counts.index[:top])
+        n_other = int(counts.index.size - len(keep))
+        df["dest"] = df["cty"].where(df["cty"].isin(keep), "Autres pays")
+        iso = dict(zip(df["cty"], df["iso"]))
+        nodes, index = [], {}
+
+        def node(key: str, label: str, col: int, **kw):
+            if key not in index:
+                index[key] = len(nodes)
+                nodes.append({"id": key, "label": label, "col": col, **kw})
+            return index[key]
+
+        fam_order = [f["key"] for f in L.FAMILIES] + ["nc"]
+        for k in fam_order:
+            g = df[df["fam"] == k]
+            if len(g):
+                node(f"f:{k}", self._family_label(k), 0, family=k, value=int(len(g)), n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()))
+        for dname, g in df.groupby("dom"):
+            node(f"d:{dname}", dname, 1, value=int(len(g)), n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()))
+        for cname in [*counts.index[:top], "Autres pays"]:
+            g = df[df["dest"] == cname]
+            if len(g):
+                node(f"c:{cname}", cname if cname != "Autres pays" else f"{n_other} autres pays", 2, iso=iso.get(cname), value=int(len(g)),
+                     n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()), other=cname == "Autres pays")
+        links = []
+        for (a, b), g in df.groupby(["fam", "dom"]):
+            links.append({"source": index[f"f:{a}"], "target": index[f"d:{b}"], "value": int(len(g)), "family": a,
+                          "n_funds": int(g["fid"].nunique()), "n_shares": int(g["sid"].nunique())})
+        for (a, b, f), g in df.groupby(["dom", "dest", "fam"]):
+            links.append({"source": index[f"d:{a}"], "target": index[f"c:{b}"], "value": int(len(g)), "family": f,
+                          "n_funds": int(g["fid"].nunique()), "n_shares": int(g["sid"].nunique())})
+        return {"unit": "enregistrements", "nodes": nodes, "links": links}
 
     def _share_aum_by_ref(self, end: pd.Timestamp) -> dict[str, float]:
         m = self.m
@@ -417,11 +512,13 @@ class Service:
         return a.groupby(sid).sum().to_dict()
 
     @lru_cache(maxsize=64)
-    def country(self, name: str, d: str | None) -> dict:
+    def country(self, name: str, d: str | None, exclude_rmm: bool = False) -> dict:
         m, end = self.m, self.end(d)
         label = L.country(name)[0]
         regs = self._registrations
         g = regs[regs["country_fr"] == label]
+        if exclude_rmm:
+            g = g[~g["fund_id"].isin(self.rmm)]
         share_aum = self._share_aum_by_ref(end)
         rows = []
         for _, r in g.iterrows():
@@ -435,9 +532,9 @@ class Service:
                          "fund": m.funds.at[fid, "name"] if fid in m.funds.index else None,
                          "family": m.funds.at[fid, "family"] if fid in m.funds.index else "nc",
                          "active": bool(r["active"]), "date": _str(r["Registration_Date"]), "finma": L.to_bool(r["FINMA_Autorization"]),
-                         "comment": _str(r["Comment"]), "aum": share_aum.get(sid)})
+                         "comment": _str(r["Comment"]), "aum": share_aum.get(sid), "rmm": fid in self.rmm})
         rows.sort(key=lambda x: (not x["active"], x["fund"] or "", x["share"] or ""))
-        return {"date": end.date().isoformat(), "country": label, "iso": L.country(name)[1], "rows": rows,
+        return {"date": end.date().isoformat(), "country": label, "iso": L.country(name)[1], "rows": rows, "exclude_rmm": exclude_rmm,
                 "n_funds": len({r["fund_id"] for r in rows if r["active"]}), "n_shares": sum(r["active"] for r in rows)}
 
     # ------------------------------------------------------------------ portefeuilles

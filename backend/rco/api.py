@@ -33,7 +33,7 @@ def service() -> Service:
         s = load_settings()
         t0 = time.time()
         model = build_model(make_source(s), stale_days=s.stale_days, history_years=s.history_years, is_mock=s.data_source != "fabric")
-        _service = Service(model)
+        _service = Service(model, s.rmm_columns, s.rmm_pattern)
         log.info("Modèle chargé en %.1f s (%d fonds, %d parts)", time.time() - t0, len(model.funds), len(model.link))
     return _service
 
@@ -131,14 +131,19 @@ def instrument(key: str = Query(...), date: str | None = None):
     return _ok(service().instrument(key, date))
 
 
+def _no_rmm(v: str | None) -> bool:
+    """`?rmm=exclure` retire les fonds Rothschild Martin Maurel de la distribution."""
+    return (v or "").strip().lower() in {"exclure", "sans", "0", "false", "non"}
+
+
 @app.get("/api/distribution")
-def distribution(date: str | None = None):
-    return _ok(service().distribution(date))
+def distribution(date: str | None = None, rmm: str | None = None):
+    return _ok(service().distribution(date, _no_rmm(rmm)))
 
 
 @app.get("/api/countries/{name}")
-def country(name: str, date: str | None = None):
-    return _ok(service().country(name, date))
+def country(name: str, date: str | None = None, rmm: str | None = None):
+    return _ok(service().country(name, date, _no_rmm(rmm)))
 
 
 @app.get("/api/risk")

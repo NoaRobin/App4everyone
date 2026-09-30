@@ -246,3 +246,4 @@
   .hdr__tools { gap: 6px; }
 }
 .asof { flex: none; }
+@media (max-width: 640px) { .spaces__x { display: none; } .hdr__burger { flex: none; } }

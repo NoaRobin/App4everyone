@@ -82,6 +82,14 @@ FUNDS: list[tuple] = [
     ("Sélection ISR", FAM_AO, "Multigestion", "Diversifié", "Multigestion diversifiée", "50 % MSCI ACWI ESG Leaders NR + 50 % Bloomberg MSCI Euro Agg SRI", .04, .07, 210, "Article 8", "France"),
 ]
 
+# Première année d'ouverture de chaque pays à la commercialisation (données fictives)
+OPENING = {"France": 2008, "Luxembourg": 2008, "Belgium": 2010, "Switzerland": 2011, "Germany": 2012, "Italy": 2013, "Spain": 2014,
+           "Austria": 2014, "Netherlands": 2015, "Portugal": 2016, "United Kingdom": 2017, "Sweden": 2018, "Finland": 2019,
+           "Denmark": 2019, "Norway": 2020, "Ireland": 2021, "Singapore": 2022, "Chile": 2024}
+
+# Fonds promus par Rothschild Martin Maurel dans les données fictives (pour éprouver le filtre « RMM »)
+RMM_DEMO = {"Patrimoine Prudent", "Patrimoine Dynamique", "Profil Prudent Multigestion", "Profil Équilibre Multigestion",
+            "Profil Dynamique Multigestion", "Sélection Obligataire Monde"}
 WEEKLY = {"Or & Matières", "Sélection Alternatifs", "Asie Croissance"}
 LAUNCHES = {"Obligations Vertes": date(2025, 6, 2), "Échéance 2030": date(2025, 1, 6)}
 LIQUIDATED = ("Échéance 2024", FAM_FI, date(2024, 12, 20))  # présent dans JUMP, absent du référentiel actif
@@ -519,6 +527,7 @@ class MockLakehouse:
                 Commissaire_Aux_Comptes=["Cabinet Audit Nord", "Audit & Associés Démo", "Contrôle Expertise Démo"][i % 3],
                 Auditors_Mandate_Start_Date=date(auditor_end.year - 6, 1, 1), Auditors_Mandate_Termination_Date=auditor_end,
                 Investment_Manager="Société de gestion (démo)",
+                Sponsoring_Entity=("Rothschild Martin Maurel" if p["name"] in RMM_DEMO else "Rothschild & Co Asset Management"),
                 Delegation_investment_manager=("Délégataire Asie Démo" if p["name"] == "Asie Croissance" else None),
                 Investment_Management_Delegation=_yn(p["name"] == "Asie Croissance"),
                 Fund_of_Funds=_yn(p["fam"] == FAM_AO), Feeder_Fund_=_yn(False), ETF_Fund=_yn(False),
@@ -554,9 +563,16 @@ class MockLakehouse:
                 chosen = base + list(rng.choice(others, size=min(k, len(others)), replace=False))
                 if sp.ccy == "CHF" and "Switzerland" not in chosen:
                     chosen.append("Switzerland")
+            start = max(filter(None, [date(2008 + (p["idx"] % 14), 1 + p["idx"] % 12, 1), p["launch"], sp.launch]))
             for c in chosen:
                 withdrawn = rng.random() < .03
-                reg = date(2012 + int(rng.integers(0, 13)), int(rng.integers(1, 13)), 1)
+                # Les pays s'ouvrent progressivement : domicile d'abord, puis l'Europe, l'Asie et l'Amérique latine plus tard
+                opens = OPENING.get(c, 2014)
+                y0 = max(start.year, opens) if c not in base else start.year
+                y = min(2026, y0 + int(rng.integers(0, 3)) * (c not in base))
+                reg = date(y, int(rng.integers(1, 13)) if y < 2026 else int(rng.integers(1, 9)), 1)
+                if reg < start:
+                    reg = start
                 recs.append(dict(
                     Id=_uid("reg", sp.pi_shareid, c), pi_countryofregistrationid=_uid("reg", sp.pi_shareid, c),
                     pi_shareid=sp.pi_shareid, Country=c, pi_name=f"{sp.isin} - {c}",

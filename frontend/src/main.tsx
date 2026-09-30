@@ -9,6 +9,7 @@ import "./styles/base.css";
 import "./styles/app.css";
 import "./styles/editorial.css";
 import "./styles/spaces.css";
+import "./styles/pages.css";
 import { App } from "./App";
 import { AppProvider } from "./lib/context";
 

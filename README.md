@@ -26,7 +26,7 @@ Le site a **deux espaces**, commutés par le sélecteur de l'en-tête :
 | **Encours** | Répartition par famille, gamme, classe d'actifs, expertise, gérant, SFDR, SRI, domicile, devise, type de part… Chaque ligne ouvre la liste des fonds. |
 | **Sélection** | Toute combinaison de critères, avec agrégat en tête et détail en dessous, exportable. |
 | **Portefeuilles** | Ce que nous détenons, et quels fonds détiennent une ligne donnée. |
-| **Distribution** | Pays d'enregistrement et plateformes ; par pays, les fonds et parts autorisés. |
+| **Distribution** | Où nos fonds sont commercialisés : carte 3D (hauteur = fonds enregistrés, arcs depuis le pays de domiciliation), Sankey 3D famille → domiciliation → pays, frise de l'ouverture des pays année après année, carte en tuiles et classement, plateformes ; par pays, les fonds et parts autorisés. Un interrupteur retire les fonds **Rothschild Martin Maurel (RMM)** de toute la rubrique (chiffres, visuels, pays), et reste appliqué d'une page à l'autre (`?rmm=exclure`). |
 | **Risques & contrôles** | SRI, volatilité, drawdown, tracking error, concentration ; contrôles automatiques de conformité et de qualité des données. |
 
 La recherche universelle est accessible partout (`Ctrl K` / `⌘ K` ou `/`). Elle comprend les combinaisons
@@ -135,6 +135,12 @@ premier chargement. Aucun secret n'est stocké. L'application charge l'historiqu
   dividende par part à la date de détachement, dans la devise de la VL.
 - Les frais et pourcentages du référentiel sont supposés exprimés en points de pourcentage (1,35 = 1,35 %).
 - Holdings : `ID_PI_FONDS` est supposé égal à `pi_productid` (secours par l'identifiant JUMP du fonds).
+- Fonds **RMM** (Rothschild Martin Maurel) : le référentiel n'a pas de colonne dédiée. Un fonds est considéré comme RMM quand
+  « RMM » (mot entier) ou « Martin Maurel » figure dans `Sponsoring_Entity`, `Investment_Manager`, `Owning_Business_Unit`,
+  `Owning_Team`, `Fund_Range`, `Umbrella_Name` ou `Product_Name`. Réglable sans toucher au code :
+  `APP_RMM_COLUMNS` (liste de colonnes séparées par des virgules) et `APP_RMM_PATTERN` (expression régulière).
+- Sankey de la distribution : l'unité est l'**enregistrement actif** (une part autorisée dans un pays), additive d'une colonne
+  à l'autre. Les encours, eux, ne se répartissent pas par pays dans les données : ils ne sont jamais ventilés ainsi.
 
 ### Ce que les données ne permettent pas (et que l'application n'invente pas)
 
@@ -142,6 +148,10 @@ premier chargement. Aucun secret n'est stocké. L'application charge l'historiqu
 - Mesures ESG chiffrées (empreinte carbone, scores) : les champs EET indiquent la *prise en compte*, pas la valeur.
 - Répartition sectorielle ou géographique des portefeuilles : les inventaires ne portent ni secteur ni pays d'émetteur.
 - VaR, stress tests, attribution de performance, classements concurrentiels (hors note Morningstar).
+
+Fond de carte : Natural Earth (domaine public) via le paquet `world-atlas` (licence ISC), projeté avec `d3-geo`.
+Palettes des graphiques d'analyse (catégorielle et rampe du SRI) vérifiées par script : luminance, chroma, séparation
+pour les daltonismes et contraste sur le fond sombre.
 
 ## Charte graphique
 
@@ -159,6 +169,11 @@ les hausses et baisses portent toujours un signe et une flèche. Tout est dans `
 | Ville 3D | Panorama | Le poids de chaque fonds et de chaque famille, et son évolution dans le temps |
 | Équation de l'année | Panorama | Encours au 31/12 + collecte + effet marché = encours du jour, barres proportionnelles |
 | Tableau à palettes | Panorama | Les pays de commercialisation, par nombre de parts enregistrées |
+| Carte 3D | Distribution | Où nos fonds sont autorisés (relief = fonds ou parts enregistrés), depuis quel pays de domiciliation (arcs) |
+| Sankey 3D | Distribution | Le parcours des autorisations : famille de gestion → domiciliation → pays, une famille par couloir de profondeur |
+| Frise d'ouverture | Distribution | Depuis quand chaque pays est ouvert, et le rythme des enregistrements |
+| Échelle du risque | Risques | Encours par SRI de 1 à 7 ; une marche filtre les fonds |
+| Bande proportionnelle | Portefeuilles | De quoi sont faits nos portefeuilles (classes d'actifs, devises) |
 | Pont des encours | Fiche fonds, fiche part, sélection | D'où vient la variation : encours de départ → collecte → marché → encours d'arrivée (axe tronqué signalé) |
 | Mosaïque | Sélection, Encours, fiche fonds | Qui pèse (surface) et qui progresse (couleur) ; pour un portefeuille, ce qui a été renforcé, allégé ou acheté |
 | Risque / rendement | Sélection, Risques | Performance et volatilité sur 1 an, taille = encours |

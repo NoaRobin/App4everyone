@@ -16,6 +16,11 @@ class Settings:
     history_years: int
     # Nombre de jours calendaires au-delà duquel une VL n'est plus reportée.
     stale_days: int
+    # Repérage des fonds Rothschild Martin Maurel (« RMM ») : aucune colonne dédiée dans le référentiel,
+    # on cherche ce motif dans ces colonnes produit. À valider sur les données réelles.
+    rmm_pattern: str = r"\bRMM\b|martin\s*maurel"
+    rmm_columns: tuple[str, ...] = ("Sponsoring_Entity", "Investment_Manager", "Owning_Business_Unit", "Owning_Team",
+                                    "Fund_Range", "Umbrella_Name", "Product_Name")
 
 
 def load_settings() -> Settings:
@@ -26,4 +31,6 @@ def load_settings() -> Settings:
         odbc_driver=os.getenv("FABRIC_ODBC_DRIVER", "ODBC Driver 18 for SQL Server"),
         history_years=int(os.getenv("APP_HISTORY_YEARS", "4")),
         stale_days=int(os.getenv("APP_STALE_DAYS", "12")),
+        **({"rmm_pattern": os.environ["APP_RMM_PATTERN"]} if os.getenv("APP_RMM_PATTERN") else {}),
+        **({"rmm_columns": tuple(c.strip() for c in os.environ["APP_RMM_COLUMNS"].split(",") if c.strip())} if os.getenv("APP_RMM_COLUMNS") else {}),
     )

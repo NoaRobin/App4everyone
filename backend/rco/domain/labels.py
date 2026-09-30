@@ -101,3 +101,14 @@ def sfdr_short(v: Any) -> str | None:
         if k in s or s == k[-1]:
             return lab
     return str(v) if v else None
+
+
+def rmm_funds(products: Any, columns: tuple[str, ...], pattern: str) -> set[str]:
+    """Identifiants des fonds dont l'une des colonnes contient le motif RMM (insensible à la casse et aux accents)."""
+    rx = re.compile(pattern, re.I)
+    out: set[str] = set()
+    cols = [c for c in columns if c in getattr(products, "columns", [])]
+    for pid, row in products[cols].iterrows():
+        if any(isinstance(v, str) and rx.search(norm(v)) for v in row.values):
+            out.add(pid)
+    return out

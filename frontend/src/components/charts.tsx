@@ -133,7 +133,7 @@ function valueAt(points: Point[], d: string): number | null {
 }
 
 /** Aires empilées (encours par famille, fin de mois). */
-export function StackedArea({ layers, height = 320, ariaLabel }: { layers: Series[]; height?: number; ariaLabel: string }) {
+export function StackedArea({ layers, height = 320, ariaLabel, format = eur }: { layers: Series[]; height?: number; ariaLabel: string; format?: (v: number) => string }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
   const W = Math.max(width, 280), H = height, m = { t: 12, r: 70, b: 30, l: 4 };
@@ -158,7 +158,7 @@ export function StackedArea({ layers, height = 320, ariaLabel }: { layers: Serie
         onKeyDown={(e) => { if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); setHover((h) => Math.max(0, Math.min(months.length - 1, (h ?? months.length - 1) + (e.key === "ArrowRight" ? 1 : -1)))); } }}
         onPointerMove={(e) => onMove(e.clientX - (e.currentTarget as SVGSVGElement).getBoundingClientRect().left)} onPointerLeave={() => setHover(null)} onBlur={() => setHover(null)}>
         {y.ticks(4).map((t) => (
-          <g key={t}><line x1={m.l} x2={W - m.r} y1={y(t)} y2={y(t)} className="chart__grid" /><text x={W - m.r + 8} y={y(t)} dy="0.32em" className="chart__tick">{eur(t)}</text></g>
+          <g key={t}><line x1={m.l} x2={W - m.r} y1={y(t)} y2={y(t)} className="chart__grid" /><text x={W - m.r + 8} y={y(t)} dy="0.32em" className="chart__tick">{format(t)}</text></g>
         ))}
         {timeTicks(x, W).map((t) => <text key={t.getTime()} x={x(t)} y={H - 8} textAnchor="middle" className="chart__tick">{tickLabel(t, spanDays)}</text>)}
         {st.map((s, i) => {
@@ -177,9 +177,9 @@ export function StackedArea({ layers, height = 320, ariaLabel }: { layers: Serie
         <div className="chart__tip" style={{ left: Math.min(Math.max(hx, 120), W - 120) }} role="status">
           <div className="chart__tip-d">{monthYear(months[hover], true)}</div>
           {[...layers].reverse().map((l) => (
-            <div key={l.key} className="chart__tip-row"><span className="dot" style={{ background: l.color }} /><span>{l.label}</span><b className="num">{eur(l.points[hover]?.v)}</b></div>
+            <div key={l.key} className="chart__tip-row"><span className="dot" style={{ background: l.color }} /><span>{l.label}</span><b className="num">{format(l.points[hover]?.v ?? 0)}</b></div>
           ))}
-          <div className="chart__tip-row chart__tip-total"><span>Total</span><b className="num">{eur(layers.reduce((s, l) => s + (l.points[hover]?.v ?? 0), 0))}</b></div>
+          {format === eur && <div className="chart__tip-row chart__tip-total"><span>Total</span><b className="num">{eur(layers.reduce((s, l) => s + (l.points[hover]?.v ?? 0), 0))}</b></div>}
         </div>
       )}
     </div>
