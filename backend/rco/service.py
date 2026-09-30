@@ -14,6 +14,7 @@ from .domain import analytics as A
 from .domain import fields as F
 from .domain import holdings as H
 from .domain import labels as L
+from .domain.numeric import fmt_meur, numeric_series, safe_divide, safe_float
 from .domain.model import PERIODS, Model, _clean
 
 FUND_DIMS = {
@@ -30,7 +31,8 @@ SHARE_DIMS = {
 
 
 def _num(x: Any) -> float | None:
-    return A._f(x)
+    """Valeur numérique finie ou None (Decimal, NumPy, pandas NA ; voir domain/numeric.py)."""
+    return safe_float(x)
 
 
 def _str(x: Any) -> str | None:
@@ -38,6 +40,16 @@ def _str(x: Any) -> str | None:
     if x is None:
         return None
     return str(x)
+
+
+def _rebase(bench: pd.Series | None) -> pd.Series | None:
+    """Indicateur de référence en base 100 sur sa première valeur valide (None si aucune valeur valide non nulle)."""
+    if bench is None:
+        return None
+    b = numeric_series(bench)
+    first = b.dropna()
+    b0 = safe_float(first.iloc[0]) if len(first) else None
+    return b / b0 * 100 if b0 else None
 
 
 class Service:
@@ -266,7 +278,7 @@ class Service:
         perf_payload = None
         if perf:
             idx, bench = perf.pop("_index"), perf.pop("_bench")
-            b = bench / bench.dropna().iloc[0] * 100 if bench is not None else None
+            b = _rebase(bench)
             perf_payload = {**perf, "share": self._share_brief(main, end),
                             "index": A.daily_points(idx, end), "bench_index": A.daily_points(b, end) if b is not None else []}
         shares = [self._share_brief(jp, end) for jp in jps]
@@ -362,7 +374,7 @@ class Service:
         perf_payload = None
         if perf:
             idx, bench = perf.pop("_index"), perf.pop("_bench")
-            b = bench / bench.dropna().iloc[0] * 100 if bench is not None else None
+            b = _rebase(bench)
             nav = A.share_nav_frame(m, jp)[:end]["VL_UNITAIRE"]
             perf_payload = {**perf, "index": A.daily_points(idx, end), "bench_index": A.daily_points(b, end) if b is not None else [],
                             "nav_series": A.daily_points(nav, end)}
@@ -408,7 +420,7 @@ class Service:
         for (cty, iso), g in act.groupby(["country_fr", "iso"]):
             sids = set(g["pi_shareid"])
             out.append({"country": cty, "iso": iso, "n_shares": len(sids), "n_funds": int(g["fund_id"].nunique()),
-                        "aum_registered": float(sum(share_aum.get(s, 0.0) for s in sids))})
+                        "aum_registered": float(sum(share_aum.get(s, 0.0) for s in sorted(sids, key=str)))})
         out.sort(key=lambda x: -x["n_shares"])
         shares = m.shares
         if exclude_rmm and "ProductID" in shares:
@@ -663,12 +675,14 @@ class Service:
         last = m.aum_raw[m.aum_raw["DATE_VL"] <= end]
         last = last[last["DATE_VL"] == last.groupby("ID_JUMP_FONDS")["DATE_VL"].transform("max")]
         for jf, g in last.groupby("ID_JUMP_FONDS"):
-            parts = g["ACTIF_NET_PART_EURO"].sum()
-            tot = g["ACTIF_NET_TOTAL_EURO"].dropna()
-            if len(tot) and tot.iloc[0] and abs(parts - tot.iloc[0]) / abs(tot.iloc[0]) > .005:
+            parts = safe_float(numeric_series(g["ACTIF_NET_PART_EURO"]).sum(min_count=1))
+            tot_s = numeric_series(g["ACTIF_NET_TOTAL_EURO"]).dropna()
+            tot = safe_float(tot_s.iloc[0]) if len(tot_s) else None
+            gap = safe_divide(abs(parts - tot), abs(tot)) if parts is not None and tot else None
+            if gap is not None and gap > .005:
                 fid = m.link[m.link["ID_JUMP_FONDS"] == jf]["fund_id"].iloc[0]
                 items.append({"fund_id": fid, "name": name(fid),
-                              "detail": f"Somme des parts {parts / 1e6:,.1f} M€ ≠ actif net total {tot.iloc[0] / 1e6:,.1f} M€".replace(",", " ").replace(".", ",")})
+                              "detail": f"Somme des parts {fmt_meur(parts)} ≠ actif net total {fmt_meur(tot)}"})
         add("totals", "Cohérence de l'actif net total", "Données", "warning",
             "Écart de plus de 0,5 % entre la somme des parts et l'actif net total publié.", items)
 

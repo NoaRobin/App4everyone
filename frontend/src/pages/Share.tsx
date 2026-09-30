@@ -14,6 +14,7 @@ import { shareEntries2 } from "../lib/fiche";
 import { eur, pctRaw } from "../lib/format";
 import * as I from "../components/Icon";
 import { recordVisit } from "../lib/desk";
+import { IndexBreak } from "./Fund";
 import { PinButton } from "../components/ui";
 
 export default function Share() {
@@ -36,7 +37,7 @@ export default function Share() {
     const fund = sliceRange(p.index, range);
     const b0 = fund[0]?.v || 1;
     const out = [{ key: "f", label: "Part", color: "var(--fc)", points: fund.map((x) => ({ d: x.d, v: (x.v / b0) * 100 })) }];
-    const bench = p.bench_index.filter((x) => x.d >= (fund[0]?.d ?? ""));
+    const bench = p.bench_index.filter((x) => x.d >= (fund[0]?.d ?? "") && x.d <= (fund[fund.length - 1]?.d ?? "9999"));
     if (bench.length) { const bb = bench[0].v || 1; out.push({ key: "b", label: "Indice", color: "var(--ink-3)", points: bench.map((x) => ({ d: x.d, v: (x.v / bb) * 100 })), dashed: true } as never); }
     return out;
   })() : [];
@@ -86,6 +87,7 @@ export default function Share() {
             <section className="section reveal" id="perf" aria-labelledby="h-perf">
               <div className="section__head"><div><div className="eyebrow">Performance</div><h2 className="h2" id="h-perf">Performance de la part</h2></div>
                 <RangeTabs value={range} onChange={setRange} options={[{ key: "1y", label: "1 an" }, { key: "3y", label: "3 ans" }, { key: "all", label: "Tout" }]} /></div>
+              <IndexBreak perf={p} />
               <div className="card card--flat">
                 <div className="legend" style={{ marginBottom: 8 }}>{perfSeries.map((x) => <span key={x.key} className="legend__i"><span className="legend__line" style={{ background: x.color }} />{x.key === "b" ? p.bench_name : s.name}</span>)}</div>
                 <TimeChart series={perfSeries} format={fmtIndex} baseline={100} ariaLabel={`Performance de ${s.name}, base 100`} />

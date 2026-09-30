@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
+from decimal import Decimal
 from datetime import date, timedelta
 from typing import Any
 
@@ -20,6 +21,7 @@ import pandas as pd
 
 from ..data import schema as S
 from . import labels as L
+from .numeric import numeric_series, safe_float
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +42,8 @@ def _clean(v: Any) -> Any:
         return int(v)
     if isinstance(v, (np.bool_,)):
         return bool(v)
+    if isinstance(v, Decimal):
+        return safe_float(v)  # DECIMAL SQL (mssql-python) : float fini, ou None si non fini
     if isinstance(v, pd.Timestamp):
         return None if pd.isna(v) else v.date().isoformat() if v.hour == 0 and v.minute == 0 else v.isoformat()
     if isinstance(v, date):
@@ -168,6 +172,23 @@ class Model:
 PERIODS = ["1J", "1S", "1M", "3M", "YTD", "1A", "3A"]
 
 
+_NUMERIC_SQL = {"decimal", "numeric", "money", "smallmoney", "float", "real"}
+
+
+def _financial(df: pd.DataFrame, table: str) -> pd.DataFrame:
+    """Convertit en float64 les colonnes numériques (d'après le schéma) d'une table ; les colonnes texte sont inchangées."""
+    if df is None or df.empty:
+        return df
+    types = S.dtypes(table)
+    cols = [c for c in df.columns if types.get(c) in _NUMERIC_SQL]
+    if not cols:
+        return df
+    df = df.copy()
+    for c in cols:
+        df[c] = numeric_series(df[c], name=f"{table}.{c}")
+    return df
+
+
 def _load(source: Any, name: str, columns: list[str], since: tuple[str, Any] | None = None) -> pd.DataFrame:
     """Lit une table en journalisant sa durée et sa volumétrie (jamais son contenu)."""
     t0 = time.perf_counter()
@@ -192,6 +213,10 @@ def assemble(ref: date, products: pd.DataFrame, shares: pd.DataFrame, countries:
              holdings: pd.DataFrame, dq: pd.DataFrame, stale_days: int = 12, is_mock: bool = False) -> Model:
     products = products.drop_duplicates("pi_productid").copy()
     shares = shares.drop_duplicates("pi_shareid").copy()
+    # Colonnes financières des tables JUMP (DECIMAL en SQL, decimal.Decimal via mssql-python) : float64 homogène
+    # avant tout calcul. Valeur non numérique ou infinie → NaN (comptée dans le journal), jamais zéro.
+    aum = _financial(aum, S.AUM)
+    holdings = _financial(holdings, S.HOLDINGS)
     aum = aum.copy()
     aum["DATE_VL"] = pd.to_datetime(aum["DATE_VL"])
     # Doublons éventuels (rechargements) : on garde la ligne la plus récemment mise à jour

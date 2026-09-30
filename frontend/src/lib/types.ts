@@ -38,7 +38,7 @@ export type Perf = {
   fund: Record<string, number | null>; bench: Record<string, number | null> | null;
   risk: { vol: number | null; mdd: number | null; te: number | null; bench_vol: number | null };
   index: Point[]; bench_index: Point[]; dividends: Point[]; share?: ShareBrief; nav_series?: Point[];
-  calendar: { year: number; fund: number; bench?: number | null; partial: boolean; ytd: boolean }[];
+  calendar: { year: number; fund: number | null; bench?: number | null; partial: boolean; ytd: boolean }[];
 };
 export type ShareBrief = {
   id: string; jump: string | null; name: string; isin: string | null; link: string; class: string | null; ccy: string | null;

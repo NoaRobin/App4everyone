@@ -7,6 +7,7 @@ import threading
 import time
 import traceback
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import numpy as np
@@ -23,6 +24,7 @@ from .config import fabric_config_problems, load_settings
 from .data.fabric import FabricConfigError, FabricError
 from .data.sources import make_source
 from .domain.model import build_model
+from .domain.numeric import safe_float
 from .service import FUND_DIMS, SHARE_DIMS, Service
 
 log = logging.getLogger("rco")
@@ -209,6 +211,8 @@ def _sanitize(o):
         return [_sanitize(v) for v in o]
     if isinstance(o, float):
         return None if math.isnan(o) or math.isinf(o) else o
+    if isinstance(o, Decimal):
+        return safe_float(o)  # DECIMAL SQL (mssql-python) : float fini ou null
     if isinstance(o, np.generic):
         return _sanitize(o.item())
     if isinstance(o, (pd.Timestamp, date)):

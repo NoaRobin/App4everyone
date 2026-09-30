@@ -195,13 +195,13 @@ export function RiskReturn({ points, height = 480, onSelect, xLabel = "Volatilit
 }
 
 // ------------------------------------------------------------------ années civiles
-export type CalYear = { year: number; fund: number; bench?: number | null; partial: boolean; ytd: boolean };
+export type CalYear = { year: number; fund: number | null; bench?: number | null; partial: boolean; ytd: boolean };
 
 /** Performances par année civile : barres fonds / indice côte à côte, écart en toutes lettres. */
 export function CalendarBars({ years, color }: { years: CalYear[]; color: string }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const W = Math.max(width, 280), H = 250, m = { t: 26, r: 8, b: 48, l: 8 };
-  const vals = years.flatMap((y) => [y.fund, y.bench ?? 0]);
+  const vals = years.flatMap((y) => [y.fund ?? 0, y.bench ?? 0]);
   const ext = Math.max(0.02, ...vals.map(Math.abs));
   const y = scaleLinear().domain([Math.min(0, ...vals) < 0 ? -ext : 0, Math.max(0, ...vals) > 0 ? ext : 0.01]).nice().range([H - m.b, m.t]);
   const x = scaleBand<number>().domain(years.map((d) => d.year)).range([m.l, W - m.r]).paddingInner(0.3);
@@ -216,12 +216,14 @@ export function CalendarBars({ years, color }: { years: CalYear[]; color: string
         <line x1={m.l} x2={W - m.r} y1={y(0)} y2={y(0)} className="chart__base" />
         {years.map((d) => {
           const xx = x(d.year)!;
-          const gap = d.bench != null ? d.fund - d.bench : null;
+          const gap = d.bench != null && d.fund != null ? d.fund - d.bench : null;
           return (
             <g key={d.year}>
-              {bar(xx, d.fund, color)}
+              {d.fund != null && bar(xx, d.fund, color)}
               {d.bench != null && bar(xx + bw + 4, d.bench, "var(--ink-3)", true)}
-              <text x={xx + bw / 2} y={d.fund >= 0 ? y(d.fund) - 6 : y(d.fund) + 14} textAnchor="middle" className="bridge__v bridge__v--s">{pct(d.fund, { digits: 1 })}</text>
+              {d.fund != null
+                ? <text x={xx + bw / 2} y={d.fund >= 0 ? y(d.fund) - 6 : y(d.fund) + 14} textAnchor="middle" className="bridge__v bridge__v--s">{pct(d.fund, { digits: 1 })}</text>
+                : <text x={xx + bw / 2} y={y(0) - 6} textAnchor="middle" className="bridge__v bridge__v--s muted">indisponible</text>}
               <text x={xx + x.bandwidth() / 2} y={H - m.b + 20} textAnchor="middle" className="bridge__l">{d.ytd ? `${d.year} (YTD)` : d.partial ? `${d.year}*` : d.year}</text>
               {gap != null && <text x={xx + x.bandwidth() / 2} y={H - m.b + 36} textAnchor="middle" className={`bridge__s ${gap >= 0 ? "is-up" : "is-down"}`}>{gap >= 0 ? "▲" : "▼"} {pct(gap, { digits: 1 })} vs indice</text>}
             </g>

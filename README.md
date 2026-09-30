@@ -142,6 +142,21 @@ Les journaux indiquent, par table, la durée et le nombre de lignes, jamais leur
 | Risque réalisé | Volatilité et tracking error annualisées sur 1 an (fréquence quotidienne ou hebdomadaire détectée), perte maximale sur 1 an. |
 | Montants d'inventaire en euros | `MONTANT_DEVISE_FONDS` × (actif net EUR / actif net devise fonds) à la date d'inventaire. |
 
+### Données invalides (données réelles du Lakehouse)
+
+- Les colonnes SQL `DECIMAL` arrivent en `decimal.Decimal` avec mssql-python : les colonnes financières de JUMP (encours,
+  VL, parts, indices, inventaires) sont converties en `float64` à la lecture, et toute valeur isolée passe par
+  `backend/rco/domain/numeric.py` (`safe_float`, `safe_divide`, `numeric_series`, `finite_or_none`, `fmt_meur`).
+- Une valeur absente, non numérique ou infinie devient `null` (JSON), jamais zéro ni une valeur arbitraire. Un
+  dénominateur nul rend le quotient indisponible (il n'est jamais remplacé par 1).
+- Indice de performance : un rendement élémentaire non fini ou ≤ −100 % (VL nulle, incohérente) rend la chaîne non
+  calculable à partir de ce point ; les performances, risques et années civiles qui en dépendent sont `null`, et la fiche
+  l'indique. Les performances valides ne sont ni écrêtées ni modifiées.
+- Indicateur de référence : un niveau nul ou négatif est écarté (performance de l'indice `null`), le fonds reste calculé.
+- Inventaires : taux de change = actif net EUR / actif net en devise du fonds ; incalculable → montant en euros `null`
+  (taux 1 seulement pour un fonds libellé en euros). Une somme dont toutes les valeurs sont indisponibles reste `null`.
+- Les journaux comptent les valeurs écartées ; ils n'affichent jamais une valeur métier.
+
 ### Hypothèses à valider sur les données réelles
 
 - Les quatre familles (*Actions internationales et gestion diversifiée*, *Actions européennes*, *Fixed Income*,

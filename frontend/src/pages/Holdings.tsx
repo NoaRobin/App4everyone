@@ -12,17 +12,20 @@ import * as I from "../components/Icon";
 
 type Resp = {
   date: string; total_eur: number; n_funds: number; n_instruments: number; dates: string[];
-  instruments: { key: string; name: string; isin: string | null; asset_class: string | null; ccy: string | null; amount_eur: number; n_funds: number }[];
-  most_shared: { key: string; name: string; n_funds: number; amount_eur: number }[];
-  by_class: { label: string; amount_eur: number; weight: number }[]; by_ccy: { label: string; amount_eur: number; weight: number }[];
+  instruments: { key: string; name: string; isin: string | null; asset_class: string | null; ccy: string | null; amount_eur: number | null; n_funds: number }[];
+  most_shared: { key: string; name: string; n_funds: number; amount_eur: number | null }[];
+  by_class: { label: string; amount_eur: number | null; weight: number | null }[]; by_ccy: { label: string; amount_eur: number | null; weight: number | null }[];
 };
 
 /** Regroupe au-delà des 5 premiers (palette catégorielle limitée, jamais recyclée). */
-function top5<T extends { label: string; amount_eur: number; weight: number }>(rows: T[]): { label: string; amount_eur: number; weight: number }[] {
-  const s = [...rows].sort((a, b) => b.amount_eur - a.amount_eur);
+type Part = { label: string; amount_eur: number | null; weight: number | null };
+function top5(rows: Part[]): Part[] {
+  const s = [...rows].sort((a, b) => (b.amount_eur ?? -Infinity) - (a.amount_eur ?? -Infinity));
   if (s.length <= 6) return s;
   const rest = s.slice(5);
-  return [...s.slice(0, 5), { label: `Autres (${rest.length})`, amount_eur: rest.reduce((x, r) => x + r.amount_eur, 0), weight: rest.reduce((x, r) => x + r.weight, 0) }];
+  // Un montant indisponible dans le reste rend le total « Autres » indisponible (pas de somme partielle présentée comme totale)
+  const sum = (k: "amount_eur" | "weight") => (rest.some((r) => r[k] == null) ? null : rest.reduce((x, r) => x + (r[k] as number), 0));
+  return [...s.slice(0, 5), { label: `Autres (${rest.length})`, amount_eur: sum("amount_eur"), weight: sum("weight") }];
 }
 
 export default function Holdings() {
@@ -40,12 +43,15 @@ export default function Holdings() {
   }, [q, lines]);
   // Couleur d'une classe d'actifs : fixée par son rang dans l'inventaire de la maison
   const classColor = useMemo(() => {
-    const order = [...(data?.by_class ?? [])].sort((a, b) => b.amount_eur - a.amount_eur).map((c) => c.label);
+    const order = [...(data?.by_class ?? [])].sort((a, b) => (b.amount_eur ?? -Infinity) - (a.amount_eur ?? -Infinity)).map((c) => c.label);
     return (label: string | null | undefined) => { const i = order.indexOf(label ?? ""); return i >= 0 && i < CATEGORICAL.length ? CATEGORICAL[i] : OTHER; };
   }, [data]);
   if (error) return <div className="page"><ErrorState error={error} /></div>;
   if (!data) return <div className="page"><Loading h={520} /></div>;
   const tp = eurParts(data.total_eur);
+  const top40 = data.instruments.slice(0, 40);
+  const mosaicLines = top40.filter((x) => x.amount_eur != null && x.amount_eur > 0);
+  const noAmount = top40.length - mosaicLines.length;
   const classes = top5(data.by_class);
   const ccys = top5(data.by_ccy);
   const maxShared = Math.max(1, ...data.most_shared.map((x) => x.n_funds));
@@ -92,20 +98,21 @@ export default function Holdings() {
           <Head id="ana" eyebrow="L'anatomie" title="De quoi sont faits nos portefeuilles"
             lede="Montants cumulés de tous les inventaires, en euros. Au-delà de cinq catégories, le reste est regroupé." />
           <h3 className="hold__sub">Par classe d'actifs</h3>
-          <Strip items={classes} value={(x) => x.amount_eur} label={(x) => x.label} color={(x) => (x.label.startsWith("Autres") ? OTHER : classColor(x.label))}
-            detail={(x) => `${eur(x.amount_eur)} · ${pctRaw(x.weight, 1)}`} ariaLabel="Répartition des actifs par classe" />
+          <Strip items={classes} value={(x) => x.amount_eur ?? 0} label={(x) => x.label} color={(x) => (x.label.startsWith("Autres") ? OTHER : classColor(x.label))}
+            detail={(x) => `${x.amount_eur == null ? "montant indisponible" : eur(x.amount_eur)} · ${pctRaw(x.weight, 1)}`} ariaLabel="Répartition des actifs par classe" />
           <h3 className="hold__sub">Par devise</h3>
-          <Strip items={ccys} value={(x) => x.amount_eur} label={(x) => x.label} color={(x, i) => (x.label.startsWith("Autres") ? OTHER : CATEGORICAL[i] ?? OTHER)}
-            detail={(x) => `${eur(x.amount_eur)} · ${pctRaw(x.weight, 1)}`} ariaLabel="Répartition des actifs par devise" />
+          <Strip items={ccys} value={(x) => x.amount_eur ?? 0} label={(x) => x.label} color={(x, i) => (x.label.startsWith("Autres") ? OTHER : CATEGORICAL[i] ?? OTHER)}
+            detail={(x) => `${x.amount_eur == null ? "montant indisponible" : eur(x.amount_eur)} · ${pctRaw(x.weight, 1)}`} ariaLabel="Répartition des actifs par devise" />
         </section>
 
         <section className="section reveal" aria-labelledby="h-lines">
           <Head id="lines" eyebrow="Les lignes de la maison" title="Nos 40 premières positions"
             lede="Surface : montant détenu, tous fonds confondus. Couleur : classe d'actifs. Cliquez une case pour voir les fonds qui la détiennent." />
           <Mosaic height={480} onSelect={(x) => go(x.key)} share={false}
-            items={data.instruments.slice(0, 40).map((x) => ({ key: x.key, label: x.name, value: x.amount_eur, color: classColor(x.asset_class),
+            items={mosaicLines.map((x) => ({ key: x.key, label: x.name, value: x.amount_eur as number, color: classColor(x.asset_class),
               sub: `${x.asset_class ?? "—"} · ${plural(x.n_funds, "fonds", "fonds")}`, ariaExtra: `${x.asset_class ?? ""}, détenue par ${plural(x.n_funds, "fonds", "fonds")}` }))}
-            legend={<div className="legend" style={{ marginTop: 12 }}>{classes.map((c) => <span key={c.label} className="legend__i"><span className="dot" style={{ background: c.label.startsWith("Autres") ? OTHER : classColor(c.label) }} />{c.label}</span>)}</div>} />
+            legend={<><div className="legend" style={{ marginTop: 12 }}>{classes.map((c) => <span key={c.label} className="legend__i"><span className="dot" style={{ background: c.label.startsWith("Autres") ? OTHER : classColor(c.label) }} />{c.label}</span>)}</div>
+              {noAmount > 0 && <p className="small muted" style={{ marginTop: 8 }}>{plural(noAmount, "ligne", "lignes")} sans montant en euros calculable (taux de change ou montant indisponible) : absentes de la mosaïque, présentes dans la recherche.</p>}</>} />
         </section>
 
         <section className="section reveal" aria-labelledby="h-shared">

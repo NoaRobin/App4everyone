@@ -187,6 +187,18 @@ function AumSection({ f }: { f: FundDetail }) {
   );
 }
 
+/** L'indice du fonds s'arrête avant la dernière VL : une VL invalide rend la suite non calculable (rien n'est extrapolé). */
+export function IndexBreak({ perf }: { perf: { index: { d: string }[]; nav_date: string } }) {
+  const last = perf.index[perf.index.length - 1]?.d;
+  if (!last || last >= perf.nav_date) return null;
+  return (
+    <p className="small" role="note" style={{ marginTop: -8, marginBottom: 18, color: "var(--gold-ink)" }}>
+      Indice de performance interrompu après le {fdate(last)} : une valeur liquidative invalide (nulle, absente ou incohérente) rend
+      les performances ultérieures non calculables. Elles sont affichées comme indisponibles.
+    </p>
+  );
+}
+
 function PerfSection({ f }: { f: FundDetail }) {
   const [range, setRange] = useState("3y");
   const perf = f.performance;
@@ -194,9 +206,10 @@ function PerfSection({ f }: { f: FundDetail }) {
     if (!perf) return [];
     const fund = sliceRange(perf.index, range);
     const rebase = (pts: typeof fund) => { const b = pts[0]?.v || 1; return pts.map((p) => ({ d: p.d, v: (p.v / b) * 100 })); };
-    const from = fund[0]?.d;
+    const from = fund[0]?.d, to = fund[fund.length - 1]?.d;
     const out = [{ key: "f", label: perf.share?.class ? `Part ${perf.share.class}` : "Fonds", color: "var(--fc)", points: rebase(fund) }];
-    if (perf.bench_index.length) out.push({ key: "b", label: "Indice", color: "var(--ink-3)", points: rebase(perf.bench_index.filter((p) => !from || p.d >= from)), dashed: true } as never);
+    // L'indice est comparé sur la période où celui du fonds existe
+    if (perf.bench_index.length) out.push({ key: "b", label: "Indice", color: "var(--ink-3)", points: rebase(perf.bench_index.filter((p) => (!from || p.d >= from) && (!to || p.d <= to))), dashed: true } as never);
     return out;
   }, [perf, range]);
   if (!perf) return null;
@@ -210,6 +223,7 @@ function PerfSection({ f }: { f: FundDetail }) {
         Part de référence : <Link className="link" to={`/parts/${encodeURIComponent(perf.share?.id ?? "")}`}>{perf.share?.name}</Link> ({perf.share?.isin}) · VL au {fdate(perf.nav_date)} : <b className="num">{fnav(perf.nav, perf.nav_ccy)}</b>.
         Base 100, dividendes réinvestis et opérations sur titres neutralisées.
       </p>
+      <IndexBreak perf={perf} />
       <div className="card card--flat">
         <div className="legend" style={{ marginBottom: 8 }}>{series.map((s) => <span key={s.key} className="legend__i"><span className="legend__line" style={{ background: s.color, opacity: s.key === "b" ? 0.7 : 1 }} />{s.key === "b" ? perf.bench_name : s.label}</span>)}</div>
         <TimeChart series={series} format={fmtIndex} baseline={100} height={320} ariaLabel={`Performance comparée de ${f.name} et de son indicateur de référence, base 100`} />
