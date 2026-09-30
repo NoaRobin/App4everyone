@@ -75,6 +75,12 @@ def fund_composition(m: Model, fund_id: str, end: pd.Timestamp) -> dict | None:
         "weight": float(r["weight"]), "amount_eur": float(r["amount_eur"]) if pd.notna(r["amount_eur"]) else None,
     } for _, r in titles.iterrows()]
     prev = previous_inventory(m, fund_id, d)
+    if not prev.empty:
+        prev_w = prev.groupby("instr_key")["weight"].sum()
+        for l in lines:
+            pw_ = prev_w.get(l["key"])
+            l["prev_weight"] = None if pw_ is None or pd.isna(pw_) else float(pw_)
+            l["is_new"] = pw_ is None or pd.isna(pw_)
     moves = []
     if not prev.empty:
         pw = prev.groupby("instr_key")["weight"].sum()

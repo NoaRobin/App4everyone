@@ -7,6 +7,8 @@ import { eur, pct, pctRaw, plural } from "../lib/format";
 import { famVar } from "../lib/families";
 import type { Control, FamilyKey } from "../lib/types";
 import { Bool, ErrorState, Loading, SriScale, useReveal } from "../components/ui";
+import { RiskReturn } from "../components/viz";
+import { FAMILY_LABEL, FAMILY_ORDER } from "../lib/families";
 import * as I from "../components/Icon";
 
 type RiskRow = { id: string; name: string; family: FamilyKey; aum: number; sri: string | null; sri_prev: string | null; vol: number | null; mdd: number | null; te: number | null;
@@ -75,6 +77,7 @@ function RiskTab() {
           )) : <p className="small muted">Aucun changement.</p>}
         </div>
       </div>
+      <RiskMap />
       <div className="table-wrap reveal" style={{ marginTop: 24 }}>
         <table className="t">
           <caption className="sr-only">Indicateurs de risque par fonds</caption>
@@ -154,5 +157,24 @@ function ControlsTab() {
         })}
       </div>
     </>
+  );
+}
+
+type FundLite = { id: string; name: string; family: FamilyKey; aum: number | null; vol_1A: number | null; perf_1A: number | null };
+function RiskMap() {
+  const { api } = useApp();
+  const nav = useNavigate();
+  const { data } = useApi<{ funds: FundLite[] }>(api("/api/funds"));
+  const pts = (data?.funds ?? []).filter((f) => (f.aum ?? 0) > 0 && f.vol_1A != null && f.perf_1A != null);
+  if (!pts.length) return null;
+  return (
+    <div className="card card--flat reveal" style={{ marginTop: 24 }}>
+      <div className="spread" style={{ marginBottom: 8 }}>
+        <h2 className="h3">Risque et rendement réalisés sur 1 an</h2>
+        <div className="legend">{FAMILY_ORDER.map((k) => <span key={k} className="legend__i"><span className="dot" style={{ background: famVar(k) }} />{FAMILY_LABEL[k]}</span>)}</div>
+      </div>
+      <RiskReturn height={440} onSelect={(p) => nav(`/fonds/${encodeURIComponent(p.key)}`)}
+        points={pts.map((f) => ({ key: f.id, label: f.name, x: f.vol_1A!, y: f.perf_1A!, size: f.aum ?? 0, color: famVar(f.family), sub: FAMILY_LABEL[f.family] }))} />
+    </div>
   );
 }

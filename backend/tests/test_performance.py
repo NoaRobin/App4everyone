@@ -41,3 +41,16 @@ def test_frequence_hebdomadaire_pour_volatilite():
     idx = pd.bdate_range("2025-01-03", "2026-01-02", freq="W-FRI")
     assert A._periods_per_year(idx) == 52.0
     assert A._periods_per_year(pd.bdate_range("2025-01-01", "2025-03-01")) == 252.0
+
+
+def test_performances_annuelles():
+    rows = [aum_row("F1", "P1", "2024-06-28", 10, 100, pi_part="S1", bench=50),
+            aum_row("F1", "P1", "2024-12-31", 10, 110, pi_part="S1", bench=55),
+            aum_row("F1", "P1", "2025-12-31", 10, 99, pi_part="S1", bench=60.5),
+            aum_row("F1", "P1", "2026-03-31", 10, 108.9, pi_part="S1", bench=60.5)]
+    m = build(rows, P, S)
+    cal = A.share_performance(m, "P1", m.as_of("2026-03-31"))["calendar"]
+    assert [c["year"] for c in cal] == [2024, 2025, 2026]
+    assert cal[0]["fund"] == pytest.approx(.10) and cal[0]["partial"]
+    assert cal[1]["fund"] == pytest.approx(-.10) and cal[1]["bench"] == pytest.approx(.10)
+    assert cal[2]["fund"] == pytest.approx(.10) and cal[2]["ytd"]

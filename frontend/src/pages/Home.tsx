@@ -6,7 +6,8 @@ import { eur, monthYear, pct, PERIOD_LABEL, plural } from "../lib/format";
 import { FAMILY_LABEL, FAMILY_ORDER, FAMILY_SHORT, famHex, famVar } from "../lib/families";
 import { useReducedMotion, webglAvailable } from "../lib/motion";
 import type { CityData, FamilyKey, FundRow, Overview } from "../lib/types";
-import { BigMoney, Decomposition, Delta, useReveal } from "../components/ui";
+import { BigMoney, Delta, useReveal } from "../components/ui";
+import { Bridge } from "../components/viz";
 import { BarList, Sparkline, StackedArea } from "../components/charts";
 import * as I from "../components/Icon";
 import type { CityScene as CitySceneT } from "../three/CityScene";
@@ -203,7 +204,7 @@ function Synthesis({ ov }: { ov: Overview }) {
             <div><Delta v={v?.pct} /> <span className="muted small">depuis le {v?.start ? v.start.split("-").reverse().join("/") : "—"}</span></div>
           </div>
           <div className="home__var-decomp" style={{ gridColumn: "span 2" }}>
-            <Decomposition v={v} />
+            <Bridge v={v} end={ov.date} height={300} label="Encours de la maison" />
             <p className="small muted" style={{ marginTop: 14 }}>
               La <b>collecte nette estimée</b> correspond aux souscriptions moins les rachats, déduits de la variation du nombre de parts valorisée à la VL.
               L'<b>effet marché</b> est le reste de la variation : l'évolution des VL et des changes.

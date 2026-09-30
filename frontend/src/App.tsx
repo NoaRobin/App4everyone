@@ -35,7 +35,7 @@ export function App() {
   }, [night]);
   return (
     <>
-      <Header night={night} />
+      <Header />
       <main id="contenu" tabIndex={-1}>
         <Suspense fallback={<div className="page"><div className="skeleton" style={{ height: 420 }} /></div>}>
           <Routes>
@@ -54,7 +54,7 @@ export function App() {
           </Routes>
         </Suspense>
       </main>
-      {loc.pathname !== "/fonds" && <Footer night={loc.pathname === "/"} />}
+      {loc.pathname !== "/fonds" && <Footer night />}
       <CommandPalette />
     </>
   );

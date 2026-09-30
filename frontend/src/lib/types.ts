@@ -38,6 +38,7 @@ export type Perf = {
   fund: Record<string, number | null>; bench: Record<string, number | null> | null;
   risk: { vol: number | null; mdd: number | null; te: number | null; bench_vol: number | null };
   index: Point[]; bench_index: Point[]; dividends: Point[]; share?: ShareBrief; nav_series?: Point[];
+  calendar: { year: number; fund: number; bench?: number | null; partial: boolean; ytd: boolean }[];
 };
 export type ShareBrief = {
   id: string; jump: string | null; name: string; isin: string | null; link: string; class: string | null; ccy: string | null;
@@ -47,7 +48,7 @@ export type ShareBrief = {
 };
 export type Composition = {
   date: string; n_lines: number; top10_weight: number; hhi: number; cash_weight: number; derivatives_expo: number;
-  lines: { key: string; name: string; isin: string | null; ccy: string | null; asset_class: string | null; type: string | null; debt: string | null; weight: number; amount_eur: number | null }[];
+  lines: { key: string; name: string; isin: string | null; ccy: string | null; asset_class: string | null; type: string | null; debt: string | null; weight: number; amount_eur: number | null; prev_weight?: number | null; is_new?: boolean }[];
   by_class: { label: string; weight: number }[]; by_ccy: { label: string; weight: number }[]; by_debt: { label: string; weight: number }[];
   previous_date: string | null; moves: { key: string; name: string; kind: string; weight: number; change: number }[];
 };

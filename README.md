@@ -125,9 +125,23 @@ premier chargement. Aucun secret n'est stocké. L'application charge l'historiqu
 
 ## Charte graphique
 
-Toutes les couleurs sont des jetons CSS dans `frontend/src/styles/tokens.css` (papier, encre, or, nuit, et les quatre
-couleurs de famille, validées pour le contraste et le daltonisme). La ville et le clavier lisent ces mêmes jetons :
-appliquer la charte officielle revient à modifier ce seul fichier.
+Interface sombre partout, sur la charte Rothschild & Co : Rothschild Blue `#1C355E` (fond et surfaces), blanc `#FFFFFF`,
+noir `#000000`, or `#CC9F53` (accent), rouge `#8A1E41`, rose `#E8C9BA`, pierre `#D6D1CA` (textes secondaires).
+Les quatre familles reprennent la charte, éclaircie pour rester lisible sur fond sombre : bleu `#6189D6`
+(Actions internationales et gestion diversifiée), rouge `#C2476F` (Actions européennes), or `#CC9F53` (Fixed Income),
+rose `#E8C9BA` (Architecture ouverte). Les variations utilisent une échelle divergente rouge ↔ pierre ↔ bleu ;
+les hausses et baisses portent toujours un signe et une flèche. Tout est dans `frontend/src/styles/tokens.css`.
+
+## Représentations
+
+| Vue | Où | Ce qu'elle rend évident |
+|---|---|---|
+| Ville 3D | Accueil | Le poids de chaque fonds et de chaque famille, et son évolution dans le temps |
+| Pont des encours | Accueil, fiche fonds, fiche part, sélection | D'où vient la variation : encours de départ → collecte → marché → encours d'arrivée (axe tronqué signalé) |
+| Mosaïque | Sélection, Encours, fiche fonds | Qui pèse (surface) et qui progresse (couleur) ; pour un portefeuille, ce qui a été renforcé, allégé ou acheté |
+| Risque / rendement | Sélection, Risques | Performance et volatilité sur 1 an, taille = encours |
+| Comparateur de parts | Fiche fonds | Quelle part proposer : filtres client / devise / revenus, frais les plus bas signalés |
+| Année par année | Fiche fonds | Performances civiles du fonds et de son indice, écart en clair |
 
 ## Architecture
 

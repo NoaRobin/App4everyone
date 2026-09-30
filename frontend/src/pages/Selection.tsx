@@ -1,11 +1,13 @@
 import { useMemo } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Bridge, Mosaic, RiskReturn, divColor, DivLegend } from "../components/viz";
+import { pct } from "../lib/format";
 import { useApi } from "../lib/api";
 import { useApp } from "../lib/context";
 import { eur, PERIOD_SHORT } from "../lib/format";
 import { FAMILY_LABEL, FAMILY_ORDER, famVar } from "../lib/families";
 import type { FundRow, Point, Variation } from "../lib/types";
-import { Crumbs, Decomposition, Delta, ErrorState, Loading, useReveal } from "../components/ui";
+import { Crumbs, Delta, ErrorState, Loading, useReveal } from "../components/ui";
 import { TimeChart } from "../components/charts";
 import { FundTable } from "../components/FundTable";
 import * as I from "../components/Icon";
@@ -41,6 +43,8 @@ export default function Selection() {
   const live = (data?.funds ?? []).filter((f) => (f.aum ?? 0) > 0);
   const title = data?.labels.length ? data.labels.map((l) => (l.key === "family" ? FAMILY_LABEL[l.value as keyof typeof FAMILY_LABEL] ?? l.value : l.value)).join(" · ") : "Tous les fonds";
   const fam = params.get("family");
+  const view = params.get("vue") ?? "tableau";
+  const nav = useNavigate();
   return (
     <div className="page" style={fam ? { ["--fc" as string]: famVar(fam) } : undefined}>
       <Crumbs items={[{ label: "Encours", to: "/encours" }, { label: "Sélection" }]} />
@@ -87,13 +91,39 @@ export default function Selection() {
                 <TimeChart series={[{ key: "a", label: "Encours", color: fam ? "var(--fc)" : "var(--ink)", points: data.aggregate.series, fill: true }]} height={240} ariaLabel="Encours mensuels de la sélection" />
               </div>
               <div className="card card--flat">
-                <h3 className="h3" style={{ marginBottom: 14 }}>Depuis le 1er janvier</h3>
-                <div className="h2 num" style={{ marginBottom: 12 }}>{eur(data.aggregate.var.YTD?.delta, { signed: true })}</div>
-                <Decomposition v={data.aggregate.var.YTD} />
+                <h3 className="h3" style={{ marginBottom: 4 }}>Depuis le 1er janvier</h3>
+                <div className="h2 num" style={{ marginBottom: 4 }}>{eur(data.aggregate.var.YTD?.delta, { signed: true })}</div>
+                <Bridge v={data.aggregate.var.YTD} end={data.date} height={220} compact />
               </div>
             </div>
           )}
-          {live.length ? <FundTable rows={live} caption={`Fonds : ${title}`} filename={`selection-${title}.csv`} /> :
+          {live.length > 0 && (
+            <div className="spread" style={{ marginBottom: 16 }}>
+              <h2 className="h3">{live.length} fonds</h2>
+              <div className="seg" role="radiogroup" aria-label="Vue">
+                {[["tableau", "Tableau"], ["mosaique", "Mosaïque"], ["risque", "Risque / rendement"]].map(([k, l]) => (
+                  <button key={k} type="button" role="radio" aria-checked={view === k} className="seg__b" onClick={() => set("vue", k === "tableau" ? null : k)}>{l}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          {live.length > 0 && view === "mosaique" && (
+            <div className="card card--flat">
+              <Mosaic height={560} onSelect={(i) => nav(`/fonds/${encodeURIComponent(i.key)}`)}
+                items={live.map((f) => ({ key: f.id, label: f.name, value: f.aum ?? 0, color: divColor(f.var_YTD, 0.3),
+                  sub: [FAMILY_LABEL[f.family], f.manager].filter(Boolean).join(" · "), badge: <>YTD {pct(f.var_YTD)}</>, ariaExtra: `encours ${pct(f.var_YTD)} depuis le 1er janvier` }))}
+                legend={<div className="spread"><span className="small muted">Surface : encours · couleur : variation des encours depuis le 1er janvier (collecte + marché)</span><DivLegend span={0.3} label="Variation YTD" /></div>} />
+            </div>
+          )}
+          {live.length > 0 && view === "risque" && (
+            <div className="card card--flat">
+              <div className="legend" style={{ marginBottom: 8 }}>{FAMILY_ORDER.filter((k) => live.some((f) => f.family === k)).map((k) => <span key={k} className="legend__i"><span className="dot" style={{ background: famVar(k) }} />{FAMILY_LABEL[k]}</span>)}</div>
+              <RiskReturn onSelect={(p) => nav(`/fonds/${encodeURIComponent(p.key)}`)}
+                points={live.filter((f) => f.vol_1A != null && f.perf_1A != null).map((f) => ({ key: f.id, label: f.name, x: f.vol_1A!, y: f.perf_1A!, size: f.aum ?? 0, color: famVar(f.family), sub: FAMILY_LABEL[f.family] }))} />
+              <p className="small muted" style={{ marginTop: 8 }}>Part de référence de chaque fonds, performance et volatilité réalisées sur 1 an. Les fonds de moins d'un an d'historique n'apparaissent pas.</p>
+            </div>
+          )}
+          {live.length && view === "tableau" ? <FundTable rows={live} caption={`Fonds : ${title}`} filename={`selection-${title}.csv`} /> : live.length ? null :
             <div className="empty">Aucun fonds ne correspond à cette sélection. <Link className="link" to="/selection">Voir tous les fonds</Link></div>}
         </>
       )}

@@ -19,7 +19,8 @@ export function CountryTiles({ values, labels, linkFor, unit = "fonds", color = 
   const tile = (iso: string, name: string, x?: number, y?: number) => {
     const v = values[iso] ?? 0;
     const href = v ? linkFor(iso) : null;
-    const style: React.CSSProperties = { ["--a" as string]: v ? 0.3 + 0.7 * (max === min ? 1 : (v - min) / (max - min)) : 0, ["--c" as string]: color, gridColumn: x != null ? x + 1 : undefined, gridRow: y != null ? y + 1 : undefined };
+    const alpha = v ? 0.3 + 0.7 * (max === min ? 1 : (v - min) / (max - min)) : 0;
+    const style: React.CSSProperties = { ["--tc" as string]: alpha > 0.62 ? "#0a0f1a" : "var(--ink)", ["--a" as string]: v ? 0.3 + 0.7 * (max === min ? 1 : (v - min) / (max - min)) : 0, ["--c" as string]: color, gridColumn: x != null ? x + 1 : undefined, gridRow: y != null ? y + 1 : undefined };
     const inner = (<><span className="tile__iso">{iso}</span><span className="tile__v num">{v ? num(v) : ""}</span></>);
     const title = `${labels[iso] ?? name} : ${v ? `${num(v)} ${unit}${v > 1 && unit !== "fonds" ? "s" : ""}` : "non commercialisé"}`;
     return href

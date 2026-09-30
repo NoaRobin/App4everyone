@@ -7,6 +7,7 @@ import { famVar } from "../lib/families";
 import type { Breakdown, Overview } from "../lib/types";
 import { BigMoney, Delta, ErrorState, Loading, useReveal } from "../components/ui";
 import { StackedArea } from "../components/charts";
+import { Mosaic, divColor, DivLegend } from "../components/viz";
 
 const AXES: { key: string; label: string; group: string }[] = [
   { key: "family", label: "Famille de gestion", group: "Fonds" }, { key: "range", label: "Gamme", group: "Fonds" },
@@ -16,7 +17,7 @@ const AXES: { key: string; label: string; group: string }[] = [
   { key: "share_ccy", label: "Devise de part", group: "Parts" }, { key: "distribution", label: "Capitalisation / distribution", group: "Parts" },
   { key: "investor", label: "Souscripteurs", group: "Parts" }, { key: "hedged", label: "Couverture de change", group: "Parts" },
 ];
-const SEQ = ["#0c1624", "#2b3a52", "#4d5d78", "#7384a0", "#9aa8bf", "#c3ccd9"];
+const SEQ = ["#cc9f53", "#6189d6", "#c2476f", "#e8c9ba", "#d6d1ca", "#6b7280"];
 
 export default function Encours() {
   const [params, setParams] = useSearchParams();
@@ -64,6 +65,18 @@ export default function Encours() {
           </div>
         ))}
       </div>
+      {data && (
+        <div className="card card--flat reveal" style={{ marginBottom: 24 }}>
+          <div className="spread" style={{ marginBottom: 12 }}>
+            <h2 className="h3">La mosaïque des encours · {data.label.toLowerCase()}</h2>
+            {axis !== "family" && <DivLegend span={0.25} label="Couleur : variation YTD" />}
+          </div>
+          <Mosaic height={340} onSelect={(g) => open(g.key)}
+            items={data.groups.map((g, i) => ({ key: g.key, label: g.label, value: g.aum, color: axis === "family" ? colorFor(g, i) : divColor(g.var.YTD?.pct, 0.25),
+              sub: `${g.n_funds != null ? g.n_funds + " fonds · " : ""}${pct(g.weight, { signed: false, digits: 1 })} des encours`, badge: <>YTD {pct(g.var.YTD?.pct)}</> }))} />
+          {axis === "family" && <p className="small muted" style={{ marginTop: 8 }}>Pour la famille de gestion, la couleur reste celle de la famille.</p>}
+        </div>
+      )}
       {!data ? <Loading h={480} /> : (
         <div className="grid enc__grid reveal">
           <div className="card card--flat">

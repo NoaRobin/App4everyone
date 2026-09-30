@@ -619,7 +619,17 @@ class MockLakehouse:
             pick = rng.choice(len(universe), size=nlines, replace=False)
             base_w = rng.dirichlet(np.full(nlines, .8)) * (100 - 3.0)
             bond_meta = {b[0]: b for b in bonds}
+            # Rotation : chaque mois, quelques petites lignes sortent et de nouvelles entrent
+            picks = [pick.copy()]
+            for _ in month_ends[1:]:
+                nxt = picks[-1].copy()
+                unused = [u for u in range(len(universe)) if u not in set(nxt)]
+                small = np.argsort(base_w)[: max(4, nlines // 3)]
+                for pos in rng.choice(small, size=min(3, len(unused), len(small)), replace=False):
+                    nxt[pos] = unused.pop(int(rng.integers(0, len(unused))))
+                picks.append(nxt)
             for m_i, me in enumerate(month_ends):
+                pick = picks[m_i]
                 if me < tot.index.min():
                     continue
                 an = float(tot[:me].iloc[-1])

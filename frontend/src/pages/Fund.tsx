@@ -5,9 +5,11 @@ import { useApp } from "../lib/context";
 import { date as fdate, eur, longDate, nav as fnav, num, pct, pctRaw, PERIOD_LABEL, PERIOD_SHORT, plural } from "../lib/format";
 import { FAMILY_LABEL, famVar } from "../lib/families";
 import type { FundDetail, Section as Sec } from "../lib/types";
-import { BigMoney, Bool, CopyCode, Crumbs, Decomposition, Delta, ErrorState, ExportCsv, FamilyTag, Loading, SriScale, Stars, useReveal } from "../components/ui";
+import { BigMoney, Bool, CopyCode, Crumbs, Delta, ErrorState, ExportCsv, FamilyTag, Loading, SriScale, Stars, useReveal } from "../components/ui";
 import { BarList, FlowBars, RangeTabs, TimeChart, fmtIndex, sliceRange } from "../components/charts";
 import { CountryTiles } from "../components/CountryTiles";
+import { Bridge, CalendarBars, DivLegend, Mosaic, divColor } from "../components/viz";
+import { ShareChooser } from "../components/ShareChooser";
 import * as I from "../components/Icon";
 
 const TOC = [
@@ -34,8 +36,24 @@ function FundView({ f }: { f: FundDetail }) {
     TOC.forEach(([k]) => { const el = document.getElementById(k); if (el) io.observe(el); });
     return () => io.disconnect();
   }, [f.id]);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const el = document.getElementById("synthese");
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting), { rootMargin: "-120px 0px 0px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [f.id]);
   return (
     <div className="fund" style={{ ["--fc" as string]: famVar(f.family) }}>
+      <div className={`fundbar${stuck ? " is-on" : ""}`} aria-hidden={!stuck}>
+        <span className="dot" style={{ background: "var(--fc)" }} />
+        <span className="fundbar__n">{f.name}</span>
+        <span className="fundbar__v num">{eur(f.aum)}</span>
+        <span className="fundbar__d small">YTD <Delta v={f.var?.YTD?.pct} /></span>
+        {f.performance && <span className="fundbar__d small">Perf. YTD <Delta v={f.performance.fund.YTD} /></span>}
+        <a href="#synthese" className="fundbar__top small" tabIndex={stuck ? 0 : -1}>Haut de fiche ↑</a>
+      </div>
       <header className="fund__hero" id="synthese">
         <div className="fund__hero-in">
           <Crumbs items={[{ label: "Fonds", to: "/fonds" }, { label: FAMILY_LABEL[f.family], to: `/selection?family=${f.family}` }, { label: f.name }]} />
@@ -129,10 +147,10 @@ function AumSection({ f }: { f: FundDetail }) {
               {(["1M", "YTD", "1A"] as const).map((x) => <button key={x} type="button" role="radio" aria-checked={p === x} className="seg__b" onClick={() => setP(x)}>{PERIOD_SHORT[x]}</button>)}
             </div>
           </div>
-          <div className="row" style={{ alignItems: "baseline", gap: 12, marginBottom: 14 }}>
+          <div className="row" style={{ alignItems: "baseline", gap: 12, marginBottom: 6 }}>
             <span className="h2 num">{eur(f.var[p]?.delta, { signed: true })}</span><Delta v={f.var[p]?.pct} />
           </div>
-          <Decomposition v={f.var[p]} />
+          <Bridge v={f.var[p]} end={f.date} height={250} />
           <table className="t t--mini" style={{ marginTop: 18 }}>
             <thead><tr><th>Période</th><th className="n">Variation</th><th className="n">Collecte</th><th className="n">Marché</th></tr></thead>
             <tbody>{(["1J", "1S", "1M", "3M", "YTD", "1A", "3A"] as const).map((k) => (
@@ -177,6 +195,15 @@ function PerfSection({ f }: { f: FundDetail }) {
         <div className="legend" style={{ marginBottom: 8 }}>{series.map((s) => <span key={s.key} className="legend__i"><span className="legend__line" style={{ background: s.color, opacity: s.key === "b" ? 0.7 : 1 }} />{s.key === "b" ? perf.bench_name : s.label}</span>)}</div>
         <TimeChart series={series} format={fmtIndex} baseline={100} height={320} ariaLabel={`Performance comparée de ${f.name} et de son indicateur de référence, base 100`} />
       </div>
+      {perf.calendar?.length > 0 && (
+        <div className="card card--flat" style={{ marginTop: 24 }}>
+          <div className="spread" style={{ marginBottom: 8 }}>
+            <h3 className="h3">Année par année</h3>
+            <div className="legend"><span className="legend__i"><span className="dot" style={{ background: "var(--fc)" }} />Fonds</span><span className="legend__i"><span className="dot" style={{ background: "var(--ink-3)" }} />Indice</span></div>
+          </div>
+          <CalendarBars years={perf.calendar} color="var(--fc)" />
+        </div>
+      )}
       <div className="grid grid-2" style={{ marginTop: 24 }}>
         <div className="table-wrap">
           <table className="t">
@@ -208,6 +235,7 @@ function PerfSection({ f }: { f: FundDetail }) {
 
 function SharesSection({ f }: { f: FundDetail }) {
   const nav = useNavigate();
+  const [view, setView] = useState<"cards" | "table">("cards");
   const cols = [
     { key: "name", label: "Part" }, { key: "isin", label: "ISIN" }, { key: "ccy", label: "Devise" }, { key: "distribution", label: "Affectation" },
     { key: "investor", label: "Souscripteurs" }, { key: "ongoing", label: "Frais courants (%)" }, { key: "min_sub", label: "Minimum" },
@@ -215,7 +243,13 @@ function SharesSection({ f }: { f: FundDetail }) {
   ];
   return (
     <section className="section reveal" id="parts" aria-labelledby="h-parts">
-      <SectionHead id="parts" eyebrow="Parts" title={`${f.shares.length} part${f.shares.length > 1 ? "s" : ""} pour ce fonds`} right={<ExportCsv rows={f.shares as never} columns={cols} filename={`parts-${f.name}.csv`} />} />
+      <SectionHead id="parts" eyebrow="Parts" title={f.shares.length > 1 ? "Quelle part proposer ?" : "La part du fonds"} right={<div className="row">
+        <div className="seg" role="radiogroup" aria-label="Présentation des parts">
+          <button type="button" role="radio" aria-checked={view === "cards"} className="seg__b" onClick={() => setView("cards")}>Comparateur</button>
+          <button type="button" role="radio" aria-checked={view === "table"} className="seg__b" onClick={() => setView("table")}>Tableau</button>
+        </div>
+        <ExportCsv rows={f.shares as never} columns={cols} filename={`parts-${f.name}.csv`} /></div>} />
+      {view === "cards" ? <ShareChooser shares={f.shares} fundAum={f.aum} /> : (
       <div className="table-wrap">
         <table className="t">
           <thead><tr><th>Part</th><th>ISIN</th><th>Devise</th><th>Affectation</th><th>Souscripteurs</th><th className="n">Frais courants</th><th className="n">Minimum</th><th>Cut-off</th><th className="n">VL</th><th className="n">Encours</th></tr></thead>
@@ -243,6 +277,7 @@ function SharesSection({ f }: { f: FundDetail }) {
           </tbody>
         </table>
       </div>
+      )}
     </section>
   );
 }
@@ -251,6 +286,7 @@ function HoldingsSection({ f }: { f: FundDetail }) {
   const c = f.composition;
   const nav = useNavigate();
   const [all, setAll] = useState(false);
+  const [paint, setPaint] = useState<"moves" | "class">("moves");
   if (!c) return (
     <section className="section" id="portefeuille"><SectionHead id="portefeuille" eyebrow="Portefeuille" title="Composition" /><div className="empty">Aucun inventaire disponible pour ce fonds.</div></section>
   );
@@ -263,6 +299,33 @@ function HoldingsSection({ f }: { f: FundDetail }) {
         <div className="stat card card--flat"><div className="eyebrow">Poids des 10 premières</div><div className="stat__v num">{pctRaw(c.top10_weight, 1)}</div></div>
         <div className="stat card card--flat"><div className="eyebrow">Liquidités</div><div className="stat__v num">{pctRaw(c.cash_weight, 1)}</div></div>
         <div className="stat card card--flat"><div className="eyebrow">Exposition dérivés</div><div className="stat__v num">{c.derivatives_expo ? pctRaw(c.derivatives_expo, 1) : "Aucune"}</div></div>
+      </div>
+      <div className="card card--flat" style={{ marginBottom: 24 }}>
+        <div className="spread" style={{ marginBottom: 12 }}>
+          <h3 className="h3">La carte du portefeuille</h3>
+          <div className="row" style={{ gap: 14 }}>
+            {paint === "moves" && c.previous_date
+              ? <div className="legend"><span className="legend__i"><span className="dot" style={{ background: "var(--gold)" }} />Nouvelle ligne</span><DivLegend span={0.1} label="Poids vs inventaire précédent" /></div>
+              : <div className="legend">{c.by_class.filter((x) => x.weight > 0).map((x) => <span key={x.label} className="legend__i"><span className="dot" style={{ background: CLASS_COLOR(x.label) }} />{x.label} · {pctRaw(x.weight, 1)}</span>)}</div>}
+            {c.previous_date && (
+              <div className="seg seg--s" role="radiogroup" aria-label="Couleur des cases">
+                <button type="button" role="radio" aria-checked={paint === "moves"} className="seg__b" onClick={() => setPaint("moves")}>Mouvements</button>
+                <button type="button" role="radio" aria-checked={paint === "class"} className="seg__b" onClick={() => setPaint("class")}>Classes d'actifs</button>
+              </div>
+            )}
+          </div>
+        </div>
+        <Mosaic height={420} share={false} format={(v) => pctRaw(v, 2)}
+          items={[...c.lines.slice(0, 60).map((l) => {
+              const moved = l.prev_weight ? (l.weight - l.prev_weight) / l.prev_weight : null;
+              const color = paint === "moves" && c.previous_date ? (l.is_new ? "var(--gold)" : divColor(moved, 0.1)) : CLASS_COLOR(l.asset_class);
+              const note = c.previous_date ? (l.is_new ? `Nouvelle ligne depuis le ${fdate(c.previous_date)}` : l.prev_weight != null ? `${pctRaw(l.prev_weight, 2)} au ${fdate(c.previous_date)} (${l.weight >= l.prev_weight ? "+" : "−"}${pctRaw(Math.abs(l.weight - l.prev_weight), 2)})` : "") : "";
+              return { key: l.key, label: l.name, value: l.weight, color, sub: [l.asset_class, l.ccy, l.debt].filter(Boolean).join(" · "), badge: note ? <>{note}</> : undefined };
+            }),
+            ...(c.lines.length > 60 ? [{ key: "__rest", label: `${c.lines.length - 60} autres lignes`, value: c.lines.slice(60).reduce((a, l) => a + l.weight, 0), color: "var(--div-mid)" }] : []),
+            ...(c.cash_weight > 0 ? [{ key: "__cash", label: "Liquidités", value: c.cash_weight, color: "#5a6272" }] : [])]}
+          onSelect={(i) => !i.key.startsWith("__") && nav(`/portefeuilles/ligne?key=${encodeURIComponent(i.key)}`)} />
+        <p className="small muted" style={{ marginTop: 10 }}>Chaque case est une ligne, sa surface est son poids. Cliquer une ligne pour voir tous les fonds de la maison qui la détiennent.</p>
       </div>
       <div className="grid grid-2">
         <div className="card card--flat">
@@ -393,6 +456,11 @@ export function CharSection({ sections, validations }: { sections: Sec[]; valida
       </div>
     </section>
   );
+}
+
+const CLASSES: Record<string, string> = { actions: "#6189d6", obligations: "#cc9f53", "monétaire": "#e8c9ba", monetaire: "#e8c9ba", opc: "#c2476f", "liquidités": "#8d929c", convertibles: "#d9b36e", "dérivés": "#5a6272" };
+function CLASS_COLOR(c: string | null | undefined): string {
+  return CLASSES[(c ?? "").toLowerCase()] ?? "#a9adb6";
 }
 
 export function renderValue(kind: string, v: string | number | boolean) {

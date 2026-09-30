@@ -5,9 +5,11 @@ import { useApp } from "../lib/context";
 import { date as fdate, nav as fnav, pct, PERIOD_LABEL, PERIOD_SHORT } from "../lib/format";
 import { FAMILY_LABEL, famVar } from "../lib/families";
 import type { ShareDetail } from "../lib/types";
-import { BigMoney, Bool, CopyCode, Crumbs, Decomposition, Delta, ErrorState, FamilyTag, Loading, useReveal } from "../components/ui";
+import { BigMoney, Bool, CopyCode, Crumbs, Delta, ErrorState, FamilyTag, Loading, useReveal } from "../components/ui";
 import { RangeTabs, TimeChart, fmtIndex, sliceRange } from "../components/charts";
 import { CharSection } from "./Fund";
+import { Bridge } from "../components/viz";
+import { eur, pctRaw } from "../lib/format";
 import * as I from "../components/Icon";
 
 export default function Share() {
@@ -47,6 +49,7 @@ export default function Share() {
               <div className="row" style={{ gap: 14, marginTop: 14 }}>
                 <CopyCode code={s.isin} />
                 {s.fund && <Link to={`/fonds/${encodeURIComponent(s.fund.id)}`} className="arrow-link">Fiche du fonds <I.Arrow size={16} /></Link>}
+                <CopySheet s={s} />
               </div>
               <dl className="fund__facts">
                 <div><dt>Devise</dt><dd>{s.ccy ?? "—"}</dd></div>
@@ -93,10 +96,8 @@ export default function Share() {
               <div className="grid grid-2">
                 <div className="card card--flat"><TimeChart series={[{ key: "a", label: "Encours", color: "var(--fc)", points: sliceRange(s.aum_series, "3y"), fill: true }]} ariaLabel={`Encours de ${s.name}`} height={260} /></div>
                 <div className="card card--flat">
-                  <h3 className="h3" style={{ marginBottom: 14 }}>{PERIOD_LABEL.YTD}</h3>
-                  <Decomposition v={s.var.YTD} />
-                  <h3 className="h3" style={{ margin: "22px 0 14px" }}>Sur 1 an</h3>
-                  <Decomposition v={s.var["1A"]} />
+                  <h3 className="h3" style={{ marginBottom: 4 }}>{PERIOD_LABEL.YTD}</h3>
+                  <Bridge v={s.var.YTD} end={s.date} height={240} label="Encours de la part" />
                 </div>
               </div>
             </section>
@@ -127,5 +128,26 @@ export default function Share() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Copie un résumé prêt à coller dans un e-mail (nom, ISIN, frais, minimum, cut-off, pays). */
+function CopySheet({ s }: { s: ShareDetail }) {
+  const [done, setDone] = useState(false);
+  const text = [
+    `${s.name} — ${s.isin ?? ""}`,
+    s.fund ? `Fonds : ${s.fund.name}` : "",
+    `Devise : ${s.ccy ?? "—"}${s.hedged ? " (couverte)" : ""} · ${s.distribution ?? ""}`,
+    `Souscripteurs : ${s.investor ?? "—"}`,
+    `Frais courants : ${s.ongoing != null ? pctRaw(s.ongoing) : "—"} · Minimum : ${s.min_sub ? eur(s.min_sub) : "1 part"}`,
+    `Cut-off : ${s.cutoff ?? "—"} · Règlement : ${s.settlement ?? "—"}`,
+    s.nav != null ? `VL au ${fdate(s.nav_date)} : ${fnav(s.nav, s.ccy)}` : "",
+    `Pays d'enregistrement : ${s.registrations.filter((r) => r.active).map((r) => r.country).join(", ") || "—"}`,
+  ].filter(Boolean).join("\n").replace(/\u202f/g, " ");
+  return (
+    <button type="button" className="btn btn--ghost" onClick={() => navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1600); })}>
+      {done ? <I.Check size={16} /> : <I.Copy size={16} />} {done ? "Fiche copiée" : "Copier la fiche"}
+      <span className="sr-only" aria-live="polite">{done ? "Fiche copiée dans le presse-papiers" : ""}</span>
+    </button>
   );
 }

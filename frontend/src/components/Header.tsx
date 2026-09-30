@@ -12,7 +12,7 @@ const NAV = [
   { to: "/risques", label: "Risques & contrôles" },
 ];
 
-export function Header({ night }: { night: boolean }) {
+export function Header() {
   const { meta, asOf, date, setDate, openPalette } = useApp();
   const [scrolled, setScrolled] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -26,7 +26,7 @@ export function Header({ night }: { night: boolean }) {
   }, []);
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
   return (
-    <header className={`hdr${night ? " hdr--night" : ""}${scrolled ? " is-scrolled" : ""}`}>
+    <header className={`hdr hdr--night${scrolled ? " is-scrolled" : ""}`}>
       <a href="#contenu" className="skip-link">Aller au contenu</a>
       <div className="hdr__in">
         <Link to="/" className="brand" aria-label="Rothschild & Co — accueil, la ville des encours">

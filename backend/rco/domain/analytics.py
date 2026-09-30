@@ -171,7 +171,33 @@ def share_performance(m: Model, jump_part: str, end: pd.Timestamp) -> dict | Non
         "risk": risk_stats(idx, bench if has_bench else None, end),
         "_index": idx, "_bench": bench if has_bench else None,
         "dividends": [{"d": d.date().isoformat(), "v": float(v)} for d, v in nav["DIVIDEND_AMOUNT"].dropna().items() if v],
+        "calendar": calendar_years(idx, bench if has_bench else None, end),
     }
+
+
+def calendar_years(idx: pd.Series, bench: pd.Series | None, end: pd.Timestamp) -> list[dict]:
+    """Performances par année civile (l'année en cours est « depuis le 1er janvier », la première est partielle)."""
+    s = idx[:end].dropna()
+    if s.empty:
+        return []
+    out = []
+    first = s.index[0]
+    for year in range(first.year, end.year + 1):
+        prev = s[: pd.Timestamp(year - 1, 12, 31)]
+        cur = s[: pd.Timestamp(year, 12, 31)]
+        if cur.empty:
+            continue
+        v0 = float(prev.iloc[-1]) if len(prev) else float(s.iloc[0])
+        v1 = float(cur.iloc[-1])
+        rec = {"year": year, "fund": v1 / v0 - 1, "partial": (not len(prev)) or year == end.year, "ytd": year == end.year}
+        if bench is not None:
+            b = bench[:end].dropna()
+            bp, bc = b[: pd.Timestamp(year - 1, 12, 31)], b[: pd.Timestamp(year, 12, 31)]
+            if len(bc):
+                b0 = float(bp.iloc[-1]) if len(bp) else float(b.iloc[0])
+                rec["bench"] = float(bc.iloc[-1]) / b0 - 1 if b0 else None
+        out.append(rec)
+    return out
 
 
 # ------------------------------------------------------------------ parts & fonds
