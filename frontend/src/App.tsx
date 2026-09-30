@@ -1,0 +1,61 @@
+import { lazy, Suspense, useEffect } from "react";
+import { Route, Routes, useLocation } from "react-router-dom";
+import { Header } from "./components/Header";
+import { CommandPalette } from "./components/CommandPalette";
+import { Footer } from "./components/Footer";
+
+const Home = lazy(() => import("./pages/Home"));
+const FundsSearch = lazy(() => import("./pages/FundsSearch"));
+const Fund = lazy(() => import("./pages/Fund"));
+const Share = lazy(() => import("./pages/Share"));
+const Encours = lazy(() => import("./pages/Encours"));
+const Selection = lazy(() => import("./pages/Selection"));
+const Holdings = lazy(() => import("./pages/Holdings"));
+const Instrument = lazy(() => import("./pages/Instrument"));
+const Distribution = lazy(() => import("./pages/Distribution"));
+const Country = lazy(() => import("./pages/Country"));
+const Risk = lazy(() => import("./pages/Risk"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+
+const TITLES: [RegExp, string][] = [
+  [/^\/$/, "La ville des encours"], [/^\/fonds$/, "Rechercher un fonds"], [/^\/encours/, "Encours"], [/^\/selection/, "Sélection de fonds"],
+  [/^\/portefeuilles/, "Portefeuilles"], [/^\/distribution/, "Distribution"], [/^\/risques/, "Risques & contrôles"],
+];
+
+export function App() {
+  const loc = useLocation();
+  const night = loc.pathname === "/" || loc.pathname === "/fonds";
+  useEffect(() => {
+    const t = TITLES.find(([re]) => re.test(loc.pathname))?.[1];
+    if (t) document.title = `${t} — Rothschild & Co`;
+    if (!loc.hash) window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+  }, [loc.pathname, loc.hash]);
+  useEffect(() => {
+    document.body.classList.toggle("is-night", night);
+  }, [night]);
+  return (
+    <>
+      <Header night={night} />
+      <main id="contenu" tabIndex={-1}>
+        <Suspense fallback={<div className="page"><div className="skeleton" style={{ height: 420 }} /></div>}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/fonds" element={<FundsSearch />} />
+            <Route path="/fonds/:id" element={<Fund />} />
+            <Route path="/parts/:id" element={<Share />} />
+            <Route path="/encours" element={<Encours />} />
+            <Route path="/selection" element={<Selection />} />
+            <Route path="/portefeuilles" element={<Holdings />} />
+            <Route path="/portefeuilles/ligne" element={<Instrument />} />
+            <Route path="/distribution" element={<Distribution />} />
+            <Route path="/distribution/:pays" element={<Country />} />
+            <Route path="/risques" element={<Risk />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
+      </main>
+      {loc.pathname !== "/fonds" && <Footer night={loc.pathname === "/"} />}
+      <CommandPalette />
+    </>
+  );
+}

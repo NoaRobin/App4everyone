@@ -1,0 +1,68 @@
+import { useEffect, useState } from "react";
+import { Link, NavLink, useLocation } from "react-router-dom";
+import * as I from "./Icon";
+import { useApp } from "../lib/context";
+import { date as fdate } from "../lib/format";
+
+const NAV = [
+  { to: "/fonds", label: "Fonds" },
+  { to: "/encours", label: "Encours" },
+  { to: "/portefeuilles", label: "Portefeuilles" },
+  { to: "/distribution", label: "Distribution" },
+  { to: "/risques", label: "Risques & contrôles" },
+];
+
+export function Header({ night }: { night: boolean }) {
+  const { meta, asOf, date, setDate, openPalette } = useApp();
+  const [scrolled, setScrolled] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const loc = useLocation();
+  useEffect(() => setMenu(false), [loc.pathname]);
+  useEffect(() => {
+    const on = () => setScrolled(window.scrollY > 12);
+    on();
+    window.addEventListener("scroll", on, { passive: true });
+    return () => window.removeEventListener("scroll", on);
+  }, []);
+  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+  return (
+    <header className={`hdr${night ? " hdr--night" : ""}${scrolled ? " is-scrolled" : ""}`}>
+      <a href="#contenu" className="skip-link">Aller au contenu</a>
+      <div className="hdr__in">
+        <Link to="/" className="brand" aria-label="Rothschild & Co — accueil, la ville des encours">
+          <span className="brand__name">Rothschild&nbsp;&amp;&nbsp;Co</span>
+          <span className="brand__sub">Asset Management · Fonds &amp; encours</span>
+        </Link>
+        <nav aria-label="Navigation principale" className={`nav${menu ? " is-open" : ""}`}>
+          {NAV.map((n) => (
+            <NavLink key={n.to} to={n.to} className={({ isActive }) => `nav__a${isActive ? " is-active" : ""}`}>{n.label}</NavLink>
+          ))}
+        </nav>
+        <div className="hdr__tools">
+          <button type="button" className="hdr__search" onClick={() => openPalette()} aria-label="Rechercher un fonds, une part, un ISIN, un gérant…">
+            <I.Search size={17} />
+            <span className="hdr__search-t">Rechercher</span>
+            <kbd>{isMac ? "⌘" : "Ctrl"} K</kbd>
+          </button>
+          {asOf && meta && (
+            <label className={`asof${date ? " is-past" : ""}`} title="Date d'arrêté des données">
+              <I.Calendar size={15} />
+              <span className="sr-only">Date d'arrêté</span>
+              <span className="asof__t" aria-hidden="true">{fdate(asOf)}</span>
+              <input type="date" value={asOf} min={meta.first_date} max={meta.last_date}
+                onChange={(e) => e.target.value && setDate(e.target.value)} aria-label={`Date d'arrêté des données, actuellement le ${fdate(asOf)}`} />
+            </label>
+          )}
+          {meta?.is_mock && <span className="mockbadge" title="L'application tourne sur des données fictives au schéma exact du Lakehouse">Données fictives</span>}
+          <button type="button" className="hdr__burger" aria-expanded={menu} aria-label="Menu" onClick={() => setMenu((m) => !m)}><span /><span /></button>
+        </div>
+      </div>
+      {date && (
+        <div className="pastbar" role="status">
+          Vous consultez les données au <b>{fdate(date)}</b>.
+          <button type="button" className="link" onClick={() => setDate(null)}>Revenir au dernier arrêté ({meta && fdate(meta.last_date)})</button>
+        </div>
+      )}
+    </header>
+  );
+}

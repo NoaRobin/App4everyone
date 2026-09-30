@@ -1,0 +1,23 @@
+type P = { size?: number; className?: string };
+const base = (size = 18) => ({ width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true });
+
+export const Search = ({ size, className }: P) => (<svg {...base(size)} className={className}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></svg>);
+export const Arrow = ({ size, className }: P) => (<svg {...base(size)} className={className}><path d="M5 12h14M13 6l6 6-6 6" /></svg>);
+export const ArrowLeft = ({ size, className }: P) => (<svg {...base(size)} className={className}><path d="M19 12H5M11 6l-6 6 6 6" /></svg>);
+export const Close = ({ size, className }: P) => (<svg {...base(size)} className={className}><path d="M6 6l12 12M18 6 6 18" /></svg>);
+export const Up = ({ size = 12 }: P) => (<svg {...base(size)} strokeWidth={2.2}><path d="M12 19V5M6 11l6-6 6 6" /></svg>);
+export const Down = ({ size = 12 }: P) => (<svg {...base(size)} strokeWidth={2.2}><path d="M12 5v14M6 13l6 6 6-6" /></svg>);
+export const Check = ({ size, className }: P) => (<svg {...base(size)} className={className}><path d="m5 12.5 4.2 4.2L19 7" /></svg>);
+export const Minus = ({ size, className }: P) => (<svg {...base(size)} className={className}><path d="M6 12h12" /></svg>);
+export const Calendar = ({ size, className }: P) => (<svg {...base(size)} className={className}><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg>);
+export const Copy = ({ size, className }: P) => (<svg {...base(size)} className={className}><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></svg>);
+export const Download = ({ size, className }: P) => (<svg {...base(size)} className={className}><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>);
+export const Play = ({ size, className }: P) => (<svg {...base(size)} className={className} fill="currentColor" stroke="none"><path d="M8 5.5v13l11-6.5z" /></svg>);
+export const Pause = ({ size, className }: P) => (<svg {...base(size)} className={className} fill="currentColor" stroke="none"><rect x="6.5" y="5" width="4" height="14" rx="1" /><rect x="13.5" y="5" width="4" height="14" rx="1" /></svg>);
+export const Alert = ({ size, className }: P) => (<svg {...base(size)} className={className}><path d="M12 3.5 2.8 19.5h18.4z" /><path d="M12 10v4.5M12 17.3v.2" /></svg>);
+export const Info = ({ size, className }: P) => (<svg {...base(size)} className={className}><circle cx="12" cy="12" r="8.5" /><path d="M12 11v5.5M12 7.8v.2" /></svg>);
+export const Octagon = ({ size, className }: P) => (<svg {...base(size)} className={className}><path d="M8.3 3h7.4L21 8.3v7.4L15.7 21H8.3L3 15.7V8.3z" /><path d="M12 7.5v5.5M12 16.3v.2" /></svg>);
+export const Star = ({ size = 14, filled }: P & { filled?: boolean }) => (<svg {...base(size)} fill={filled ? "currentColor" : "none"}><path d="m12 3.6 2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 17l-5.2 2.7 1-5.8-4.3-4.1 5.9-.8z" /></svg>);
+export const List = ({ size, className }: P) => (<svg {...base(size)} className={className}><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" /></svg>);
+export const Cube = ({ size, className }: P) => (<svg {...base(size)} className={className}><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z" /><path d="M4 7.5 12 12l8-4.5M12 12v9" /></svg>);
+export const Keyboard = ({ size, className }: P) => (<svg {...base(size)} className={className}><rect x="2.5" y="6" width="19" height="12" rx="2" /><path d="M6 10h.01M9 10h.01M12 10h.01M15 10h.01M18 10h.01M7 14h10" /></svg>);

@@ -1,0 +1,54 @@
+/* Jetons de design — la charte Rothschild & Co se règle ici, et uniquement ici. */
+:root {
+  color-scheme: light;
+  /* Papier & encre */
+  --paper: #f5f1e8;
+  --paper-2: #efe9dc;
+  --paper-3: #e5dccb;
+  --card: #fbf9f4;
+  --ink: #0c1624;
+  --ink-2: #394354;
+  --ink-3: #5f6776;
+  --line: rgba(12, 22, 36, 0.12);
+  --line-2: rgba(12, 22, 36, 0.2);
+  --gold: #a88547;
+  --gold-ink: #7a5c26;
+  --gold-soft: rgba(168, 133, 71, 0.14);
+
+  /* Nuit (la ville, le clavier) */
+  --night: #070d18;
+  --night-2: #0d1828;
+  --night-3: #14223a;
+  --night-line: rgba(233, 223, 201, 0.14);
+  --on-night: #efe7d6;
+  --on-night-2: #a9b1bf;
+
+  /* Les quatre familles de gestion (palette validée : contraste ≥ 3:1, séparation daltonisme ≥ 8) */
+  --fam-aid: #1f5fa8;
+  --fam-ae: #a12a45;
+  --fam-fi: #0f8a73;
+  --fam-ao: #b87a1a;
+  --fam-nc: #7d8591;
+  --fam-aid-night: #6c9be0;
+  --fam-ae-night: #e0718b;
+  --fam-fi-night: #3cc3a0;
+  --fam-ao-night: #e8b24f;
+  --fam-nc-night: #9aa3b2;
+
+  /* Hausse / baisse (toujours accompagnées d'un signe) */
+  --up: #1d6a4d;
+  --down: #a3392a;
+
+  /* Typographie */
+  --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --sans: "Inter Tight Variable", "Inter Tight", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  --radius: 14px;
+  --radius-s: 8px;
+  --shadow: 0 1px 0 rgba(12, 22, 36, 0.04), 0 12px 32px -18px rgba(12, 22, 36, 0.28);
+  --ease: cubic-bezier(0.2, 0.7, 0.1, 1);
+  --header-h: 68px;
+  --gutter: clamp(16px, 4vw, 56px);
+  --maxw: 1440px;
+}

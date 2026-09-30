@@ -632,7 +632,9 @@ class Service:
             terms = [_str(f.get(c)) for c in ("Product_Global_ID", "LEI_Code", "AMF_Code", "CSSF_Code", "AIM_Portfolio_Code", "Umbrella_Name")]
             entries.append({"t": "fonds", "id": r["id"], "label": r["name"], "family": r["family"], "aum": _num(r["aum"]),
                             "sub": _join(r.get("range"), r.get("manager"), L.sfdr_short(_str(r.get("sfdr")))),
-                            "terms": [x for x in terms if x]})
+                            "terms": [x for x in terms if x],
+                            "attrs": {k: _str(r.get(k)) for k in ("range", "asset_class", "expertise", "manager", "backup", "sfdr", "domicile", "legal_form", "sri")}
+                            | {"countries": r.get("countries") or []}})
         for jp in m.link.index:
             b = self._share_brief(jp, end)
             fid = m.link.at[jp, "fund_id"]

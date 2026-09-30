@@ -123,7 +123,7 @@ def house_holdings(m: Model, end: pd.Timestamp, limit: int = 60) -> dict:
         "instruments": [{"key": k, **{kk: (None if pd.isna(vv) else vv) for kk, vv in r.items()}} for k, r in g.head(limit).iterrows()],
         "most_shared": [{"key": k, "name": r["name"], "n_funds": int(r["n_funds"]), "amount_eur": float(r["amount_eur"])}
                         for k, r in g.sort_values(["n_funds", "amount_eur"], ascending=False).head(12).iterrows()],
-        "by_class": [{"label": k, "amount_eur": float(v), "weight": float(v / total * 100) if total else None} for k, v in by_class.items()],
+        "by_class": [{"label": k, "amount_eur": float(v), "weight": float(v / total * 100) if total else None} for k, v in by_class.items() if abs(v) >= 1],
         "by_ccy": [{"label": k, "amount_eur": float(v), "weight": float(v / total * 100) if total else None} for k, v in by_ccy.items()],
     }
 
