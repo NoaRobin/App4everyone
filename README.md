@@ -36,7 +36,8 @@ Node.js n'est nécessaire que pour modifier le front. Pour Fabric, il faut en pl
 | macOS / Linux | `./run.sh` |
 | Partout | `python run.py` |
 
-Le lanceur crée l'environnement Python (`.venv`), installe les dépendances (quelques minutes la première fois),
+Le lanceur crée l'environnement Python hors du projet (`%LOCALAPPDATA%\RCoFonds` sous Windows, `~/.cache/rco-fonds` ailleurs ;
+modifiable avec `RCO_VENV`), installe les dépendances (quelques minutes la première fois),
 démarre le serveur et ouvre le navigateur. Les données fictives sont utilisées par défaut.
 
 | Option | Effet |
@@ -55,6 +56,7 @@ Lancez d'abord `python run.py --doctor`, puis :
 
 | Symptôme | Cause probable | Solution |
 |---|---|---|
+| `No module named 'pip._internal…'` | projet dans un dossier OneDrive/SharePoint ou au chemin trop long (limite Windows de 260 caractères) | déjà corrigé : l'environnement Python est créé dans `%LOCALAPPDATA%\RCoFonds`. Pour plus de fiabilité, copier le projet dans un chemin court et local (`C:\dev\App4everyone`) |
 | « Échec : installation de requirements.txt » | proxy d'entreprise | `set HTTPS_PROXY=http://proxy:port` (Windows) ou `export HTTPS_PROXY=…`, puis relancer |
 | « Python 3.10 ou plus récent est requis » | Python trop ancien | installer Python depuis python.org (cocher « Add to PATH ») |
 | `python` introuvable sous Windows | Python absent du PATH | utiliser `run.bat` (il essaie `py` puis `python`) |

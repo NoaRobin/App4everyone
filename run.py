@@ -31,8 +31,27 @@ ROOT = Path(__file__).resolve().parent
 BACKEND = ROOT / "backend"
 FRONTEND = ROOT / "frontend"
 DIST = FRONTEND / "dist"
-VENV = ROOT / ".venv"
 WIN = os.name == "nt"
+OLD_VENV = ROOT / ".venv"
+
+
+def _venv_dir() -> Path:
+    """Environnement Python hors du dossier du projet, dans un chemin local court.
+
+    Un projet placé dans un dossier OneDrive/SharePoint ou dans un chemin long casse l'environnement
+    (limite Windows de 260 caractères, synchronisation des milliers de fichiers de pip et pandas).
+    """
+    if os.environ.get("RCO_VENV"):
+        return Path(os.environ["RCO_VENV"])
+    key = hashlib.sha1(str(ROOT).lower().encode()).hexdigest()[:8]
+    if WIN:
+        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "RCoFonds"
+    else:
+        base = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "rco-fonds"
+    return base / f"venv-{key}"
+
+
+VENV = _venv_dir()
 PY = VENV / ("Scripts/python.exe" if WIN else "bin/python")
 NPM = "npm.cmd" if WIN else "npm"
 MIN_PY = (3, 10)
@@ -89,26 +108,45 @@ def load_env_file(env: dict) -> None:
 
 
 def venv_ok() -> bool:
+    """L'environnement existe ET pip y est complet (un pip à moitié installé est le cas le plus fréquent)."""
     if not PY.exists():
         return False
     try:
-        subprocess.run([str(PY), "-c", "import sys"], check=True, capture_output=True)
+        subprocess.run([str(PY), "-m", "pip", "--version"], check=True, capture_output=True, timeout=60)
         return True
     except Exception:
         return False
 
 
+def warn_location() -> None:
+    p = str(ROOT)
+    synced = any(k in p for k in ("OneDrive", "SharePoint")) or " - Documents" in p
+    if WIN and (len(p) > 150 or synced):
+        say("Attention : le projet est dans un dossier synchronisé ou au chemin très long.")
+        say("  L'environnement Python est placé ailleurs pour l'éviter, mais pour plus de fiabilité,")
+        say(r"  copiez le dossier du projet dans un chemin court et local, par exemple C:\dev\App4everyone.")
+
+
 def ensure_python(extras: list[str]) -> None:
+    # Ancien environnement dans le dossier du projet (souvent cassé sous OneDrive) : on le supprime
+    if OLD_VENV.exists() and (OLD_VENV / "pyvenv.cfg").exists() and OLD_VENV != VENV:
+        say("Suppression de l'ancien environnement .venv du dossier du projet…")
+        shutil.rmtree(OLD_VENV, ignore_errors=True)
     if not venv_ok():
         if VENV.exists():
-            say("Environnement Python existant inutilisable : recréation…")
+            say("Environnement Python incomplet : recréation…")
             shutil.rmtree(VENV, ignore_errors=True)
-        say("Création de l'environnement Python (.venv)…")
+        say(f"Création de l'environnement Python ({VENV})…")
         try:
-            venv.create(VENV, with_pip=True)
+            VENV.parent.mkdir(parents=True, exist_ok=True)
+            venv.create(VENV, with_pip=True, clear=True)
         except Exception as e:  # pragma: no cover - dépend du poste
             fail(f"Impossible de créer l'environnement Python : {e}",
                  "Sous Linux : installez le paquet python3-venv. Sous Windows : réinstallez Python depuis python.org.")
+        if not venv_ok():
+            fail("L'environnement Python a été créé mais pip y est inutilisable.",
+                 f"Supprimez le dossier {VENV} puis relancez. Si le problème persiste, réinstallez Python depuis python.org\n"
+                 "(cocher « Add python.exe to PATH »), ou indiquez un autre emplacement : set RCO_VENV=C:\\venv-rco")
     reqs = [BACKEND / "requirements.txt"] + [BACKEND / f"requirements-{x}.txt" for x in extras]
     for req in reqs:
         stamp = VENV / f".deps-{req.stem}"
@@ -203,7 +241,8 @@ def open_when_ready(api: str, url: str, browser: bool, proc: subprocess.Popen) -
 def doctor() -> None:
     ok = lambda b: "OK " if b else "-- "
     print(f"{ok(sys.version_info >= MIN_PY)} Python {sys.version.split()[0]} ({sys.executable})")
-    print(f"{ok(venv_ok())} Environnement .venv {'présent' if venv_ok() else 'absent (sera créé)'}")
+    print(f"{ok(venv_ok())} Environnement Python {'opérationnel' if venv_ok() else 'absent ou incomplet (sera recréé)'} : {VENV}")
+    print(f"    Dossier du projet ({len(str(ROOT))} caractères) : {ROOT}")
     try:
         urllib.request.urlopen("https://pypi.org/simple/pip/", timeout=6)
         net = True
@@ -233,6 +272,7 @@ def main() -> None:
     if a.doctor:
         doctor()
         return
+    warn_location()
     if sys.version_info < MIN_PY:
         fail(f"Python {MIN_PY[0]}.{MIN_PY[1]} ou plus récent est requis (version actuelle : {sys.version.split()[0]}).", "Téléchargement : https://www.python.org/downloads/")
 

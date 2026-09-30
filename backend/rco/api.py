@@ -154,7 +154,9 @@ def controls(date: str | None = None):
 # ---------------------------------------------------------------- interface (build Vite)
 DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if DIST.exists():
-    app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
+    for sub in ("a", "assets"):
+        if (DIST / sub).is_dir():
+            app.mount(f"/{sub}", StaticFiles(directory=DIST / sub), name=f"static-{sub}")
 
     @app.get("/{path:path}")
     def spa(path: str):
