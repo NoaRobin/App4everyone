@@ -27,6 +27,28 @@ La recherche universelle est accessible partout (`Ctrl K` / `⌘ K` ou `/`). Ell
 
 Prérequis : Python 3.11+, Node 20+ ; pour Fabric, le pilote *ODBC Driver 18 for SQL Server*.
 
+### En une commande
+
+| Système | Commande |
+|---|---|
+| Windows | double-cliquer sur `run.bat` (ou `run.bat --fabric`) |
+| macOS / Linux | `./run.sh` (ou `./run.sh --fabric`) |
+| Partout | `python run.py` |
+
+Le lanceur crée l'environnement Python (`.venv`), installe les dépendances, compile l'interface si elle a changé,
+démarre le serveur et ouvre le navigateur sur http://127.0.0.1:8000. Options :
+
+| Option | Effet |
+|---|---|
+| `--fabric` | données du Lakehouse Fabric (sinon données fictives) |
+| `--dev` | mode développement : front sur :5173 avec rechargement à chaud, API relancée à chaque modification |
+| `--test` | lance les tests back-end et front-end |
+| `--port 8080` | autre port |
+| `--rebuild` | force la recompilation de l'interface |
+| `--no-browser` | n'ouvre pas le navigateur |
+
+### Étape par étape
+
 ```bash
 # 1. Back-end
 cd backend
