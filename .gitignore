@@ -34,3 +34,6 @@ node_modules/
 .idea/
 .vscode/
 screenshots/
+
+# Cache de compilation TypeScript
+*.tsbuildinfo
