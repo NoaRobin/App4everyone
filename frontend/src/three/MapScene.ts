@@ -31,7 +31,7 @@ export type MapOptions = {
 };
 
 /** ISO 3166 alpha-2 → numérique (identifiants de world-atlas). */
-const NUM: Record<string, string> = {
+export const NUM: Record<string, string> = {
   FR: "250", LU: "442", BE: "056", DE: "276", AT: "040", IT: "380", ES: "724", PT: "620", NL: "528", CH: "756", GB: "826", SE: "752",
   FI: "246", DK: "208", NO: "578", IE: "372", SG: "702", CL: "152", MC: "492", LI: "438", MT: "470", CY: "196", GR: "300", PL: "616",
   CZ: "203", HU: "348", IS: "352", HK: "344", JP: "392", US: "840", CA: "124", BR: "076", MX: "484", PE: "604", CO: "170", UY: "858",
@@ -40,7 +40,7 @@ const NUM: Record<string, string> = {
   TR: "792", MA: "504",
 };
 /** Points d'ancrage explicites (capitale financière) pour les pays dont le centroïde tombe mal. */
-const HUB: Record<string, [number, number]> = { FR: [2.35, 48.86], LU: [6.13, 49.61], NO: [10.75, 59.91], US: [-74, 40.7], CL: [-70.65, -33.45], SG: [103.82, 1.35], HK: [114.17, 22.3] };
+export const HUB: Record<string, [number, number]> = { FR: [2.35, 48.86], LU: [6.13, 49.61], NO: [10.75, 59.91], US: [-74, 40.7], CL: [-70.65, -33.45], SG: [103.82, 1.35], HK: [114.17, 22.3] };
 
 const H_MAX = 6.5;
 const BASE = 0.25;

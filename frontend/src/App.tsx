@@ -1,12 +1,12 @@
 import { lazy, Suspense, useEffect } from "react";
-import { Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Header } from "./components/Header";
 import { CommandPalette } from "./components/CommandPalette";
 import { Footer } from "./components/Footer";
 import { Cursor, Curtain } from "./components/Motion";
 import { BackendStatus } from "./components/BackendStatus";
 
-const Panorama = lazy(() => import("./pages/Panorama"));
+const Home = lazy(() => import("./pages/Home"));
 const Workspace = lazy(() => import("./pages/Workspace"));
 const FundsSearch = lazy(() => import("./pages/FundsSearch"));
 const Fund = lazy(() => import("./pages/Fund"));
@@ -17,17 +17,16 @@ const Holdings = lazy(() => import("./pages/Holdings"));
 const Instrument = lazy(() => import("./pages/Instrument"));
 const Distribution = lazy(() => import("./pages/Distribution"));
 const Country = lazy(() => import("./pages/Country"));
-const Risk = lazy(() => import("./pages/Risk"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const TITLES: [RegExp, string][] = [
-  [/^\/$/, "Panorama"], [/^\/metiers/, "Espace métiers"], [/^\/fonds$/, "Rechercher un fonds"], [/^\/encours/, "Encours"], [/^\/selection/, "Sélection de fonds"],
-  [/^\/portefeuilles/, "Portefeuilles"], [/^\/distribution/, "Distribution"], [/^\/risques/, "Risques & contrôles"],
+  [/^\/$/, "Accueil"], [/^\/metiers/, "Espace métiers"], [/^\/fonds$/, "Rechercher un fonds"], [/^\/encours/, "Encours"], [/^\/selection/, "Sélection de fonds"],
+  [/^\/portefeuilles/, "Portefeuilles"], [/^\/distribution/, "Distribution"],
 ];
 
 export function App() {
   const loc = useLocation();
-  const night = loc.pathname === "/" || loc.pathname === "/fonds";
+  const night = loc.pathname === "/" || loc.pathname === "/fonds" || loc.pathname === "/encours";
   useEffect(() => {
     const t = TITLES.find(([re]) => re.test(loc.pathname))?.[1];
     if (t) document.title = `${t} — Rothschild & Co`;
@@ -43,7 +42,7 @@ export function App() {
       <main id="contenu" tabIndex={-1}>
         <Suspense fallback={<div className="page"><div className="skeleton" style={{ height: 420 }} /></div>}>
           <Routes>
-            <Route path="/" element={<Panorama />} />
+            <Route path="/" element={<Home />} />
             <Route path="/metiers" element={<Workspace />} />
             <Route path="/fonds" element={<FundsSearch />} />
             <Route path="/fonds/:id" element={<Fund />} />
@@ -54,12 +53,12 @@ export function App() {
             <Route path="/portefeuilles/ligne" element={<Instrument />} />
             <Route path="/distribution" element={<Distribution />} />
             <Route path="/distribution/:pays" element={<Country />} />
-            <Route path="/risques" element={<Risk />} />
+            <Route path="/risques" element={<Navigate to="/fonds#risques" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </main>
-      {loc.pathname !== "/fonds" && <Footer night />}
+      <Footer night />
       <CommandPalette />
       <Curtain />
       <Cursor />

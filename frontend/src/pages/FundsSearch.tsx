@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/context";
 import { famHex } from "../lib/families";
 import { useReducedMotion, webglAvailable } from "../lib/motion";
@@ -7,8 +7,9 @@ import { SearchResults, useResultNav } from "../components/SearchResults";
 import * as I from "../components/Icon";
 import { useReveal } from "../components/ui";
 import type { KeyboardScene as KS } from "../three/KeyboardScene";
+import { FundsRiskControls } from "../components/RiskPanels";
 
-/** Rubrique Fonds : un clavier et une barre de recherche, rien d'autre. */
+/** Rubrique Fonds : la recherche (clavier 3D), puis les risques et les contrôles de tous les fonds. */
 export default function FundsSearch() {
   const { index, entries, closePalette } = useApp();
   const [q, setQ] = useState("");
@@ -23,8 +24,19 @@ export default function FundsSearch() {
   const nFunds = entries.filter((e) => e.t === "fonds" && (e.aum ?? 0) > 0).length;
   const qRef = useRef(q);
   qRef.current = q;
+  const loc = useLocation();
 
-  useEffect(() => { closePalette(); input.current?.focus(); }, [closePalette]);
+  useEffect(() => { closePalette(); if (!loc.hash) input.current?.focus(); }, [closePalette, loc.hash]);
+  // Ancre (#risques, #ctl-…) : défilement une fois la section rendue
+  useEffect(() => {
+    if (!loc.hash) return;
+    let n = 0;
+    const t = window.setInterval(() => {
+      const el = document.getElementById(decodeURIComponent(loc.hash.slice(1)));
+      if (el || ++n > 40) { window.clearInterval(t); el?.scrollIntoView({ block: "start" }); }
+    }, 150);
+    return () => window.clearInterval(t);
+  }, [loc.hash, loc.search]);
   useReveal(1);
 
   useEffect(() => {
@@ -60,6 +72,7 @@ export default function FundsSearch() {
 
   const has = !!results;
   return (
+    <>
     <section className={`kbd${has ? " has-results" : ""}`} aria-label="Rechercher un fonds">
       <div className="kbd__stage" ref={host} />
       <div className="kbd__glow" aria-hidden="true" />
@@ -84,6 +97,11 @@ export default function FundsSearch() {
           </div>
         )}
       </div>
+      <a href="#risques" className="kbd__down" onClick={(e) => { e.preventDefault(); document.getElementById("risques")?.scrollIntoView({ behavior: "smooth" }); }}>
+        Risques &amp; contrôles des fonds <I.Arrow size={14} />
+      </a>
     </section>
+    <FundsRiskControls />
+    </>
   );
 }

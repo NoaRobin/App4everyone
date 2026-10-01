@@ -6,16 +6,26 @@ const res = (status: number, body: unknown) => ({ ok: status < 400, status, json
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe("fetchJson", () => {
-  it("patiente pendant le chargement du modèle puis renvoie les données", async () => {
+  it("patiente pendant le chargement du modèle (une seule boucle /api/health) puis renvoie les données", async () => {
     vi.useFakeTimers();
-    const f = vi.fn()
-      .mockResolvedValueOnce(res(503, { error: "model_loading", message: "Chargement…" }))
-      .mockResolvedValueOnce(res(200, { ok: 1 }));
+    let ready = false;
+    const calls: string[] = [];
+    const f = vi.fn(async (url: string) => {
+      calls.push(url);
+      if (url === "/api/health") return res(200, { model: { state: ready ? "ready" : "loading" } });
+      return ready ? res(200, { ok: url }) : res(503, { error: "model_loading", message: "Chargement…" });
+    });
     vi.stubGlobal("fetch", f);
-    const p = fetchJson<{ ok: number }>("/api/test-attente");
-    await vi.advanceTimersByTimeAsync(3100);
-    await expect(p).resolves.toEqual({ ok: 1 });
-    expect(f).toHaveBeenCalledTimes(2);
+    const a = fetchJson<{ ok: string }>("/api/test-attente-a");
+    const b = fetchJson<{ ok: string }>("/api/test-attente-b");
+    await vi.advanceTimersByTimeAsync(1600);
+    ready = true;
+    await vi.advanceTimersByTimeAsync(1600);
+    await expect(a).resolves.toEqual({ ok: "/api/test-attente-a" });
+    await expect(b).resolves.toEqual({ ok: "/api/test-attente-b" });
+    // Deux requêtes en attente, mais une seule interrogation de /api/health à la fois
+    expect(calls.filter((u) => u === "/api/health").length).toBeLessThanOrEqual(2);
+    expect(calls.filter((u) => u === "/api/test-attente-a").length).toBe(2);
   });
 
   it("remonte le message et le conseil du serveur", async () => {

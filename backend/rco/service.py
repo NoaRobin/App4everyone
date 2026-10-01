@@ -15,7 +15,7 @@ from .domain import fields as F
 from .domain import holdings as H
 from .domain import labels as L
 from .domain.numeric import fmt_meur, numeric_series, safe_divide, safe_float
-from .domain.model import PERIODS, Model, _clean, memo, rows_of
+from .domain.model import PERIODS, Model, _clean, find_duplicate_funds, memo, rows_of
 
 FUND_DIMS = {
     "family": ("Famille de gestion", "family"), "range": ("Gamme", "Fund_Range"), "asset_class": ("Classe d'actifs", "Asset_Class"),
@@ -381,7 +381,8 @@ class Service:
         flows = ctx["flows"].get(jp) if ctx["start"] is not None else None
         p = ctx["pos"].get(jp, -1)
         return {
-            "id": self._share_key(jp), "jump": jp, "name": ref.get("Share_Name") or lk["NOM_PART"],
+            "id": self._share_key(jp), "jump": jp,
+            "name": _str(ref.get("Share_Name")) or _str(lk["NOM_PART"]) or _str(ref.get("ISIN_Code")) or _str(lk["CODE_ISIN_PART"]) or f"Part {jp}",
             "isin": ref.get("ISIN_Code") or lk["CODE_ISIN_PART"], "link": lk["link"],
             "class": _str(ref.get("Share_Class")), "ccy": _str(ref.get("Subscription_Currency")) or (ctx["ccy"][p] if p >= 0 else None),
             "hedged": L.to_bool(ref.get("Share_Hedged_Against_FX_Exposure")), "distribution": _str(ref.get("Income_Distribution")),
@@ -445,7 +446,9 @@ class Service:
         m = self.m
         c = m.countries.copy()
         if c.empty:
-            return pd.DataFrame(columns=["pi_shareid", "fund_id", "country_fr", "iso", "active"])
+            return pd.DataFrame({"pi_shareid": pd.Series(dtype=object), "fund_id": pd.Series(dtype=object),
+                                 "country_fr": pd.Series(dtype=object), "iso": pd.Series(dtype=object),
+                                 "Country": pd.Series(dtype=object), "active": pd.Series(dtype=bool)})
         lab = c["Country"].map(L.country)
         c["country_fr"] = lab.map(lambda t: t[0])
         c["iso"] = lab.map(lambda t: t[1])
@@ -483,7 +486,7 @@ class Service:
         rmm_live = [f for f in self.rmm if f in m.funds.index]
         return {"date": end.date().isoformat(), "countries": out, "platforms": plat,
                 "n_shares_registered": int(act["pi_shareid"].nunique()), "n_funds_registered": int(act["fund_id"].nunique()),
-                "sankey": self._sankey(act), "routes": self._routes(act), "timeline": self._timeline(act), "exclude_rmm": exclude_rmm,
+                "sankey": self._sankey(act), "clients": self._client_map(act), "routes": self._routes(act), "timeline": self._timeline(act), "exclude_rmm": exclude_rmm,
                 "rmm": {"n_funds": len(rmm_live), "funds": sorted(m.funds.loc[rmm_live, "name"].astype(str).tolist()),
                         "rule": {"columns": list(self.rmm_columns), "pattern": self.rmm_pattern}}}
 
@@ -519,9 +522,15 @@ class Service:
                         "value": int(len(g)), "n_funds": int(g["fid"].nunique())})
         return sorted(out, key=lambda r: -r["value"])
 
+    def _clients(self, sids: pd.Series) -> pd.Series:
+        """Type de client de chaque part (Investor_Type du référentiel), libellé lisible ; vide → « Non renseigné »."""
+        m = self.m
+        inv = m.shares["Investor_Type"].map(_str) if "Investor_Type" in m.shares else pd.Series(dtype=object)
+        return sids.map(inv).fillna("Clientèle non renseignée")
+
     def _sankey(self, act: pd.DataFrame, top: int = 11) -> dict:
         """
-        Flux famille de gestion → domiciliation du fonds → pays d'enregistrement.
+        Parcours d'une autorisation : type de client de la part → pays d'enregistrement → famille de gestion du fonds.
         Unité : un enregistrement actif (une part autorisée dans un pays). Additive d'une colonne à l'autre,
         contrairement aux encours qui, eux, ne se répartissent pas par pays dans les données.
         """
@@ -530,8 +539,7 @@ class Service:
             return {"unit": "enregistrements", "nodes": [], "links": []}
         df = pd.DataFrame({"sid": act["pi_shareid"].values, "fid": act["fund_id"].values, "cty": act["country_fr"].values, "iso": act["iso"].values})
         df["fam"] = df["fid"].map(m.funds["family"]).fillna("nc")
-        dom = m.funds["Domiciliation"].map(_str) if "Domiciliation" in m.funds else pd.Series(dtype=object)
-        df["dom"] = df["fid"].map(dom).fillna("Domiciliation non renseignée")
+        df["cli"] = self._clients(df["sid"]).values
         counts = df.groupby("cty")["sid"].count().sort_values(ascending=False)
         keep = set(counts.index[:top])
         n_other = int(counts.index.size - len(keep))
@@ -545,26 +553,39 @@ class Service:
                 nodes.append({"id": key, "label": label, "col": col, **kw})
             return index[key]
 
+        for cname, g in sorted(df.groupby("cli"), key=lambda kv: -len(kv[1])):
+            node(f"k:{cname}", cname, 0, client=cname, value=int(len(g)), n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()))
+        for cname in [*counts.index[:top], "Autres pays"]:
+            g = df[df["dest"] == cname]
+            if len(g):
+                node(f"c:{cname}", cname if cname != "Autres pays" else f"{n_other} autres pays", 1, iso=iso.get(cname), value=int(len(g)),
+                     n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()), other=cname == "Autres pays")
         fam_order = [f["key"] for f in L.FAMILIES] + ["nc"]
         for k in fam_order:
             g = df[df["fam"] == k]
             if len(g):
-                node(f"f:{k}", self._family_label(k), 0, family=k, value=int(len(g)), n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()))
-        for dname, g in df.groupby("dom"):
-            node(f"d:{dname}", dname, 1, value=int(len(g)), n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()))
-        for cname in [*counts.index[:top], "Autres pays"]:
-            g = df[df["dest"] == cname]
-            if len(g):
-                node(f"c:{cname}", cname if cname != "Autres pays" else f"{n_other} autres pays", 2, iso=iso.get(cname), value=int(len(g)),
-                     n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()), other=cname == "Autres pays")
+                node(f"f:{k}", self._family_label(k), 2, family=k, value=int(len(g)), n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()))
         links = []
-        for (a, b), g in df.groupby(["fam", "dom"]):
-            links.append({"source": index[f"f:{a}"], "target": index[f"d:{b}"], "value": int(len(g)), "family": a,
+        for (a, b, f), g in df.groupby(["cli", "dest", "fam"]):
+            links.append({"source": index[f"k:{a}"], "target": index[f"c:{b}"], "value": int(len(g)), "family": f,
                           "n_funds": int(g["fid"].nunique()), "n_shares": int(g["sid"].nunique())})
-        for (a, b, f), g in df.groupby(["dom", "dest", "fam"]):
-            links.append({"source": index[f"d:{a}"], "target": index[f"c:{b}"], "value": int(len(g)), "family": f,
+        for (a, b), g in df.groupby(["dest", "fam"]):
+            links.append({"source": index[f"c:{a}"], "target": index[f"f:{b}"], "value": int(len(g)), "family": b,
                           "n_funds": int(g["fid"].nunique()), "n_shares": int(g["sid"].nunique())})
-        return {"unit": "enregistrements", "nodes": nodes, "links": links}
+        return {"unit": "enregistrements", "nodes": nodes, "links": links, "order": ["clients", "pays", "familles"]}
+
+    def _client_map(self, act: pd.DataFrame) -> list[dict]:
+        """Par type de client : pays où ses parts sont autorisées (pour la carte), du plus large au plus étroit."""
+        if act.empty:
+            return []
+        df = pd.DataFrame({"sid": act["pi_shareid"].values, "fid": act["fund_id"].values, "cty": act["country_fr"].values, "iso": act["iso"].values})
+        df["cli"] = self._clients(df["sid"]).values
+        out = []
+        for cli, g in df.groupby("cli"):
+            per = g.groupby(["cty", "iso"]).agg(n=("sid", "nunique"), f=("fid", "nunique")).reset_index().sort_values("n", ascending=False)
+            out.append({"client": cli, "n_shares": int(g["sid"].nunique()), "n_funds": int(g["fid"].nunique()),
+                        "countries": [{"country": r.cty, "iso": r.iso, "n_shares": int(r.n), "n_funds": int(r.f)} for r in per.itertuples()]})
+        return sorted(out, key=lambda x: -x["n_shares"])
 
     def _share_aum_by_ref(self, end: pd.Timestamp) -> dict[str, float]:
         m = self.m
@@ -784,9 +805,33 @@ class Service:
                 items.append({"fund_id": None, "name": r.get("MLVName"),
                               "detail": f"{_business_table(r.get('MLVName'))} : {int(v or 0)} violation(s), {int(dropped or 0)} ligne(s) écartée(s) au chargement du {_fr_date(r.get('RefreshDate'))}"})
         add("dq", "Contrôles qualité du chargement", "Données", "info", "Résultats des contrôles qualité du Lakehouse.", items)
+        # 11. ISIN ambigus : le secours par ISIN n'est pas utilisé pour eux
+        rep = self.links()
+        add("isin_ambiguous", "ISIN ambigus", "Données", "warning" if rep["ambiguous_isins"] else "info",
+            "ISIN portés par plusieurs parts (référentiel ou JUMP) : aucune part n'est rattachée par ces ISIN.",
+            [{"fund_id": None, "name": x, "detail": f"ISIN {x} partagé par plusieurs parts : rattachement par ISIN écarté"}
+             for x in rep["ambiguous_isins"]])
+        # 12. Doublons restant après consolidation (même nom, identifiants différents) : signalés, jamais fusionnés
+        add("duplicates", "Fonds en double après consolidation", "Données", "serious" if rep["duplicates"] else "info",
+            "Plusieurs fonds affichés portent le même nom : à rapprocher dans le référentiel (aucune fusion sur le seul nom).",
+            [{"fund_id": d["funds"][0]["id"], "name": d["name"],
+              "detail": f"{len(d['funds'])} lignes : " + ", ".join(("référentiel" if x["referenced"] else "JUMP seul") for x in d["funds"])}
+             for d in rep["duplicates"]])
         sev_order = {"serious": 0, "warning": 1, "info": 2}
         out.sort(key=lambda c: (c["count"] == 0, sev_order.get(c["severity"], 3)))
-        return {"date": end.date().isoformat(), "controls": out}
+        return {"date": end.date().isoformat(), "controls": out, "links": rep}
+
+    @lru_cache(maxsize=1)
+    def links(self) -> dict:
+        """Compteurs de rattachement JUMP ↔ Product Info et doublons restants (vue « Contrôles » et diagnostic)."""
+        m = self.m
+        rep = dict(m.link_report)
+        end = m.dates[-1]
+        live = m.funds[[(_num(m.fund_aum.at[end, f]) or 0) > 0 if f in m.fund_aum.columns else bool(r) for f, r in m.funds["referenced"].items()]]
+        rep["duplicates"] = find_duplicate_funds(live, m.fund_aum, end)
+        rep["funds_displayed"] = int(len(live))
+        rep["funds_jump_only"] = int((~live["referenced"].astype(bool)).sum())
+        return rep
 
     # ------------------------------------------------------------------ recherche
     @lru_cache(maxsize=4)
@@ -799,7 +844,7 @@ class Service:
         for _, r in rows_of(df, df.columns):
             f = codes[r["id"]]
             terms = [_str(f.get(c)) for c in ("Product_Global_ID", "LEI_Code", "AMF_Code", "CSSF_Code", "AIM_Portfolio_Code", "Umbrella_Name")]
-            entries.append({"t": "fonds", "id": r["id"], "label": r["name"], "family": r["family"], "aum": _num(r["aum"]),
+            entries.append({"t": "fonds", "id": r["id"], "label": _str(r["name"]) or str(r["id"]), "family": r["family"], "aum": _num(r["aum"]),
                             "sub": _join(r.get("range"), r.get("manager"), L.sfdr_short(_str(r.get("sfdr")))),
                             "terms": [x for x in terms if x],
                             "attrs": {k: _str(r.get(k)) for k in ("range", "asset_class", "expertise", "manager", "backup", "sfdr", "domicile", "legal_form", "sri")}
@@ -842,7 +887,7 @@ class Service:
                             "terms": list({str(x) for x in g["Country"].dropna()})})
         inst = H.instruments_for_search(m, end)
         for _, r in inst.iterrows():
-            entries.append({"t": "ligne", "id": r["instr_key"], "label": r["name"], "sub": f"Détenue par {r['n_funds']} fonds",
+            entries.append({"t": "ligne", "id": r["instr_key"], "label": _str(r["name"]) or _str(r["isin"]) or str(r["instr_key"]), "sub": f"Détenue par {r['n_funds']} fonds",
                             "terms": [x for x in [_str(r["isin"])] if x], "aum": _num(r["amount_eur"])})
         return {"date": end.date().isoformat(), "entries": entries}
 

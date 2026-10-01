@@ -10,6 +10,7 @@ import "./styles/app.css";
 import "./styles/editorial.css";
 import "./styles/spaces.css";
 import "./styles/pages.css";
+import "./styles/home.css";
 import { App } from "./App";
 import { AppProvider } from "./lib/context";
 

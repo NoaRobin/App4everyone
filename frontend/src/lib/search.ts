@@ -6,8 +6,9 @@
  */
 import type { SearchEntry } from "./types";
 
-export const norm = (s: string) =>
-  s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[’']/g, " ").replace(/[^a-z0-9%&]+/g, " ").trim();
+/** Texte normalisé pour la recherche ; tolère null, undefined et les valeurs non textuelles (données réelles incomplètes). */
+export const norm = (s: string | number | null | undefined) =>
+  (s == null ? "" : String(s)).normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[’']/g, " ").replace(/[^a-z0-9%&]+/g, " ").trim();
 
 const STOP = new Set(["le", "la", "les", "des", "du", "de", "d", "l", "et", "en", "au", "aux", "un", "une", "pour", "avec", "sur", "dans",
   "quel", "quels", "quelle", "quelles", "qui", "est", "sont", "commercialise", "commercialises", "commercialisee", "commercialisees", "enregistre", "enregistres", "the", "of"]);
@@ -103,8 +104,9 @@ export class SearchIndex {
     };
     this.items = entries.map((e) => {
       const full = norm(e.label);
-      const codes = e.terms.map((x) => norm(x).replace(/\s+/g, "")).filter(Boolean);
-      const words = [...new Set([...full.split(" "), ...e.terms.flatMap((x) => norm(x).split(" "))].filter(Boolean))];
+      const terms = (e.terms ?? []).filter((x): x is string => typeof x === "string" && x.length > 0);
+      const codes = terms.map((x) => norm(x).replace(/\s+/g, "")).filter(Boolean);
+      const words = [...new Set([...full.split(" "), ...terms.flatMap((x) => norm(x).split(" "))].filter(Boolean))];
       const sub = norm(e.sub ?? "").split(" ").filter(Boolean);
       return { e, words: Int32Array.from(words, id), sub: Int32Array.from(sub, id), codes, full };
     });
@@ -228,10 +230,10 @@ export class SearchIndex {
       }
     }
     // Facettes par libellé complet (le plus long d'abord)
-    const facets = [...this.facets].sort((a, b) => b.label.length - a.label.length);
+    const facets = [...this.facets].sort((a, b) => (b.label ?? "").length - (a.label ?? "").length);
     for (const f of facets) {
       if (!f.key || filters[f.key]) continue;
-      const names = [f.label, ...f.terms].map(norm).filter((x) => x.length >= 3);
+      const names = [f.label, ...(f.terms ?? [])].map(norm).filter((x) => x.length >= 3);
       const hit = names.find((n) => new RegExp(`(^|\\s)${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s|$)`).test(rest));
       if (hit) {
         filters[f.key] = f.key === "family" ? f.id : f.label;

@@ -36,7 +36,7 @@ def test_ecriture_refusee(sql):
 
 def test_build_select_explicite_et_parametre():
     sql, params = build_select("JUMP_portfolio_aum", ["DATE_VL", "VL_UNITAIRE"], ("DATE_VL", "2024-01-01"))
-    assert sql == "SELECT [DATE_VL], [VL_UNITAIRE] FROM [dbo].[JUMP_portfolio_aum] WHERE [DATE_VL] >= ?"
+    assert sql == "SELECT [DATE_VL], CAST([VL_UNITAIRE] AS FLOAT) AS [VL_UNITAIRE] FROM [dbo].[JUMP_portfolio_aum] WHERE [DATE_VL] >= ?"
     assert params == ["2024-01-01"]
 
 

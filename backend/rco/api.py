@@ -329,6 +329,12 @@ def risk(date: str | None = None):
     return _ok(_api_service().risk(date))
 
 
+@app.get("/api/diagnostics/links")
+def diagnostics_links():
+    """Compteurs de rattachement des parts et des fonds (JUMP ↔ Product Info), ISIN ambigus, doublons restants."""
+    return _sanitize(_api_service().links())
+
+
 @app.get("/api/controls")
 def controls(date: str | None = None):
     return _ok(_api_service().controls(date))

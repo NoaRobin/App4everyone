@@ -388,7 +388,15 @@ def build_select(name: str, columns: Sequence[str], since: tuple[str, Any] | Non
     for ident in (name, *columns, *( [since[0]] if since else [])):
         if "]" in ident or "[" in ident:
             raise ValueError(f"Identifiant invalide : {ident!r}")
-    cols = ", ".join(f"[{c}]" for c in columns)
+    try:
+        from . import schema as S
+        types = S.dtypes(name)
+    except KeyError:
+        types = {}
+    # Montants DECIMAL transmis en FLOAT (8 octets, aucun objet decimal.Decimal) : l'application les convertit de toute
+    # façon en float64 ; texte, dates et entiers sont lus tels quels.
+    cols = ", ".join(f"CAST([{c}] AS FLOAT) AS [{c}]" if types.get(c) in ("decimal", "numeric", "money", "smallmoney") else f"[{c}]"
+                     for c in columns)
     sql = f"SELECT {cols} FROM [dbo].[{name}]"
     params: list[Any] = []
     if since:

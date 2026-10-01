@@ -10,7 +10,6 @@ const NAV = [
   { to: "/encours", label: "Encours" },
   { to: "/portefeuilles", label: "Portefeuilles" },
   { to: "/distribution", label: "Distribution" },
-  { to: "/risques", label: "Risques & contrôles" },
 ];
 
 export function Header() {
@@ -33,12 +32,12 @@ export function Header() {
     <header className={`hdr hdr--night${scrolled ? " is-scrolled" : ""}${pano ? " hdr--pano" : ""}`}>
       <a href="#contenu" className="skip-link">Aller au contenu</a>
       <div className="hdr__in">
-        <Link to="/" className="brand" aria-label="Rothschild & Co — accueil, le panorama des encours">
+        <Link to="/" className="brand" aria-label="Rothschild & Co — accueil">
           <span className="brand__name">Rothschild&nbsp;&amp;&nbsp;Co</span>
           <span className="brand__sub">Asset Management · Fonds &amp; encours</span>
         </Link>
         <nav className="spaces" aria-label="Espaces">
-          <Link to="/" className={`spaces__a${pano ? " is-on" : ""}`} aria-current={pano ? "page" : undefined}>Panorama</Link>
+          <Link to="/" className={`spaces__a${pano ? " is-on" : ""}`} aria-current={pano ? "page" : undefined}>Accueil</Link>
           <Link to="/metiers" className={`spaces__a${!pano ? " is-on" : ""}`} aria-current={loc.pathname === "/metiers" ? "page" : undefined}><span className="spaces__x">Espace </span>métiers</Link>
           <span className="spaces__k" aria-hidden="true" data-on={pano ? "0" : "1"} />
         </nav>

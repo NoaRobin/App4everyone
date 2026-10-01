@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApi } from "../lib/api";
 import { useApp } from "../lib/context";
@@ -7,7 +7,9 @@ import { CATEGORICAL, OTHER } from "../lib/families";
 import { norm } from "../lib/search";
 import { ErrorState, Loading, useReveal } from "../components/ui";
 import { Mosaic } from "../components/viz";
-import { Head, PageHero, Strip } from "../components/Editorial";
+import { Head, PageHero } from "../components/Editorial";
+import { prefersReducedMotion } from "../lib/motion";
+import { gsap, ScrollTrigger } from "../lib/gsap";
 import * as I from "../components/Icon";
 
 type Resp = {
@@ -104,13 +106,11 @@ export default function Holdings() {
 
         <section className="section reveal" aria-labelledby="h-ana">
           <Head id="ana" eyebrow="L'anatomie" title="De quoi sont faits nos portefeuilles"
-            lede="Montants cumulés de tous les inventaires, en euros. Au-delà de cinq catégories, le reste est regroupé." />
-          <h3 className="hold__sub">Par classe d'actifs</h3>
-          <Strip items={classes} value={(x) => x.amount_eur ?? 0} label={(x) => x.label} color={(x) => (x.label.startsWith("Autres") ? OTHER : classColor(x.label))}
-            detail={(x) => `${x.amount_eur == null ? "montant indisponible" : eur(x.amount_eur)} · ${pctRaw(x.weight, 1)}`} ariaLabel="Répartition des actifs par classe" />
-          <h3 className="hold__sub">Par devise</h3>
-          <Strip items={ccys} value={(x) => x.amount_eur ?? 0} label={(x) => x.label} color={(x, i) => (x.label.startsWith("Autres") ? OTHER : CATEGORICAL[i] ?? OTHER)}
-            detail={(x) => `${x.amount_eur == null ? "montant indisponible" : eur(x.amount_eur)} · ${pctRaw(x.weight, 1)}`} ariaLabel="Répartition des actifs par devise" />
+            lede="Montants cumulés de tous les derniers inventaires, en euros. Survolez un segment pour son montant ; au-delà de cinq catégories, le reste est regroupé." />
+          <div className="rings">
+            <Ring title="Par classe d'actifs" parts={classes} color={(x) => (x.label.startsWith("Autres") ? OTHER : classColor(x.label))} />
+            <Ring title="Par devise" parts={ccys} color={(x, i) => (x.label.startsWith("Autres") ? OTHER : CATEGORICAL[i] ?? OTHER)} />
+          </div>
         </section>
 
         <section className="section reveal" aria-labelledby="h-lines">
@@ -141,5 +141,70 @@ export default function Holdings() {
         </section>
       </div>
     </div>
+  );
+}
+
+
+/**
+ * Anneau de répartition : les segments se dessinent à l'entrée dans la page ; au survol (ou au clavier), le segment
+ * s'écarte et le centre affiche son libellé, son montant et son poids.
+ */
+function Ring({ title, parts, color }: { title: string; parts: Part[]; color: (p: Part, i: number) => string }) {
+  const ref = useRef<SVGSVGElement>(null);
+  const [hot, setHot] = useState<number | null>(null);
+  const items = parts.filter((p) => (p.amount_eur ?? 0) > 0);
+  const total = items.reduce((s, p) => s + (p.amount_eur ?? 0), 0) || 1;
+  const R = 92, W = 26, C = 2 * Math.PI * R;
+  let acc = 0;
+  const segs = items.map((p, i) => {
+    const f = (p.amount_eur ?? 0) / total;
+    const seg = { p, i, f, start: acc };
+    acc += f;
+    return seg;
+  });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || prefersReducedMotion()) return;
+    const arcs = el.querySelectorAll(".ring__s");
+    const tw = gsap.fromTo(arcs, { strokeDashoffset: (_i: number, t: Element) => Number((t as SVGElement).dataset.len) },
+      { strokeDashoffset: 0, duration: 1.4, stagger: 0.12, ease: "power3.out", paused: true });
+    const st = ScrollTrigger.create({ trigger: el, start: "top 85%", once: true, onEnter: () => tw.play() });
+    return () => { st.kill(); tw.revert(); };
+  }, [items.length]);
+  const h = hot != null ? segs[hot] : null;
+  return (
+    <figure className="ring">
+      <figcaption className="ring__t">{title}</figcaption>
+      <div className="ring__body">
+        <svg ref={ref} viewBox="-130 -130 260 260" className="ring__svg" role="img" aria-label={`${title} : ${items.map((p) => `${p.label} ${pctRaw(p.weight, 1)}`).join(", ")}`}>
+          <circle r={R} className="ring__track" />
+          {segs.map(({ p, i, f, start }) => {
+            const len = Math.max(0, f * C - 2);
+            const mid = (start + f / 2) * 2 * Math.PI - Math.PI / 2;
+            const off = hot === i ? 7 : 0;
+            return (
+              <circle key={p.label} r={R} className="ring__s" data-len={len} stroke={color(p, i)}
+                strokeDasharray={`${len} ${C}`} strokeDashoffset={0} transform={`translate(${Math.cos(mid) * off} ${Math.sin(mid) * off}) rotate(${start * 360 - 90})`}
+                style={{ strokeWidth: hot === i ? W + 6 : W, opacity: hot != null && hot !== i ? 0.35 : 1 }}
+                onMouseEnter={() => setHot(i)} onMouseLeave={() => setHot(null)} />
+            );
+          })}
+          <text className="ring__v num" y={h ? -2 : 6} textAnchor="middle">{h ? pctRaw(h.p.weight, 1) : eurParts(total).value}</text>
+          <text className="ring__l" y={h ? 22 : 30} textAnchor="middle">{h ? (h.p.label.length > 22 ? h.p.label.slice(0, 21) + "…" : h.p.label) : eurParts(total).unit}</text>
+          {h && <text className="ring__a num" y={42} textAnchor="middle">{eur(h.p.amount_eur)}</text>}
+        </svg>
+        <ul className="ring__legend">
+          {segs.map(({ p, i }) => (
+            <li key={p.label}>
+              <button type="button" className={hot === i ? "is-on" : ""} onMouseEnter={() => setHot(i)} onMouseLeave={() => setHot(null)} onFocus={() => setHot(i)} onBlur={() => setHot(null)}>
+                <span className="dot" style={{ background: color(p, i) }} /><span className="ring__ln">{p.label}</span>
+                <span className="num ring__lv">{pctRaw(p.weight, 1)}</span>
+              </button>
+            </li>
+          ))}
+          {parts.some((p) => p.amount_eur == null) && <li className="small muted">Certains montants en euros sont indisponibles (taux de change incalculable).</li>}
+        </ul>
+      </div>
+    </figure>
   );
 }

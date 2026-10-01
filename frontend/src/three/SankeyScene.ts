@@ -147,7 +147,7 @@ export class SankeyScene {
 
     // Ordre dans chaque colonne, puis échelle commune (les flux se conservent d'une colonne à l'autre)
     const cols = [0, 1, 2].map((c) => nodes.map((n, i) => ({ n, i })).filter((x) => x.n.col === c)
-      .sort((a, b) => (c === 0 ? famRank(a.n) - famRank(b.n) : (a.n.other ? 1 : 0) - (b.n.other ? 1 : 0) || b.n.value - a.n.value)));
+      .sort((a, b) => (a.n.family && b.n.family ? famRank(a.n) - famRank(b.n) : (a.n.other ? 1 : 0) - (b.n.other ? 1 : 0) || b.n.value - a.n.value)));
     const pad = (c: number) => (c === 2 ? 1.25 : 2.2);
     const k = Math.min(...cols.map((col, c) => (HT - pad(c) * (col.length - 1)) / Math.max(1, col.reduce((s, x) => s + x.n.value, 0))));
     const pos: { top: number; h: number }[] = [];
@@ -198,7 +198,7 @@ export class SankeyScene {
     nodes.forEach((n, i) => {
       const { top, h } = pos[i];
       const geo = new THREE.BoxGeometry(NODE_W, Math.max(h, 0.2), depth);
-      const fam = n.col === 0 && n.family ? new THREE.Color(this.opts.colors[n.family]) : null;
+      const fam = n.family ? new THREE.Color(this.opts.colors[n.family]) : null;
       const mat = new THREE.MeshStandardMaterial({ color: fam ? fam.clone().multiplyScalar(0.55) : new THREE.Color("#1a2a45"), metalness: 0.55, roughness: 0.28,
         emissive: fam ?? new THREE.Color("#cc9f53"), emissiveIntensity: fam ? 0.35 : 0.06, transparent: true, opacity: 0.94 });
       const mesh = new THREE.Mesh(geo, mat);
@@ -214,9 +214,9 @@ export class SankeyScene {
       (label.firstChild as HTMLElement).textContent = f.title;
       (label.lastChild as HTMLElement).textContent = f.sub;
       this.opts.labelLayer.appendChild(label);
-      const ax = n.col === 0 ? X[0] - NODE_W / 2 - 1.6 : n.col === 2 ? X[2] + NODE_W / 2 + 1.6 : X[1];
-      // Ancré sur la face avant du nœud, pour ne jamais chevaucher le volume en perspective
-      const anchor = new THREE.Vector3(ax, n.col === 1 ? top + 1.2 : top - h / 2, depth / 2);
+      const ax = n.col === 0 ? X[0] - NODE_W / 2 - 1.6 : X[n.col] + NODE_W / 2 + 1.6;
+      // Ancré sur la face avant du nœud, centré verticalement, pour ne jamais chevaucher le volume en perspective
+      const anchor = new THREE.Vector3(ax, top - h / 2, depth / 2);
       this.nodes.push({ n, mesh, mat, edge, label, anchor, cur: 1, top, h });
       if (!this.opts.reduced) {
         mesh.scale.y = edge.scale.y = 0.001;
@@ -225,7 +225,7 @@ export class SankeyScene {
     });
 
     // Titres de colonnes
-    const colTitles = ["Famille de gestion", "Domiciliation du fonds", "Pays d'enregistrement"];
+    const colTitles = ["Clientèle", "Pays d'enregistrement", "Famille de gestion"];
     cols.forEach((col, c) => {
       const tot = col.reduce((s, x) => s + x.n.value * k, 0) + pad(c) * (col.length - 1);
       const el = document.createElement("div");
@@ -276,15 +276,21 @@ export class SankeyScene {
   }
 
   // ---------------------------------------------------------------- mise en valeur
-  /** Flux reliés à un nœud : pour une famille, tout son parcours ; pour un pays, les flux qui y mènent et leur amont. */
+  /**
+   * Flux reliés à un nœud, sur tout le parcours qui le traverse : pour une famille, tous ses flux ; pour un nœud
+   * d'entrée (client), ses flux et leur prolongement de même famille ; pour un pays, l'amont et l'aval.
+   */
   private related(ni: number): Set<number> {
     const { nodes, links } = this.data;
     const n = nodes[ni];
     const out = new Set<number>();
-    if (n.col === 0) links.forEach((l, i) => { if (l.family === n.family) out.add(i); });
-    else if (n.col === 1) links.forEach((l, i) => { if (l.source === ni || l.target === ni) out.add(i); });
-    else {
-      const pairs = new Set<string>();
+    if (n.family) { links.forEach((l, i) => { if (l.family === n.family) out.add(i); }); return out; }
+    if (n.col === 1) { links.forEach((l, i) => { if (l.source === ni || l.target === ni) out.add(i); }); return out; }
+    const pairs = new Set<string>();
+    if (n.col === 0) {
+      links.forEach((l, i) => { if (l.source === ni) { out.add(i); pairs.add(`${l.family}|${l.target}`); } });
+      links.forEach((l, i) => { if (nodes[l.source].col === 1 && pairs.has(`${l.family}|${l.source}`)) out.add(i); });
+    } else {
       links.forEach((l, i) => { if (l.target === ni) { out.add(i); pairs.add(`${l.family}|${l.source}`); } });
       links.forEach((l, i) => { if (nodes[l.source].col === 0 && pairs.has(`${l.family}|${l.target}`)) out.add(i); });
     }
@@ -344,7 +350,7 @@ export class SankeyScene {
   private placeLabels() {
     for (const o of this.nodes) {
       const p = this.project(o.anchor);
-      o.label.style.transform = `translate(${p.x}px, ${p.y}px) ${o.n.col === 0 ? "translate(-100%, -50%)" : o.n.col === 2 ? "translate(0, -50%)" : "translate(-50%, -100%)"}`;
+      o.label.style.transform = `translate(${p.x}px, ${p.y}px) ${o.n.col === 0 ? "translate(-100%, -50%)" : "translate(0, -50%)"}`;
     }
     for (const h of this.heads) {
       const p = this.project(h.pos);

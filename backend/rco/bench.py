@@ -83,6 +83,11 @@ def main(argv: list[str] | None = None) -> int:
     for label, dt in timings:
         print(f"  vue {label:<22s}: {dt:6.1f} s")
     print(f"Prêt en                     : {total:6.1f} s")
+    rep = svc.links()
+    p, f = rep["parts"], rep["funds"]
+    print(f"Parts JUMP                  : {p['total']} · {p['by_pi_shareid']} par pi_shareid · {p['by_isin']} par ISIN · {p['unlinked']} non rattachées")
+    print(f"Fonds JUMP                  : {f['total']} · {f['by_product_id']} par ProductID · {f['by_id_pi_fonds']} par ID_PI_FONDS · {f['unlinked']} non rattachés")
+    print(f"ISIN ambigus                : {len(rep['ambiguous_isins'])} · doublons de fonds restants : {len(rep['duplicates'])} · fonds JUMP seuls : {rep['funds_jump_only']}")
     mem = peak_memory_mb()
     print(f"Mémoire maximale            : {mem:,.0f} Mo".replace(",", " ") if mem else "Mémoire maximale            : indisponible")
     close = getattr(src, "close", None)

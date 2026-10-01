@@ -11,23 +11,22 @@ dividendes, indices, inventaires) croisé avec **Product Info** (référentiel f
 
 Le site a **deux espaces**, commutés par le sélecteur de l'en-tête :
 
-- **Panorama** (`/`) — la maison en chiffres, racontée au défilement. Une ville 3D reste en fond (un immeuble par fonds,
-  volume ∝ encours, quatre quartiers = quatre familles) et la caméra se déplace de chapitre en chapitre :
-  la maison · quatre ans d'histoire (la ville grandit mois par mois au fil du défilement) · les quatre familles
-  (vol vers chaque quartier) · d'où vient la croissance (encours de départ + collecte + effet marché = encours d'arrivée)
-  · le monde (pays de commercialisation, tableau à palettes) · l'entrée vers l'espace métiers.
+- **Accueil** (`/`) — l'histoire de la maison, racontée au défilement (GSAP) : ouverture (les cinq flèches, la devise
+  *Concordia · Integritas · Industria*), une fresque horizontale de 1744 à aujourd'hui (22 étapes datées et sourcées,
+  `frontend/public/histoire/histoire.json`), les cinq maisons sur la carte de l'Europe, Rothschild & Co Asset Management
+  aujourd'hui (chiffres publics), la maison vue par l'application, le tableau des départs (pays de commercialisation) et
+  l'entrée vers l'espace métiers.
 - **Espace métiers** (`/metiers` et toutes les rubriques ci-dessous) — pour aller chercher une information vite.
 
 | Rubrique | Question à laquelle elle répond |
 |---|---|
 | **Accueil métiers** | Une grande barre de recherche, vos fiches épinglées et consultées récemment (mémorisées sur le poste, identifiants et libellés seulement), les questions de tous les jours, le répertoire de tous les fonds de A à Z, les contrôles à surveiller. |
-| **Fonds** | Un clavier 3D et une barre de recherche : nom, ISIN, gérant, gamme, pays… tolérante aux accents et aux fautes. |
+| **Fonds** | Un clavier 3D et une barre de recherche (nom, ISIN, gérant, gamme, pays… tolérante aux accents et aux fautes), puis les **risques** de tous les fonds (SRI, volatilité, drawdown, tracking error, concentration, carte risque/rendement) et les **contrôles** (conformité, qualité des données, rattachement JUMP ↔ Product Info). |
 | **Fiche fonds** | Tout sur un fonds : encours et leur décomposition (collecte / marché), performance vs indice, parts, portefeuille, ESG, distribution, caractéristiques, contrôles. |
-| **Encours** | Répartition par famille, gamme, classe d'actifs, expertise, gérant, SFDR, SRI, domicile, devise, type de part… Chaque ligne ouvre la liste des fonds. |
+| **Encours** | En deux parties : **I. la ville des encours** (ville 3D, un immeuble par fonds, rejouable mois par mois, familles en surbrillance) ; **II. l'analyse** (l'équation de l'année, répartition par famille, gamme, classe d'actifs, expertise, gérant, SFDR, SRI, domicile, devise, type de part…). |
 | **Sélection** | Toute combinaison de critères, avec agrégat en tête et détail en dessous, exportable. |
-| **Portefeuilles** | Ce que nous détenons, et quels fonds détiennent une ligne donnée. |
-| **Distribution** | Où nos fonds sont commercialisés : carte 3D (hauteur = fonds enregistrés, arcs depuis le pays de domiciliation), Sankey 3D famille → domiciliation → pays, frise de l'ouverture des pays année après année, carte en tuiles et classement, plateformes ; par pays, les fonds et parts autorisés. Un interrupteur retire les fonds **Rothschild Martin Maurel (RMM)** de toute la rubrique (chiffres, visuels, pays), et reste appliqué d'une page à l'autre (`?rmm=exclure`). |
-| **Risques & contrôles** | SRI, volatilité, drawdown, tracking error, concentration ; contrôles automatiques de conformité et de qualité des données. |
+| **Portefeuilles** | Ce que nous détenons (anneaux par classe d'actifs et par devise, mosaïque des 40 premières positions, lignes les plus partagées), et quels fonds détiennent une ligne donnée. |
+| **Distribution** | Où nos fonds sont commercialisés : le parcours d'une autorisation en Sankey 3D **clientèle → pays → famille de gestion**, un globe 3D interactif (rotation, survol, clic pour centrer un pays, filtre par clientèle, arcs depuis le pays de domiciliation), frise de l'ouverture des pays année après année, carte en tuiles et classement, plateformes ; par pays, les fonds et parts autorisés. Un interrupteur retire les fonds **Rothschild Martin Maurel (RMM)** de toute la rubrique (chiffres, visuels, pays), et reste appliqué d'une page à l'autre (`?rmm=exclure`). |
 
 La recherche universelle est accessible partout (`Ctrl K` / `⌘ K` ou `/`). Elle comprend les combinaisons
 (« article 9 italie », « encours fixed income », « fonds de Claire Vasseur ») et répond directement : nombre de fonds et encours.
@@ -118,6 +117,28 @@ Toutes les erreurs sont renvoyées en JSON `{error, message, hint}` : `fabric_co
 `fabric_auth`, `fabric_timeout`, `fabric_query` (table ou colonne nommée), `model_loading` (503 pendant le chargement).
 Les journaux indiquent, par table, la durée et le nombre de lignes, jamais leur contenu. L'historique (4 ans par défaut,
 `APP_HISTORY_YEARS`) est gardé en mémoire et jamais écrit sur disque.
+
+### Rattachement JUMP ↔ Product Info
+
+Les identifiants ne sont jamais comparés tels quels : casse, accolades, espaces (y compris insécables), identifiants
+numériques lus en nombre (`12345.0`) ou en texte, valeurs vides (`""`, `NULL`, `N/A`) sont ramenés à une forme canonique
+(`backend/rco/domain/ids.py`), et chaque identifiant JUMP est réécrit sous la forme exacte du référentiel.
+
+1. Part : `ID_PI_PART` = `pi_shareid` ; à défaut `CODE_ISIN_PART` = `ISIN_Code`, **seulement si l'ISIN est unique** (une seule
+   part du référentiel, une seule part JUMP à rattacher, part non déjà rattachée par son identifiant).
+2. Fonds : `ProductID` de la part (fonds actif) ; à défaut `ID_PI_FONDS` de JUMP ; à défaut le fonds auquel sont rattachées les
+   autres parts du **même fonds JUMP** (s'il est unique). **Jamais de rapprochement sur le nom** : deux fonds de même nom
+   restent deux lignes, signalées dans le contrôle « Fonds en double après consolidation ».
+
+Compteurs (parts par pi_shareid / par ISIN / non rattachées ; fonds par ProductID / par ID_PI_FONDS / non rattachés ; ISIN
+ambigus ; doublons restants) : rubrique Fonds → Contrôles, `GET /api/diagnostics/links`, et `python run.py --fabric --bench`.
+
+### Photos de l'Accueil
+
+La fresque affiche une planche gravée lorsqu'aucune photographie n'est fournie. Pour ajouter des photos (droits vérifiés,
+par exemple Wikimedia Commons), déposez les fichiers dans `frontend/dist/histoire/` (et `frontend/public/histoire/` pour
+qu'ils survivent à une recompilation), puis renseignez `"image": "nom.jpg"` dans l'étape concernée de `histoire.json` et la
+légende, l'auteur et la licence dans `"images"`. Aucune recompilation ni Node.js n'est nécessaire.
 
 ### Volumétrie (des dizaines de millions de cellules)
 
@@ -232,11 +253,11 @@ les hausses et baisses portent toujours un signe et une flèche. Tout est dans `
 
 | Vue | Où | Ce qu'elle rend évident |
 |---|---|---|
-| Ville 3D | Panorama | Le poids de chaque fonds et de chaque famille, et son évolution dans le temps |
-| Équation de l'année | Panorama | Encours au 31/12 + collecte + effet marché = encours du jour, barres proportionnelles |
-| Tableau à palettes | Panorama | Les pays de commercialisation, par nombre de parts enregistrées |
-| Carte 3D | Distribution | Où nos fonds sont autorisés (relief = fonds ou parts enregistrés), depuis quel pays de domiciliation (arcs) |
-| Sankey 3D | Distribution | Le parcours des autorisations : famille de gestion → domiciliation → pays, une famille par couloir de profondeur |
+| Ville 3D | Encours | Le poids de chaque fonds et de chaque famille, et son évolution dans le temps |
+| Équation de l'année | Encours | Encours au 31/12 + collecte + effet marché = encours du jour, barres proportionnelles |
+| Tableau à palettes | Accueil | Les pays de commercialisation, par nombre de parts enregistrées |
+| Globe 3D | Distribution | Où nos parts sont autorisées (colonnes de lumière = fonds ou parts enregistrés), filtrable par clientèle, arcs depuis le pays de domiciliation |
+| Sankey 3D | Distribution | Le parcours des autorisations : clientèle → pays → famille de gestion, une famille par couloir de profondeur |
 | Frise d'ouverture | Distribution | Depuis quand chaque pays est ouvert, et le rythme des enregistrements |
 | Échelle du risque | Risques | Encours par SRI de 1 à 7 ; une marche filtre les fonds |
 | Bande proportionnelle | Portefeuilles | De quoi sont faits nos portefeuilles (classes d'actifs, devises) |
@@ -264,8 +285,8 @@ backend/rco/
   service.py / api.py  réponses de l'API (FastAPI) et service du front
   bench.py             mesure du chargement (python run.py --bench)
 frontend/src/
-  three/  CityScene.ts, KeyboardScene.ts   scènes Three.js
-  pages/  Panorama, Workspace, FundsSearch, Fund, Share, Encours, Selection, Holdings, Instrument, Distribution, Country, Risk
+  three/  CityScene.ts, KeyboardScene.ts, SankeyScene.ts, GlobeScene.ts   scènes Three.js
+  pages/  Home, Workspace, FundsSearch (+ risques et contrôles), Fund, Share, Encours, Selection, Holdings, Instrument, Distribution, Country
   lib/    search.ts (recherche tolérante), desk.ts (épingles, récents), format.ts (formats français), api.ts, context.tsx
 ```
 

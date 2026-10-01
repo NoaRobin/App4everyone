@@ -156,9 +156,9 @@ const QUESTIONS: { theme: string; items: { to: string; q: string }[] }[] = [
     { to: "/portefeuilles", q: "Quels fonds détiennent cette ligne ?" },
   ] },
   { theme: "Risques & contrôles", items: [
-    { to: "/risques", q: "Carte risque / rendement des fonds" },
-    { to: "/risques", q: "Quels fonds ont changé de SRI ?" },
-    { to: "/risques?onglet=controles", q: "Qu'est-ce qui n'est pas en ordre ?" },
+    { to: "/fonds#risques", q: "Carte risque / rendement des fonds" },
+    { to: "/fonds#risques", q: "Quels fonds ont changé de SRI ?" },
+    { to: "/fonds?vue=controles#risques", q: "Qu'est-ce qui n'est pas en ordre ?" },
   ] },
 ];
 
@@ -263,10 +263,10 @@ function Watch({ controls }: { controls: Control[] }) {
   return (
     <section className="section reveal" aria-labelledby="h-watch">
       <div className="section__head"><div><div className="eyebrow">Contrôles automatiques</div><h2 className="h2" id="h-watch">À surveiller</h2></div>
-        <Link to="/risques?onglet=controles" className="arrow-link">Tous les contrôles <I.Arrow size={16} /></Link></div>
+        <Link to="/fonds?vue=controles#risques" className="arrow-link">Tous les contrôles <I.Arrow size={16} /></Link></div>
       <div className="desk__watch">
         {list.map((c) => (
-          <Link key={c.key} to={`/risques?onglet=controles#ctl-${c.key}`} className={`desk__w desk__w--${c.severity}`}>
+          <Link key={c.key} to={`/fonds?vue=controles#ctl-${c.key}`} className={`desk__w desk__w--${c.severity}`}>
             <span className="desk__w-n num">{c.count}</span>
             <span className="desk__w-t">{c.title}</span>
             <span className="desk__w-s small">{sev[c.severity]} · {c.audience}</span>

@@ -514,7 +514,7 @@ export function renderValue(kind: string, v: string | number | boolean) {
 function ControlsSection({ f }: { f: FundDetail }) {
   return (
     <section className="section reveal" id="controles" aria-labelledby="h-controles">
-      <SectionHead id="controles" eyebrow="Contrôles" title={f.controls.length ? "Points d'attention" : "Aucun point d'attention"} right={<Link to="/risques?onglet=controles" className="arrow-link">Tous les contrôles <I.Arrow size={16} /></Link>} />
+      <SectionHead id="controles" eyebrow="Contrôles" title={f.controls.length ? "Points d'attention" : "Aucun point d'attention"} right={<Link to="/fonds?vue=controles#risques" className="arrow-link">Tous les contrôles <I.Arrow size={16} /></Link>} />
       {f.controls.length ? (
         <div className="stack" style={{ ["--s" as string]: "12px" }}>
           {f.controls.map((c) => (

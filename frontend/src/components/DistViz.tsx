@@ -155,3 +155,125 @@ export function Timeline({ t }: { t: TimelineData }) {
     </section>
   );
 }
+
+// ------------------------------------------------------------------ globe 3D
+export type ClientMap = { client: string; n_shares: number; n_funds: number; countries: { country: string; iso: string; n_shares: number; n_funds: number }[] }[];
+
+/**
+ * Le globe des autorisations : terres en points, pays autorisés en or, arcs depuis les pays de domiciliation.
+ * Interactif : rotation à la souris, survol, clic pour centrer un pays et afficher son panneau, filtre par clientèle.
+ */
+export function GlobeSection({ countries, routes, clients, withRmm }: { countries: MapCountry[]; routes: MapRoute[]; clients: ClientMap; withRmm: (u: string) => string }) {
+  const host = useRef<HTMLDivElement>(null);
+  const labels = useRef<HTMLDivElement>(null);
+  const scene = useRef<import("../three/GlobeScene").GlobeScene | null>(null);
+  const reduced = useReducedMotion();
+  const nav = useNavigate();
+  const [gl] = useState(() => webglAvailable());
+  const [metric, setMetric] = useState<MapMetric>("n_funds");
+  const [client, setClient] = useState<string | null>(null);
+  const [tip, setTip] = useState<{ c: MapCountry; x: number; y: number } | null>(null);
+  const [sel, setSel] = useState<MapCountry | null>(null);
+  const [ready, setReady] = useState(false);
+  const data = useMemo(() => ({ countries, routes }), [countries, routes]);
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const values = useMemo(() => {
+    if (!client) return null;
+    const c = clients.find((x) => x.client === client);
+    return new Map((c?.countries ?? []).map((x) => [x.iso, x[metric]]));
+  }, [client, clients, metric]);
+
+  useEffect(() => {
+    if (!gl || !host.current || !labels.current) return;
+    let alive = true;
+    Promise.all([import("../three/GlobeScene"), import("world-atlas/countries-110m.json")]).then(([{ GlobeScene }, world]) => {
+      if (!alive || !host.current || !labels.current) return;
+      scene.current = new GlobeScene(host.current, ((world as unknown as { default?: never }).default ?? (world as never)), dataRef.current, {
+        reduced, labelLayer: labels.current, domColors: DOM_COLORS,
+        onHover: (c, x, y) => setTip(c ? { c, x, y } : null),
+        onSelect: (c) => setSel(c),
+      });
+      setReady(true);
+    });
+    return () => { alive = false; scene.current?.dispose(); scene.current = null; setReady(false); };
+  }, [gl, reduced]);
+  useEffect(() => { if (ready) scene.current?.setMetric(metric); }, [metric, ready]);
+  useEffect(() => { if (ready) scene.current?.setFilter(values); }, [values, ready]);
+  const first = useRef(true);
+  useEffect(() => { if (first.current) { first.current = false; return; } scene.current?.setData(data, values ?? undefined); }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const choose = (c: MapCountry | null) => { setSel(c); scene.current?.select(c?.iso ?? null); };
+  const shown = values ? countries.filter((c) => values.has(c.iso)) : countries;
+  const ranked = [...shown].sort((a, b) => b[metric] - a[metric]);
+  const selClients = sel ? clients.filter((k) => k.countries.some((x) => x.iso === sel.iso))
+    .map((k) => ({ k, n: k.countries.find((x) => x.iso === sel.iso)!.n_shares })).sort((a, b) => b.n - a.n) : [];
+  const doms = [...new Set(routes.filter((r) => r.domicile_iso !== r.iso).map((r) => `${r.domicile_iso}|${r.domicile}`))];
+  return (
+    <section className="globe reveal" aria-labelledby="h-globe">
+      <div className="page globe__head">
+        <Head id="globe" eyebrow="Le monde" title="Où nos parts sont autorisées"
+          lede={<>Faites tourner le globe, survolez un pays, cliquez pour le centrer. Chaque colonne de lumière mesure {metric === "n_funds" ? "le nombre de fonds" : "le nombre de parts"} enregistrés dans le pays{client ? <> pour la clientèle <b>{client}</b></> : null}&nbsp;; les arcs partent du pays de domiciliation des fonds.</>}
+          right={
+            <div className="seg" role="radiogroup" aria-label="Mesure">
+              {(["n_funds", "n_shares"] as MapMetric[]).map((m) => <button key={m} type="button" role="radio" aria-checked={metric === m} className="seg__b" onClick={() => setMetric(m)}>{m === "n_funds" ? "Fonds" : "Parts"}</button>)}
+            </div>} />
+        <div className="globe__clients" role="group" aria-label="Filtrer par clientèle">
+          <button type="button" className="chip" aria-pressed={!client} onClick={() => setClient(null)}>Toutes les clientèles</button>
+          {clients.map((k) => (
+            <button key={k.client} type="button" className="chip" aria-pressed={client === k.client} onClick={() => setClient(client === k.client ? null : k.client)}>
+              {k.client} <span className="num muted">{k.countries.length} pays</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="globe__stage">
+        {gl ? <><div className="globe__canvas" ref={host} /><div className="globe__labels" ref={labels} aria-hidden="true" /></> : <div className="globe__fallback" />}
+        {tip && !sel && (
+          <div className="city__tip globe__tip" style={{ transform: `translate(-50%, -100%) translate(${tip.x}px, ${tip.y - 18}px)` }} role="status">
+            <div className="city__tip-f">Pays d'enregistrement</div>
+            <div className="city__tip-n">{tip.c.country}</div>
+            <div className="city__tip-v num">{plural(tip.c.n_funds, "fonds", "fonds")} · {plural(tip.c.n_shares, "part")}</div>
+            <div className="city__tip-go small">Cliquer pour centrer</div>
+          </div>
+        )}
+        <aside className={`globe__panel${sel ? " is-open" : ""}`} aria-live="polite">
+          {sel ? (
+            <>
+              <button type="button" className="globe__close" onClick={() => choose(null)} aria-label="Fermer le pays">×</button>
+              <div className="eyebrow">Pays d'enregistrement · {sel.iso}</div>
+              <h3 className="globe__country">{sel.country}</h3>
+              <dl className="globe__kv">
+                <div><dt>Fonds</dt><dd className="num">{sel.n_funds}</dd></div>
+                <div><dt>Parts</dt><dd className="num">{sel.n_shares}</dd></div>
+                <div><dt>Encours des parts autorisées</dt><dd className="num">{eur(sel.aum_registered)}</dd></div>
+              </dl>
+              {selClients.length > 0 && (
+                <div className="globe__cl">
+                  <div className="eyebrow">Clientèles autorisées</div>
+                  <ul>{selClients.map(({ k, n }) => <li key={k.client}><span>{k.client}</span><span className="num">{plural(n, "part")}</span></li>)}</ul>
+                </div>
+              )}
+              <button type="button" className="btn btn--gold" onClick={() => nav(withRmm(`/distribution/${encodeURIComponent(sel.country)}`))}>Ouvrir le pays</button>
+            </>
+          ) : (
+            <>
+              <div className="eyebrow">{client ? client : "Toutes les clientèles"}</div>
+              <h3 className="globe__country">{shown.length} pays</h3>
+              <ol className="globe__rank">
+                {ranked.slice(0, 8).map((c) => (
+                  <li key={c.iso}><button type="button" onClick={() => choose(c)} onMouseEnter={() => scene.current?.select(null)}>
+                    <span>{c.country}</span><span className="num">{values?.get(c.iso) ?? c[metric]}</span></button></li>
+                ))}
+              </ol>
+              <div className="globe__dom small">{doms.map((k) => { const [iso, name] = k.split("|"); return <span key={k}><i style={{ background: domColor(iso) }} /> depuis {name === "France" ? "la France" : name === "Luxembourg" ? "le Luxembourg" : name}</span>; })}</div>
+            </>
+          )}
+        </aside>
+      </div>
+      <ul className="sr-only" aria-label="Pays d'enregistrement">
+        {ranked.map((c) => <li key={c.iso}><button type="button" onClick={() => choose(c)}>{c.country} : {plural(c.n_funds, "fonds", "fonds")}, {plural(c.n_shares, "part")}</button></li>)}
+      </ul>
+    </section>
+  );
+}

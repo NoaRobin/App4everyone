@@ -62,8 +62,8 @@ export function Cursor() {
 }
 
 const ROUTE_NAMES: [RegExp, string][] = [
-  [/^\/$/, "Panorama"], [/^\/metiers/, "Espace métiers"], [/^\/fonds$/, "Fonds"], [/^\/encours/, "Encours"], [/^\/selection/, "Sélection"], [/^\/portefeuilles/, "Portefeuilles"],
-  [/^\/distribution/, "Distribution"], [/^\/risques/, "Risques & contrôles"],
+  [/^\/$/, "Accueil"], [/^\/metiers/, "Espace métiers"], [/^\/fonds$/, "Fonds"], [/^\/encours/, "Encours"], [/^\/selection/, "Sélection"], [/^\/portefeuilles/, "Portefeuilles"],
+  [/^\/distribution/, "Distribution"],
 ];
 
 /**

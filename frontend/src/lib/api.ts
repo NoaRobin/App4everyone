@@ -7,14 +7,33 @@ export type ApiError = Error & { status?: number; code?: string; hint?: string; 
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Attente commune de la fin du chargement : une seule boucle interroge /api/health (qui ne déclenche rien), quel que
+ * soit le nombre de requêtes en attente ; elles sont toutes relancées une fois le modèle prêt.
+ */
+let ready: Promise<void> | null = null;
+function untilReady(): Promise<void> {
+  if (!ready) {
+    ready = (async () => {
+      for (let i = 0; i < 900; i++) {
+        await sleep(i < 5 ? 1500 : 2500);
+        try {
+          const h = await (await fetch("/api/health", { headers: { Accept: "application/json" }, cache: "no-store" })).json();
+          if (h?.model?.state && h.model.state !== "loading") return;
+        } catch { /* serveur momentanément injoignable */ }
+      }
+    })().finally(() => { ready = null; });
+  }
+  return ready;
+}
+
 async function load<T>(url: string): Promise<T> {
-  // Pendant le chargement des données (503 « model_loading »), on patiente et on réessaie (jusqu'à 15 minutes)
   for (let i = 0; ; i++) {
     const r = await fetch(url, { headers: { Accept: "application/json" } });
     if (r.ok) return r.json() as Promise<T>;
     let body: { error?: string; message?: string; hint?: string; detail?: string } = {};
     try { body = await r.json(); } catch { /* réponse non JSON */ }
-    if (r.status === 503 && body.error === "model_loading" && i < 300) { await sleep(3000); continue; }
+    if (r.status === 503 && body.error === "model_loading" && i < 20) { await untilReady(); continue; }
     const msg = body.message ?? (r.status === 404 ? "Introuvable" : "Erreur de chargement");
     throw Object.assign(new Error(msg), { status: r.status, code: body.error, hint: body.hint, detail: body.detail }) as ApiError;
   }
