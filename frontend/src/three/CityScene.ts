@@ -10,6 +10,9 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { Reflector } from "three/examples/jsm/objects/Reflector.js";
+
+/** Au-delà de ce nombre d'immeubles, pas de sol réfléchissant (il doublerait le coût de rendu). */
+const MIRROR_MAX_BUILDINGS = 350;
 import gsap from "gsap";
 import { Quality, type Level } from "./quality";
 
@@ -217,7 +220,8 @@ export class CityScene {
     mirror.position.y = -0.02;
     s.add(mirror);
     this.mirror = mirror;
-    mirror.visible = this.q.level > 0;
+    // Le reflet redessine toute la ville : réservé aux villes de taille raisonnable (budget d'appels de dessin)
+    mirror.visible = this.q.level > 0 && this.opts.funds.length <= MIRROR_MAX_BUILDINGS;
     this.disposables.push(mirror.geometry, { dispose: () => mirror.dispose() });
     const groundMat = new THREE.MeshStandardMaterial({ color: "#ffffff", map: gtex, roughness: 0.7, metalness: 0.2, transparent: true, opacity: 0.82 });
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), groundMat);
@@ -245,10 +249,29 @@ export class CityScene {
     this.opts.funds.forEach((f) => { const k = QUAD[f.family] ? f.family : "nc"; byFam.set(k, [...(byFam.get(k) ?? []), f]); });
     const unitGeo = new THREE.BoxGeometry(1, 1, 1);
     unitGeo.translate(0, 0.5, 0);
+    // Faces ±x, ±y, ±z regroupées par matériau (façade 1, toit, façade 2) : 3 appels de dessin par bâtiment au lieu de 6
+    unitGeo.clearGroups();
+    [0, 1, 2].forEach((k) => unitGeo.addGroup(k * 12, 12, k));
     const crownGeo = new THREE.BoxGeometry(1, 1, 1);
     crownGeo.translate(0, 0.5, 0);
     this.disposables.push(unitGeo, crownGeo);
     const facadeCache = new Map<string, ReturnType<typeof facadeCanvas>[]>();
+    // Une texture GPU par façade, partagée par clonage (chaque bâtiment garde sa propre répétition des fenêtres)
+    const texCache = new Map<HTMLCanvasElement, THREE.CanvasTexture>();
+    const texFor = (canvas: HTMLCanvasElement) => {
+      let t = texCache.get(canvas);
+      if (!t) {
+        t = new THREE.CanvasTexture(canvas);
+        t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+        texCache.set(canvas, t);
+        this.disposables.push(t);
+      }
+      return t.clone();
+    };
+    // Ombres portées réservées aux plus grands bâtiments (les petits n'en projettent pas de visibles)
+    const SHADOW_CASTERS = 150;
+    const casters = new Set(
+      [...this.opts.funds].sort((a, b) => Math.max(0, ...b.series) - Math.max(0, ...a.series)).slice(0, SHADOW_CASTERS).map((f) => f.id));
     const facadesFor = (fam: string) => {
       if (!facadeCache.has(fam)) facadeCache.set(fam, [1, 2, 3].map((k) => facadeCanvas(k, this.opts.colors[fam]?.night ?? "#888")));
       return facadeCache.get(fam)!;
@@ -300,18 +323,17 @@ export class CityScene {
         const fac = facs[idx % facs.length];
         const tex: THREE.Texture[] = [];
         const mk = () => {
-          const map = new THREE.CanvasTexture(fac.color);
-          const em = new THREE.CanvasTexture(fac.glow);
-          [map, em].forEach((t) => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; });
+          const map = texFor(fac.color);
+          const em = texFor(fac.glow);
           tex.push(map, em);
           return new THREE.MeshStandardMaterial({ color: night.clone().lerp(base, 0.25), map, emissiveMap: em, emissive: new THREE.Color("#ffffff"), emissiveIntensity: 1.0, roughness: 0.3, metalness: 0.4 });
         };
         const side1 = mk(), side2 = mk();
         const top = new THREE.MeshStandardMaterial({ color: night.clone().multiplyScalar(0.7), roughness: 0.5, metalness: 0.3 });
-        const mats = [side1, side1, top, top, side2, side2];
+        const mats = [side1, top, side2];
         const mesh = new THREE.Mesh(unitGeo, mats);
         mesh.position.set(x, 0.5, z);
-        mesh.castShadow = true;
+        mesh.castShadow = casters.has(f.id);
         mesh.receiveShadow = true;
         mesh.userData.i = this.buildings.length;
         // Les teintes claires (rose, or) saturent le bloom de près : leur couronne brille moins fort
@@ -328,6 +350,7 @@ export class CityScene {
       });
     }
     this.extentR = extent;
+    this.fitWorld(extent);
     this.addRoads(extent);
     this.addTraffic(extent);
     // Étiquettes des plus grands fonds
@@ -650,6 +673,18 @@ export class CityScene {
     const w = this.host.clientWidth, h = this.host.clientHeight;
     const shift = w > 1000 ? -w * 0.14 : 0;
     this.camera.setViewOffset(w, h, shift, this.opts.story && w > 1000 ? -h * 0.04 : h * 0.02, w, h);
+  }
+
+  /**
+   * Adapte brouillard et profondeur de champ à l'étendue de la ville : avec plusieurs centaines de fonds,
+   * la caméra recule et un brouillard de densité fixe masquerait toute la ville. Ville de taille habituelle
+   * (étendue ≤ 50) : réglages d'origine inchangés.
+   */
+  private fitWorld(extent: number) {
+    const k = Math.max(1, extent / 50);
+    if (this.scene.fog instanceof THREE.FogExp2) this.scene.fog.density = 0.0042 / k;
+    this.camera.far = Math.max(2000, extent * 14);
+    this.camera.updateProjectionMatrix();
   }
 
   private applyQuality(l: Level) {

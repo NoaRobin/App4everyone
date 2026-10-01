@@ -7,6 +7,8 @@
     python run.py --doctor     diagnostic du poste (Python, pip, Node, port)
     python run.py --dev        mode développement (rechargement à chaud, Node.js requis)
     python run.py --test       lance les tests
+    python run.py --bench      mesure le temps de chargement et la mémoire (avec --fabric : sur les données réelles)
+    python run.py --scale 17   données fictives démultipliées (≈ 75 millions de cellules), pour éprouver l'application
 
 Environnement Python : RCO_VENV s'il pointe vers un Python valide, sinon %USERPROFILE%\venv-rco s'il existe,
 sinon un environnement géré dans %LOCALAPPDATA%\RCoFonds. Un environnement valide n'est jamais recréé ;
@@ -240,6 +242,22 @@ def ensure_python(extras: list[str]) -> None:
         run([str(PY), "-m", "pip", "install", "-q", "--disable-pip-version-check", "-r", str(req)], ROOT, what=f"installation de {req.name}", hint=hint)
         if mods and not has_modules(mods):
             fail(f"Après installation, {', '.join(mods)} reste introuvable dans {VENV}.", "Relancez avec --doctor pour diagnostiquer.")
+    if "fabric" in extras:
+        ensure_optional("pyarrow", BACKEND / "requirements-arrow.txt",
+                        "lecture en colonnes des grandes tables Fabric (beaucoup plus rapide et économe en mémoire)")
+
+
+def ensure_optional(module: str, req: Path, why: str) -> None:
+    """Dépendance facultative : installée si elle manque ; un échec n'empêche jamais le lancement."""
+    if has_modules([module]):
+        return
+    if not has_pip():
+        say(f"Facultatif : {module} absent ({why}). L'application fonctionne sans, plus lentement.")
+        return
+    say(f"Installation de {module} ({why})…")
+    r = subprocess.run([str(PY), "-m", "pip", "install", "-q", "--disable-pip-version-check", "-r", str(req)], cwd=ROOT)
+    if r.returncode != 0 or not has_modules([module]):
+        say(f"{module} n'a pas pu être installé : l'application continue avec la lecture par lots (plus lente).")
 
 
 def check_fabric_client(env: dict) -> None:
@@ -374,6 +392,7 @@ def doctor() -> None:
     if venv_ok():
         print(f"{ok(has_modules(REQ_MODULES['requirements']))} Dépendances de l'application")
         print(f"{ok(has_modules(['mssql_python']))} Connecteur Fabric mssql-python (aucun pilote ODBC requis)")
+        print(f"{ok(has_modules(['pyarrow']))} pyarrow (facultatif) : lecture rapide des grandes tables Fabric")
     print(f"    Dossier du projet ({len(str(ROOT))} caractères) : {ROOT}")
     try:
         urllib.request.urlopen("https://pypi.org/simple/pip/", timeout=6)
@@ -400,6 +419,8 @@ def main() -> None:
     ap.add_argument("--test", action="store_true", help="lancer les tests puis quitter")
     ap.add_argument("--doctor", action="store_true", help="diagnostiquer le poste puis quitter")
     ap.add_argument("--no-browser", action="store_true", help="ne pas ouvrir le navigateur")
+    ap.add_argument("--bench", action="store_true", help="mesurer le temps de chargement et la mémoire, puis quitter")
+    ap.add_argument("--scale", type=int, default=None, help="données fictives démultipliées N fois (essais de volumétrie)")
     a = ap.parse_args()
 
     if a.doctor:
@@ -419,6 +440,8 @@ def main() -> None:
         env["APP_DATA_SOURCE"] = "fabric"
     if a.mock:
         env["APP_DATA_SOURCE"] = "mock"
+    if a.scale:
+        env["APP_MOCK_SCALE"] = str(max(1, a.scale))
     source = env.get("APP_DATA_SOURCE", "mock").strip().lower() or "mock"
     env["APP_DATA_SOURCE"] = source
     if source == "fabric":
@@ -431,6 +454,9 @@ def main() -> None:
         check_fabric_client(env)
     if a.fabric_check:
         sys.exit(fabric_check(env))
+    if a.bench:
+        say("Mesure du chargement (aucune donnée n'est affichée)…")
+        sys.exit(subprocess.run([str(PY), "-m", "rco.bench"], cwd=BACKEND, env=env).returncode)
 
     if a.test:
         say("Tests back-end…")

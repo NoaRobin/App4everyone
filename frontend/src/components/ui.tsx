@@ -220,3 +220,24 @@ export function PinButton({ item }: { item: DeskItem }) {
     </button>
   );
 }
+
+/**
+ * Affichage progressif des longues listes (des centaines de fonds avec les données réelles) : les premières lignes
+ * tout de suite, le reste à la demande. Évite des dizaines de milliers de nœuds dans la page.
+ */
+export function useProgressive(step = 60) {
+  const [limit, setLimit] = useState(step);
+  return { limit, step, more: () => setLimit((l) => l + step), all: () => setLimit(Infinity), reset: () => setLimit(step) };
+}
+
+export function MoreRows({ shown, total, step, onMore, onAll, what = "lignes affichées" }:
+  { shown: number; total: number; step: number; onMore: () => void; onAll: () => void; what?: string }) {
+  if (shown >= total) return null;
+  return (
+    <div className="more" role="group" aria-label="Afficher davantage">
+      <span className="small muted num">{shown} {what} sur {total}</span>
+      <button type="button" className="chip" onClick={onMore}>Afficher {Math.min(step, total - shown)} de plus</button>
+      <button type="button" className="chip" onClick={onAll}>Tout afficher</button>
+    </div>
+  );
+}

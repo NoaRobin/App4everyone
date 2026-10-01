@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from datetime import date, timedelta
 from typing import Any
@@ -19,16 +19,19 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from ..data import aum as AQ
 from ..data import schema as S
 from . import labels as L
 from .numeric import numeric_series, safe_float
 
 log = logging.getLogger(__name__)
 
-AUM_COLS = ["ID_JUMP_FONDS", "ID_PI_FONDS", "ID_JUMP_PART", "ID_PI_PART", "CODE_ISIN_PART", "NOM_PART", "DATE_VL",
-            "VL_UNITAIRE", "NOMBRE_PARTS", "DEVISE_VL", "COEFFICIENT_OST", "DEVISE_FONDS", "ACTIF_NET_PART_DEVISE_FONDS",
-            "ACTIF_NET_TOTAL_DEVISE_FONDS", "NOM_BENCH", "VL_BENCH", "DIVIDEND_AMOUNT", "DIVIDEND_DEVISE",
-            "ACTIF_NET_TOTAL_EURO", "ACTIF_NET_PART_EURO", "DATE_MAJ"]
+# Colonnes lues dans JUMP_portfolio_aum (voir data/aum.py : faits numériques + libellés de part)
+AUM_COLS = AQ.AUM_READ_COLS
+# Colonnes des inventaires utilisées par l'application (les autres ne sont pas lues)
+HOLDINGS_COLS = ["ID_JUMP_FONDS", "ID_PI_FONDS", "NOM_FONDS", "DATE_INVENTAIRE", "ID_JUMP_INSTRUMENT", "CODE_ISIN_INSTRUMENT",
+                 "CODE_BLOOMBERG", "NOM_INSTRUMENT", "CODE_TYPE_INSTRUMENT", "DEVISE_INSTRUMENT", "CLASSE_ACTIF", "TYPE_HOLDING",
+                 "TYPE_DETTE", "DEVISE_FONDS", "MONTANT_DEVISE_FONDS", "EXPOSITION_DEVISE_FONDS", "POIDS_LIGNE_EXPO"]
 
 
 def _clean(v: Any) -> Any:
@@ -57,13 +60,25 @@ def records(df: pd.DataFrame) -> list[dict]:
     return [{k: _clean(v) for k, v in r.items()} for r in df.to_dict("records")]
 
 
+def rows_of(df: pd.DataFrame, cols) -> list[tuple[Any, dict]]:
+    """(index, ligne) pour les seules colonnes demandées présentes : équivalent rapide de df.iterrows() sur une table
+    très large (434 colonnes pour le référentiel produits), avec les mêmes valeurs Python."""
+    present = [c for c in dict.fromkeys(cols) if c in df.columns]
+    return list(zip(df.index, df[present].astype(object).to_dict("records")))
+
+
 def link_shares(aum: pd.DataFrame, shares: pd.DataFrame, products: pd.DataFrame) -> pd.DataFrame:
     """Une ligne par part JUMP : identifiants de rattachement au référentiel et au fonds.
 
+    `aum` : lignes JUMP (table complète ou seulement les changements de libellés, même résultat : pour chaque
+    libellé, sa dernière valeur renseignée dans l'ordre chronologique).
     Colonnes : ID_JUMP_PART, ID_JUMP_FONDS, NOM_PART, pi_shareid, link (id|isin|none), fund_id, fund_linked.
     """
-    last = (aum.sort_values("DATE_VL").groupby("ID_JUMP_PART", as_index=False).last()
-            [["ID_JUMP_PART", "ID_JUMP_FONDS", "ID_PI_FONDS", "ID_PI_PART", "CODE_ISIN_PART", "NOM_PART"]])
+    last = AQ.latest_attributes(aum)
+    for c in ("ID_JUMP_FONDS", "ID_PI_FONDS", "ID_PI_PART", "CODE_ISIN_PART", "NOM_PART"):
+        if c not in last:
+            last[c] = None
+    last = last[["ID_JUMP_PART", "ID_JUMP_FONDS", "ID_PI_FONDS", "ID_PI_PART", "CODE_ISIN_PART", "NOM_PART"]].copy()
     share_ids = set(shares["pi_shareid"].dropna())
     isin_counts = shares["ISIN_Code"].dropna().value_counts()
     isin_to_share = (shares.dropna(subset=["ISIN_Code"])
@@ -82,6 +97,13 @@ def link_shares(aum: pd.DataFrame, shares: pd.DataFrame, products: pd.DataFrame)
     last["fund_linked"] = last["fund_id"].notna()
     last["fund_id"] = last["fund_id"].fillna("J:" + last["ID_JUMP_FONDS"].astype(str))
     return last.drop(columns=["ID_PI_PART", "ID_PI_FONDS"])
+
+
+def _matrix(values: np.ndarray, rows: np.ndarray, cols: np.ndarray, index: pd.DatetimeIndex, columns: pd.Index) -> pd.DataFrame:
+    """Matrice dates × parts remplie directement (équivalent de pivot().reindex(), sans tri ni copie intermédiaire)."""
+    out = np.full((len(index), len(columns)), np.nan)
+    out[rows, cols] = values
+    return pd.DataFrame(out, index=index, columns=columns)
 
 
 def asof_matrix(pivot: pd.DataFrame, stale_days: int) -> pd.DataFrame:
@@ -139,6 +161,8 @@ class Model:
     fund_flow_cum: pd.DataFrame   # dates × fund_id
     stale_days: int
     is_mock: bool
+    # Mémos calculés à la demande (bornes de période, parts d'un fonds, positions des lignes d'une part…)
+    memo: dict = field(default_factory=dict, repr=False)
 
     # ---------------------------------------------------------------- dates
     def date_index(self, d: date | str | None) -> int:
@@ -154,6 +178,12 @@ class Model:
 
     def period_start(self, end: pd.Timestamp, period: str) -> pd.Timestamp | None:
         """Date de départ d'une période (valeur prise à la dernière date ≤ départ)."""
+        key = ("period_start", end, period)
+        if key not in self.memo:
+            self.memo[key] = self._period_start(end, period)
+        return self.memo[key]
+
+    def _period_start(self, end: pd.Timestamp, period: str) -> pd.Timestamp | None:
         e = end.date()
         starts = {
             "1J": None, "1S": e - timedelta(days=7), "1M": (pd.Timestamp(e) - pd.DateOffset(months=1)).date(),
@@ -172,73 +202,123 @@ class Model:
 PERIODS = ["1J", "1S", "1M", "3M", "YTD", "1A", "3A"]
 
 
+def memo(m: Any) -> dict:
+    """Mémo de calculs attaché au modèle (créé au besoin, y compris sur un modèle simplifié de test)."""
+    d = getattr(m, "memo", None)
+    if d is None:
+        d = {}
+        m.memo = d
+    return d
+
+
 _NUMERIC_SQL = {"decimal", "numeric", "money", "smallmoney", "float", "real"}
 
 
 def _financial(df: pd.DataFrame, table: str) -> pd.DataFrame:
-    """Convertit en float64 les colonnes numériques (d'après le schéma) d'une table ; les colonnes texte sont inchangées."""
+    """Convertit en float64 les colonnes numériques (d'après le schéma) d'une table ; les colonnes texte sont inchangées.
+
+    Le tableau est reconstruit en une fois (pas d'affectations colonne par colonne, coûteuses sur des millions de lignes).
+    """
     if df is None or df.empty:
         return df
     types = S.dtypes(table)
-    cols = [c for c in df.columns if types.get(c) in _NUMERIC_SQL]
-    if not cols:
+    cols = {c for c in df.columns if types.get(c) in _NUMERIC_SQL}
+    if not cols or all(df[c].dtype == np.float64 for c in cols):
         return df
-    df = df.copy()
-    for c in cols:
-        df[c] = numeric_series(df[c], name=f"{table}.{c}")
-    return df
+    return pd.DataFrame({c: (numeric_series(df[c], name=f"{table}.{c}") if c in cols else df[c]) for c in df.columns},
+                        index=df.index)
 
 
-def _load(source: Any, name: str, columns: list[str], since: tuple[str, Any] | None = None) -> pd.DataFrame:
+def _log_table(name: str, df: pd.DataFrame, t0: float) -> None:
+    log.info("Table %s : %d lignes × %d colonnes en %.1f s", name, len(df), df.shape[1], time.perf_counter() - t0)
+
+
+_TABLE_LABELS = {S.PRODUCT: "référentiel des fonds", S.SHARE: "référentiel des parts", S.COUNTRY: "pays d'enregistrement",
+                 S.AUM: "encours et VL", S.HOLDINGS: "inventaires", S.DQ: "contrôles qualité"}
+
+
+def _load(source: Any, name: str, columns: list[str], since: tuple[str, Any] | None = None, report=None) -> pd.DataFrame:
     """Lit une table en journalisant sa durée et sa volumétrie (jamais son contenu)."""
+    if report:
+        report(f"Lecture : {_TABLE_LABELS.get(name, name)}")
     t0 = time.perf_counter()
     df = source.table(name, columns, since=since) if since else source.table(name, columns)
-    log.info("Table %s : %d lignes × %d colonnes en %.1f s", name, len(df), df.shape[1], time.perf_counter() - t0)
+    _log_table(name, df, t0)
     return df
 
 
-def build_model(source: Any, stale_days: int = 12, history_years: int = 4, is_mock: bool = False) -> Model:
+def _load_aum(source: Any, since: date, report=None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Encours : deux lectures compactes (faits + changements de libellés) si la source le permet, sinon table complète."""
+    if report:
+        report(f"Lecture : {_TABLE_LABELS[S.AUM]}")
+    t0 = time.perf_counter()
+    if hasattr(source, "aum_parts"):
+        facts, attrs = source.aum_parts(since)
+        log.info("Table %s : %d lignes de montants × %d colonnes et %d changements de libellés en %.1f s",
+                 S.AUM, len(facts), facts.shape[1], len(attrs), time.perf_counter() - t0)
+        return facts, attrs
+    full = source.table(S.AUM, AUM_COLS, since=("DATE_VL", since))
+    _log_table(S.AUM, full, t0)
+    return AQ.split_aum(full)
+
+
+def build_model(source: Any, stale_days: int = 12, history_years: int = 4, is_mock: bool = False, report=None) -> Model:
+    """Lit les tables puis assemble le modèle. `report(libellé)` est appelé à chaque étape (bandeau de chargement)."""
     ref = getattr(source, "reference_date", date.today())
     since = date(ref.year - history_years, 1, 1)
-    products = _load(source, S.PRODUCT, S.columns(S.PRODUCT))
-    shares = _load(source, S.SHARE, S.columns(S.SHARE))
-    countries = _load(source, S.COUNTRY, S.columns(S.COUNTRY))
-    aum = _load(source, S.AUM, AUM_COLS, since=("DATE_VL", since))
-    holdings = _load(source, S.HOLDINGS, S.columns(S.HOLDINGS), since=("DATE_INVENTAIRE", ref - timedelta(days=200)))
-    dq = _load(source, S.DQ, S.columns(S.DQ))
-    return assemble(ref, products, shares, countries, aum, holdings, dq, stale_days, is_mock)
+    products = _load(source, S.PRODUCT, S.columns(S.PRODUCT), report=report)
+    shares = _load(source, S.SHARE, S.columns(S.SHARE), report=report)
+    countries = _load(source, S.COUNTRY, S.columns(S.COUNTRY), report=report)
+    facts, attrs = _load_aum(source, since, report=report)
+    holdings = _load(source, S.HOLDINGS, HOLDINGS_COLS, since=("DATE_INVENTAIRE", ref - timedelta(days=200)), report=report)
+    dq = _load(source, S.DQ, S.columns(S.DQ), report=report)
+    if report:
+        report("Calculs : encours, collecte et rattachements")
+    t0 = time.perf_counter()
+    model = assemble(ref, products, shares, countries, facts, holdings, dq, stale_days, is_mock, aum_attrs=attrs)
+    log.info("Calculs du modèle en %.1f s (%d dates × %d parts)", time.perf_counter() - t0, len(model.dates), len(model.link))
+    return model
 
 
 def assemble(ref: date, products: pd.DataFrame, shares: pd.DataFrame, countries: pd.DataFrame, aum: pd.DataFrame,
-             holdings: pd.DataFrame, dq: pd.DataFrame, stale_days: int = 12, is_mock: bool = False) -> Model:
+             holdings: pd.DataFrame, dq: pd.DataFrame, stale_days: int = 12, is_mock: bool = False,
+             aum_attrs: pd.DataFrame | None = None) -> Model:
+    """Assemble le modèle. `aum` : table JUMP complète, ou seulement ses faits si `aum_attrs` (changements de libellés)
+    est fourni (lecture compacte, voir data/aum.py)."""
     products = products.drop_duplicates("pi_productid").copy()
     shares = shares.drop_duplicates("pi_shareid").copy()
+    facts, attrs = (aum, aum_attrs) if aum_attrs is not None else AQ.split_aum(aum)
     # Colonnes financières des tables JUMP (DECIMAL en SQL, decimal.Decimal via mssql-python) : float64 homogène
     # avant tout calcul. Valeur non numérique ou infinie → NaN (comptée dans le journal), jamais zéro.
-    aum = _financial(aum, S.AUM)
+    facts = _financial(facts, S.AUM)
     holdings = _financial(holdings, S.HOLDINGS)
-    aum = aum.copy()
-    aum["DATE_VL"] = pd.to_datetime(aum["DATE_VL"])
-    # Doublons éventuels (rechargements) : on garde la ligne la plus récemment mise à jour
-    if "DATE_MAJ" in aum:
-        aum = aum.sort_values(["DATE_MAJ"]).drop_duplicates(["ID_JUMP_PART", "DATE_VL"], keep="last")
-    aum = aum.sort_values(["ID_JUMP_PART", "DATE_VL"]).reset_index(drop=True)
+    # Doublons éventuels (rechargements) : on garde la ligne la plus récemment mise à jour ; tri par part puis date
+    aum = AQ.dedupe_facts(facts)
+    del facts
+    # Libellés nécessaires ligne à ligne (fonds JUMP, devise de la VL, indicateur de référence), tels qu'en vigueur à chaque date
+    aum = AQ.join_attributes(aum, attrs, AQ.ROW_ATTRS)
 
-    link = link_shares(aum, shares, products)
+    link = link_shares(attrs, shares, products)
 
     # Calendrier de calcul : jours ouvrés entre la première et la dernière VL
     dates = pd.bdate_range(aum["DATE_VL"].min(), aum["DATE_VL"].max())
     dates = dates.union(pd.DatetimeIndex(aum["DATE_VL"].unique()))
 
-    def pivot(col: str) -> pd.DataFrame:
-        return aum.pivot(index="DATE_VL", columns="ID_JUMP_PART", values=col).reindex(dates)
+    codes, uniques = pd.factorize(aum["ID_JUMP_PART"], sort=True)
+    columns = pd.Index(uniques, name="ID_JUMP_PART")
+    rows = dates.get_indexer(aum["DATE_VL"])
 
-    an_eur = pivot("ACTIF_NET_PART_EURO").astype(float)
-    parts = pivot("NOMBRE_PARTS").astype(float)
-    coef = pivot("COEFFICIENT_OST").astype(float)
+    def pivot(col: str) -> pd.DataFrame:
+        return _matrix(aum[col].to_numpy(dtype=float, na_value=np.nan), rows, codes, dates, columns)
+
+    an_eur = pivot("ACTIF_NET_PART_EURO")
+    parts = pivot("NOMBRE_PARTS")
+    coef = pivot("COEFFICIENT_OST")
     share_aum = asof_matrix(an_eur, stale_days)
     flows = flow_matrix(an_eur, parts, coef, share_aum)
+    del parts, coef
     share_flow_cum = flows.cumsum()
+    del flows, an_eur
 
     # ------------------------------------------------------------ fonds
     fam = {pid: L.family_of(r) for pid, r in zip(products["pi_productid"], products.to_dict("records"))}

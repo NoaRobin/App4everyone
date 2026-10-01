@@ -1,0 +1,4 @@
+# Facultatif, recommandé avec Fabric : lecture en colonnes (Apache Arrow) par mssql-python.
+# Divise le temps et la mémoire de lecture des grandes tables ; installé par pip, sans droits administrateur.
+# Sans lui, l'application lit par lots de lignes (plus lent, mais fonctionne).
+pyarrow>=14

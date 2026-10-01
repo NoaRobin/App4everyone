@@ -13,8 +13,8 @@ def make_source(settings: Settings):
         src = FabricSource(settings)
         src.reference_date = date.today()
         return src
-    from .mock import AS_OF, MockSource
+    from .mock import AS_OF, MockSource, ScaledMockSource
 
-    src = MockSource()
+    src = ScaledMockSource(settings.mock_scale) if settings.mock_scale > 1 else MockSource()
     src.reference_date = AS_OF
     return src

@@ -59,6 +59,7 @@ class _State:
         self.error: dict | None = None
         self.failed_at: float | None = None
         self.builds = 0              # nombre de constructions effectivement lancées (tests)
+        self.step: str | None = None  # étape en cours du chargement (affichée par le bandeau d'état)
 
 
 _S = _State()
@@ -95,20 +96,22 @@ def service(wait: bool = True) -> Service:
         log.info("Construction du modèle (source %s)…", s.data_source)
         try:
             src = _source(s)
-            model = build_model(src, stale_days=s.stale_days, history_years=s.history_years, is_mock=s.data_source != "fabric")
+            model = build_model(src, stale_days=s.stale_days, history_years=s.history_years, is_mock=s.data_source != "fabric",
+                                report=_set_step)
             svc = Service(model, s.rmm_columns, s.rmm_pattern)
+            _prepare_views(svc)
         except FabricError as e:
-            _S.state, _S.failed_at = "error", time.time()
+            _S.state, _S.failed_at, _S.step = "error", time.time(), None
             _S.error = {**e.to_dict(), "status": e.status}
             log.error("Chargement du modèle impossible : %s — %s", e.code, e.message)
             raise
         except Exception as e:
-            _S.state, _S.failed_at = "error", time.time()
+            _S.state, _S.failed_at, _S.step = "error", time.time(), None
             _S.error = {"error": "model_error", "message": "Le chargement des données a échoué.", "detail": type(e).__name__, "status": 500}
             log.error("Chargement du modèle impossible (%s)\n%s", type(e).__name__, "".join(traceback.format_tb(e.__traceback__)))
             raise
         _S.loaded_in = time.time() - t0
-        _S.service, _S.state = svc, "ready"
+        _S.service, _S.state, _S.step = svc, "ready", None
         log.info("Modèle chargé en %.1f s (%d fonds, %d parts)", _S.loaded_in, len(model.funds), len(model.link))
         return svc
     finally:
@@ -120,19 +123,36 @@ def _api_service() -> Service:
     return service(wait=_S.state not in ("loading",))
 
 
+def _set_step(label: str) -> None:
+    _S.step = label
+    log.info("Chargement : %s", label)
+
+
+# Vues précalculées pendant le chargement (date par défaut) : une fois le modèle prêt, les pages principales répondent
+# immédiatement au lieu de calculer à la première visite (plusieurs secondes chacune avec les volumes réels).
+_VIEWS = (("liste des fonds", "_fund_table"), ("vue d'ensemble", "overview"), ("panorama", "city"), ("recherche", "search_index"),
+          ("risques", "risk"), ("contrôles", "controls"), ("portefeuilles", "holdings"), ("distribution", "distribution"))
+
+
+def _prepare_views(svc: Service) -> None:
+    for i, (label, name) in enumerate(_VIEWS, 1):
+        _set_step(f"Préparation des vues ({i}/{len(_VIEWS)}) : {label}")
+        t = time.perf_counter()
+        try:
+            getattr(svc, name)(None)
+        except Exception as e:  # une vue en échec sera recalculée (et son erreur renvoyée) à la demande
+            log.error("Préchauffage %s : %s", name, type(e).__name__)
+        log.info("Vue %s prête en %.1f s", name, time.perf_counter() - t)
+
+
 @app.on_event("startup")
 def _warm_up():
-    """Charge le modèle et précalcule les vues principales en tâche de fond."""
+    """Charge le modèle (et précalcule les vues principales) en tâche de fond dès le démarrage du serveur."""
     def run():
         try:
-            svc = service()
+            service()
         except Exception:
             return  # l'erreur est conservée dans l'état et renvoyée par /api/health et les routes
-        for fn in (svc.overview, svc.city, svc._fund_table, svc.search_index, svc.controls, svc.risk, svc.holdings, svc.distribution):
-            try:
-                fn(None)
-            except Exception as e:  # un échec de préchauffage ne doit pas empêcher le démarrage
-                log.error("Préchauffage %s : %s", getattr(fn, "__name__", "?"), type(e).__name__)
     threading.Thread(target=run, daemon=True, name="rco-warmup").start()
 
 
@@ -178,6 +198,11 @@ def health():
                           "config_problems": fabric_config_problems(s)}
     if _S.state == "loading" and _S.started:
         body["model"]["elapsed_s"] = round(time.time() - _S.started, 1)
+        if _S.step:
+            body["model"]["step"] = _S.step
+        prog = getattr(_S.source, "progress", None)
+        if prog:
+            body["model"]["progress"] = [{"table": k, **{kk: v.get(kk) for kk in ("rows", "total", "done")}} for k, v in list(prog.items())]
     if _S.state == "ready":
         body["model"]["loaded_in_s"] = round(_S.loaded_in or 0, 1)
     if _S.state == "error" and _S.error:

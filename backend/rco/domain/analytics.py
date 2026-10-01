@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from . import labels as L
-from .model import PERIODS, Model
+from .model import PERIODS, Model, memo, rows_of
 from .numeric import finite_or_none, numeric_series, return_between, safe_divide, safe_float
 
 log = logging.getLogger(__name__)
@@ -66,18 +66,37 @@ def daily_points(series: pd.Series, end: pd.Timestamp, start: pd.Timestamp | Non
 
 # ------------------------------------------------------------------ performance
 def nav_rows(m: Model, jump_part: str) -> pd.DataFrame:
-    """Lignes JUMP d'une part (index par part calculé une seule fois)."""
-    groups = getattr(m, "_nav_groups", None)
-    if groups is None:
-        groups = {k: g for k, g in m.aum_raw.groupby("ID_JUMP_PART", sort=False)}
-        m._nav_groups = groups
-    return groups.get(jump_part, m.aum_raw.iloc[0:0])
+    """Lignes JUMP d'une part : tranche contiguë de `aum_raw` (trié par part puis date), sans copie."""
+    pos = memo(m).get("nav_pos")
+    if pos is None:
+        key = m.aum_raw["ID_JUMP_PART"].to_numpy(dtype=object)
+        if len(key):
+            cut = np.flatnonzero(key[1:] != key[:-1]) + 1
+            starts = np.concatenate([[0], cut])
+            stops = np.concatenate([cut, [len(key)]])
+            pos = {key[a]: (int(a), int(b)) for a, b in zip(starts, stops)}
+        else:
+            pos = {}
+        memo(m)["nav_pos"] = pos
+    ab = pos.get(jump_part)
+    return m.aum_raw.iloc[ab[0]:ab[1]] if ab else m.aum_raw.iloc[0:0]
+
+
+_NAV_COLS = ["VL_UNITAIRE", "COEFFICIENT_OST", "DIVIDEND_AMOUNT", "VL_BENCH", "NOM_BENCH", "DEVISE_VL", "NOMBRE_PARTS"]
 
 
 def share_nav_frame(m: Model, jump_part: str) -> pd.DataFrame:
-    df = nav_rows(m, jump_part)[
-        ["DATE_VL", "VL_UNITAIRE", "COEFFICIENT_OST", "DIVIDEND_AMOUNT", "VL_BENCH", "NOM_BENCH", "DEVISE_VL", "NOMBRE_PARTS"]]
-    return df.dropna(subset=["VL_UNITAIRE"]).set_index("DATE_VL").sort_index()
+    """VL d'une part indexées par date (lignes sans VL écartées), construites directement depuis les tableaux."""
+    rows = nav_rows(m, jump_part)
+    vl = rows["VL_UNITAIRE"].to_numpy(dtype=float, na_value=np.nan) if len(rows) else np.array([], dtype=float)
+    keep = ~np.isnan(vl)
+    index = pd.DatetimeIndex(rows["DATE_VL"].to_numpy()[keep], name="DATE_VL")
+    cols = {}
+    for c in _NAV_COLS:
+        v = rows[c].to_numpy()[keep]
+        cols[c] = pd.Series(v, index=index, dtype=object) if v.dtype == object else v  # pas de conversion implicite en texte
+    df = pd.DataFrame(cols, index=index)
+    return df if index.is_monotonic_increasing else df.sort_index()
 
 
 def benchmark_series(nav: pd.DataFrame) -> pd.Series:
@@ -99,12 +118,16 @@ def adjusted_index(nav: pd.DataFrame) -> pd.Series:
     rend la chaîne multiplicative non calculable à partir de ce point : l'indice vaut NaN à partir de cette date,
     et les mesures qui en dépendent sont indisponibles (None). Aucune performance valide n'est écrêtée.
     """
-    vl = numeric_series(nav["VL_UNITAIRE"])
-    div = numeric_series(nav["DIVIDEND_AMOUNT"]).fillna(0.0)  # pas de dividende ce jour-là
-    coef = numeric_series(nav["COEFFICIENT_OST"]).fillna(1.0).replace(0, 1.0)  # pas d'opération sur titres
-    prev = vl.shift(1).mask(vl.shift(1) == 0.0)  # VL précédente nulle : rapport incalculable (NaN, pas inf)
-    ratio = (vl + div) * coef / prev
-    ratio.iloc[0] = 1.0
+    vl = numeric_series(nav["VL_UNITAIRE"]).to_numpy(dtype=float)
+    div = numeric_series(nav["DIVIDEND_AMOUNT"]).to_numpy(dtype=float)
+    div = np.where(np.isnan(div), 0.0, div)                       # pas de dividende ce jour-là
+    coef = numeric_series(nav["COEFFICIENT_OST"]).to_numpy(dtype=float)
+    coef = np.where(np.isnan(coef) | (coef == 0), 1.0, coef)       # pas d'opération sur titres
+    prev = np.concatenate([[np.nan], vl[:-1]]) if len(vl) else vl.copy()
+    prev[prev == 0.0] = np.nan                                     # VL précédente nulle : rapport incalculable (NaN, pas inf)
+    ratio = pd.Series((vl + div) * coef / prev, index=nav.index)
+    if len(ratio):
+        ratio.iloc[0] = 1.0
     bad = ~np.isfinite(ratio.to_numpy()) | (ratio.to_numpy() <= 0)
     out = pd.Series(np.nan, index=ratio.index, dtype="float64")
     stop = int(bad.argmax()) if bad.any() else len(ratio)
@@ -138,61 +161,134 @@ def _last_observation(s: pd.Series, d: pd.Timestamp | None) -> float | None:
     return safe_float(sub.iloc[-1]) if len(sub) else None
 
 
-def _periods_per_year(idx: pd.DatetimeIndex) -> float:
-    if len(idx) < 3:
+def _periods_per_year(idx) -> float:
+    values = idx.values if hasattr(idx, "values") else np.asarray(idx)
+    if len(values) < 3:
         return 252.0
-    gap = float(np.median(np.diff(idx.values).astype("timedelta64[D]").astype(float)))
+    gap = float(np.median(np.diff(values).astype("timedelta64[D]").astype(float)))
     return 52.0 if gap >= 5 else 252.0
+
+
+def _std1(x: np.ndarray) -> float:
+    """Écart-type (ddof = 1) calculé exactement comme pandas Series.std (algorithme en deux passes, sans NaN)."""
+    n = len(x)
+    if n < 2:
+        return float("nan")
+    avg = x.sum(dtype=np.float64) / n
+    return float(np.sqrt(((avg - x) ** 2).sum(dtype=np.float64) / (n - 1)))
+
+
+class _Obs:
+    """Série datée (index trié) vue en tableaux NumPy : valeur à une date et dernière valeur renseignée ≤ date,
+    par recherche dichotomique, sans découper la série pandas à chaque période."""
+
+    __slots__ = ("t", "v", "last_valid")
+
+    def __init__(self, series: pd.Series):
+        self.t = series.index.values
+        self.v = numeric_series(series).to_numpy(dtype=float)
+        ok = ~np.isnan(self.v)
+        self.last_valid = np.maximum.accumulate(np.where(ok, np.arange(len(ok)), -1)) if len(ok) else np.array([], dtype=int)
+
+    def pos(self, d: pd.Timestamp) -> int:
+        """Position de la dernière observation ≤ d (−1 si aucune)."""
+        return int(np.searchsorted(self.t, np.datetime64(d, "ns"), side="right")) - 1
+
+    def at(self, d: pd.Timestamp) -> float | None:
+        """Valeur à la dernière observation ≤ d, NaN compris (→ None) : équivalent de series[:d].iloc[-1]."""
+        p = self.pos(d)
+        return safe_float(self.v[p]) if p >= 0 else None
+
+    def valid_pos(self, d: pd.Timestamp | None = None) -> int:
+        """Position de la dernière valeur renseignée ≤ d (toute la série si d est None) ; −1 si aucune."""
+        p = len(self.v) - 1 if d is None else self.pos(d)
+        return int(self.last_valid[p]) if p >= 0 else -1
+
+    def valid_at(self, d: pd.Timestamp | None) -> float | None:
+        """Dernière valeur renseignée ≤ d : équivalent de series[:d].dropna().iloc[-1]."""
+        if d is None:
+            return None
+        p = self.valid_pos(d)
+        return safe_float(self.v[p]) if p >= 0 else None
+
+    def first_valid(self) -> int:
+        ok = np.flatnonzero(~np.isnan(self.v))
+        return int(ok[0]) if len(ok) else -1
 
 
 def perf_block(m: Model, series: pd.Series, end: pd.Timestamp, first_date: pd.Timestamp, strict: bool = False) -> dict[str, float | None]:
     """Performances par période. `strict` (indice du fonds) : si l'indice est interrompu, pas de valeur de fin."""
     out: dict[str, float | None] = {}
-    v1 = _last_observation(series, end) if strict else _value_at(series, end)
-    obs = series[:end].dropna()
-    last_obs = obs.index[-1] if len(obs) else None
+    o = series if isinstance(series, _Obs) else _Obs(series)
+    v1 = o.at(end) if strict else o.valid_at(end)
+    lp = o.valid_pos(end)
+    last_obs = pd.Timestamp(o.t[lp]) if lp >= 0 else None
     for p in ["1M", "3M", "YTD", "1A", "3A"]:
         start = m.period_start(end, p)
         if start is None or start < first_date or last_obs is None or last_obs <= start:
             out[p] = None
             continue
-        v0 = _value_at(series, start)
+        v0 = o.valid_at(start)
         r = return_between(v1, v0)
         if r is not None and p == "3A":
             r = (1 + r) ** (1 / 3) - 1 if 1 + r > 0 else None  # annualisée
         out[p] = finite_or_none(r)
-    s0 = series.dropna()
-    out["origine"] = return_between(v1, s0.iloc[0]) if len(s0) else None
+    f0 = o.first_valid()
+    out["origine"] = return_between(v1, o.v[f0]) if f0 >= 0 else None
     return out
 
 
 def risk_stats(idx: pd.Series, bench: pd.Series | None, end: pd.Timestamp) -> dict[str, float | None]:
+    """Volatilité, perte maximale, tracking error et volatilité de l'indicateur sur un an glissant (tableaux NumPy)."""
     start = end - pd.DateOffset(years=1)
     none = {"vol": None, "mdd": None, "te": None, "bench_vol": None}
-    window = numeric_series(idx[start:end])
-    if window.isna().any() and window.notna().any() and window.last_valid_index() != window.index[-1]:
+    t = idx.index.values
+    a = int(np.searchsorted(t, np.datetime64(start, "ns"), side="left"))
+    b = int(np.searchsorted(t, np.datetime64(end, "ns"), side="right"))
+    w = numeric_series(idx).to_numpy(dtype=float)[a:b]
+    wt = t[a:b]
+    nan = np.isnan(w)
+    if nan.any() and (~nan).any() and nan[-1]:
         return none  # indice interrompu dans la fenêtre : mesures non calculables sur un an
-    s = window.dropna()
+    s, st = w[~nan], wt[~nan]
     if len(s) < 20:
         return none
-    ppy = _periods_per_year(s.index)
-    r = s.pct_change(fill_method=None).dropna()
-    vol = finite_or_none(r.std() * math.sqrt(ppy))
-    mdd = finite_or_none((s / s.cummax() - 1).min())
+    ppy = _periods_per_year(st)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        r_all = s[1:] / s[:-1] - 1
+    r_ok = ~np.isnan(r_all)
+    r = r_all[r_ok]
+    vol = finite_or_none(_std1(r) * math.sqrt(ppy))
+    mdd = finite_or_none((s / np.maximum.accumulate(s) - 1).min())
     te = bvol = None
     if bench is not None:
-        b = numeric_series(bench).reindex(s.index).ffill()
-        if b.notna().sum() > 20:
-            rb = b.pct_change(fill_method=None)
-            rb = rb.mask(np.isinf(rb.to_numpy())).dropna()
-            common = r.index.intersection(rb.index)
-            if len(common) > 20:
-                te = finite_or_none((r[common] - rb[common]).std() * math.sqrt(ppy))
-                bvol = finite_or_none(rb[common].std() * math.sqrt(ppy))
+        bv = numeric_series(bench).reindex(pd.DatetimeIndex(st)).to_numpy(dtype=float)
+        ok = ~np.isnan(bv)
+        if ok.any():
+            last = np.maximum.accumulate(np.where(ok, np.arange(len(bv)), -1))
+            bv = np.where(last >= 0, bv[np.clip(last, 0, None)], np.nan)        # report de la dernière valeur (ffill)
+        if (~np.isnan(bv)).sum() > 20:
+            with np.errstate(divide="ignore", invalid="ignore"):
+                rb_all = bv[1:] / bv[:-1] - 1
+            rb_ok = np.isfinite(rb_all)
+            common = r_ok & rb_ok                                               # dates communes aux deux rendements
+            if common.sum() > 20:
+                rc, rbc = r_all[common], rb_all[common]
+                te = finite_or_none(_std1(rc - rbc) * math.sqrt(ppy))
+                bvol = finite_or_none(_std1(rbc) * math.sqrt(ppy))
     return {"vol": vol, "mdd": mdd, "te": te, "bench_vol": bvol}
 
 
 def share_performance(m: Model, jump_part: str, end: pd.Timestamp) -> dict | None:
+    """Performances, risques et années civiles d'une part à la date `end` (mémorisé : ne pas modifier le résultat)."""
+    key = ("perf", jump_part, end)
+    cache = memo(m)
+    if key not in cache:
+        cache[key] = _share_performance(m, jump_part, end)
+    return cache[key]
+
+
+def _share_performance(m: Model, jump_part: str, end: pd.Timestamp) -> dict | None:
     nav = share_nav_frame(m, jump_part)
     nav = nav[:end]
     if len(nav) < 2:
@@ -218,33 +314,42 @@ def share_performance(m: Model, jump_part: str, end: pd.Timestamp) -> dict | Non
 
 def calendar_years(idx: pd.Series, bench: pd.Series | None, end: pd.Timestamp) -> list[dict]:
     """Performances par année civile (l'année en cours est « depuis le 1er janvier », la première est partielle)."""
-    full = numeric_series(idx[:end])       # indice du fonds : NaN à partir d'une interruption éventuelle
-    s = full.dropna()
-    if s.empty:
+    full = _Obs(idx[:end])                 # indice du fonds : NaN à partir d'une interruption éventuelle
+    f0 = full.first_valid()
+    if f0 < 0:
         return []
+    b = None
+    if bench is not None:
+        bs = numeric_series(bench[:end]).dropna()
+        b = _Obs(bs) if len(bs) else None
     out = []
-    first = s.index[0]
+    first = pd.Timestamp(full.t[f0])
     for year in range(first.year, end.year + 1):
-        prev = s[: pd.Timestamp(year - 1, 12, 31)]
-        cur_all = full[: pd.Timestamp(year, 12, 31)]
-        if s[: pd.Timestamp(year, 12, 31)].empty:
+        y_prev, y_end = pd.Timestamp(year - 1, 12, 31), pd.Timestamp(year, 12, 31)
+        if full.valid_pos(y_end) < 0:
             continue
-        v0 = prev.iloc[-1] if len(prev) else s.iloc[0]
-        v1 = cur_all.iloc[-1]                 # dernière observation de l'année (None si l'indice est interrompu)
-        rec = {"year": year, "fund": return_between(v1, v0), "partial": (not len(prev)) or year == end.year, "ytd": year == end.year}
+        pp = full.valid_pos(y_prev)
+        v0 = full.v[pp] if pp >= 0 else full.v[f0]
+        v1 = full.at(y_end)                # dernière observation de l'année (None si l'indice est interrompu)
+        rec = {"year": year, "fund": return_between(v1, v0), "partial": pp < 0 or year == end.year, "ytd": year == end.year}
         if bench is not None:
-            b = numeric_series(bench[:end]).dropna()
-            bp, bc = b[: pd.Timestamp(year - 1, 12, 31)], b[: pd.Timestamp(year, 12, 31)]
-            if len(bc):
-                b0 = bp.iloc[-1] if len(bp) else b.iloc[0]
-                rec["bench"] = return_between(bc.iloc[-1], b0)
+            if b is not None and b.pos(y_end) >= 0:
+                bp = b.pos(y_prev)
+                b0 = b.v[bp] if bp >= 0 else b.v[0]
+                rec["bench"] = return_between(b.v[b.pos(y_end)], b0)
         out.append(rec)
     return out
 
 
 # ------------------------------------------------------------------ parts & fonds
 def fund_jump_parts(m: Model, fund_id: str) -> list[str]:
-    return m.link.index[m.link["fund_id"] == fund_id].tolist()
+    """Parts JUMP d'un fonds, dans l'ordre du rattachement (index regroupé une fois)."""
+    groups = memo(m).get("fund_parts")
+    if groups is None:
+        ix = m.link.index
+        groups = {k: ix[v].tolist() for k, v in m.link.groupby("fund_id", sort=False).indices.items()}
+        memo(m)["fund_parts"] = groups
+    return list(groups.get(fund_id, []))
 
 
 def main_part(m: Model, fund_id: str, end: pd.Timestamp) -> str | None:
@@ -267,11 +372,16 @@ def fund_summary_rows(m: Model, end: pd.Timestamp) -> pd.DataFrame:
     aum_end = m.fund_aum.loc[end]
     rows = []
     starts = {p: m.period_start(end, p) for p in ("1M", "YTD", "1A")}
-    for fid, f in m.funds.iterrows():
+    attrs = (("range", "Fund_Range"), ("asset_class", "Asset_Class"), ("expertise", "Management_Expertise_Level_2"),
+             ("manager", "Portfolio_Manager"), ("backup", "Portfolio_Manager_backup_1"), ("sfdr", "ESG_SFDR_Article"),
+             ("sri", "Official_Risk_Scale"), ("domicile", "Domiciliation"), ("legal_form", "Legal_Form"),
+             ("currency", "Accounting_Currency"), ("amf", "ESG_AMF_Category"), ("umbrella", "Umbrella_Name"))
+    fund_cols = set(m.fund_aum.columns)
+    for fid, f in rows_of(m.funds, ["name", "family", "referenced", *(c for _, c in attrs)]):
         a = _f(aum_end.get(fid))
-        if fid not in m.fund_aum.columns:
+        if fid not in fund_cols:
             a = None
-        col = m.fund_aum[fid] if fid in m.fund_aum.columns else None
+        col = m.fund_aum[fid] if fid in fund_cols else None
         rec = {
             "id": fid, "name": f["name"], "family": f["family"], "referenced": bool(f["referenced"]), "aum": a,
         }
@@ -282,10 +392,7 @@ def fund_summary_rows(m: Model, end: pd.Timestamp) -> pd.DataFrame:
                 rec[f"var_{p}"] = v["pct"]
                 rec[f"delta_{p}"] = v["delta"]
                 rec[f"flows_{p}"] = v["flows"]
-        for k, c in (("range", "Fund_Range"), ("asset_class", "Asset_Class"), ("expertise", "Management_Expertise_Level_2"),
-                     ("manager", "Portfolio_Manager"), ("backup", "Portfolio_Manager_backup_1"), ("sfdr", "ESG_SFDR_Article"),
-                     ("sri", "Official_Risk_Scale"), ("domicile", "Domiciliation"), ("legal_form", "Legal_Form"),
-                     ("currency", "Accounting_Currency"), ("amf", "ESG_AMF_Category"), ("umbrella", "Umbrella_Name")):
+        for k, c in attrs:
             rec[k] = _clean_str(f.get(c)) if c in f else None
         rec["n_parts"] = len(fund_jump_parts(m, fid))
         rows.append(rec)

@@ -16,7 +16,7 @@ const TYPE_WEIGHT: Record<string, number> = { fonds: 1.15, part: 0.95, "gérant"
 export const TYPE_LABEL: Record<string, string> = { fonds: "Fonds", part: "Parts", "gérant": "Gérants", famille: "Familles de gestion", gamme: "Gammes", "classe d'actifs": "Classes d'actifs", expertise: "Expertises", SFDR: "Classification SFDR", pays: "Pays de commercialisation", domicile: "Domiciliation", "forme juridique": "Forme juridique", ligne: "Lignes en portefeuille" };
 const GROUP_LIMIT: Record<string, number> = { fonds: 8, part: 6, ligne: 5 };
 
-type Prepared = { e: SearchEntry; words: string[]; sub: string[]; codes: string[]; full: string };
+type Prepared = { e: SearchEntry; words: Int32Array; sub: Int32Array; codes: string[]; full: string };
 
 export type Hit = { entry: SearchEntry; score: number };
 export type Answer = { title: string; filters: Record<string, string>; labels: string[]; count: number; aum: number; href: string; wantsAum: boolean };
@@ -24,21 +24,29 @@ export type Answer = { title: string; filters: Record<string, string>; labels: s
 export type Ask = { entry: SearchEntry; question: string; href: string };
 export type Results = { hits: Hit[]; groups: { type: string; label: string; hits: Hit[] }[]; answer: Answer | null; tokens: string[]; ask?: Ask | null };
 
+// Matrice de travail réutilisée par osa (évite d'allouer un tableau par comparaison)
+let osaBuf = new Int32Array(0);
+
 export function osa(a: string, b: string, max: number): number {
   if (Math.abs(a.length - b.length) > max) return max + 1;
-  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
-  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  const W = b.length + 1;
+  const need = (a.length + 1) * W;
+  if (osaBuf.length < need) osaBuf = new Int32Array(Math.max(need, osaBuf.length * 2));
+  const d = osaBuf;
+  for (let i = 0; i <= a.length; i++) d[i * W] = i;
+  for (let j = 1; j <= b.length; j++) d[j] = j;
   for (let i = 1; i <= a.length; i++) {
     let rowMin = Infinity;
     for (let j = 1; j <= b.length; j++) {
       const c = a[i - 1] === b[j - 1] ? 0 : 1;
-      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
-      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
-      rowMin = Math.min(rowMin, d[i][j]);
+      let v = Math.min(d[(i - 1) * W + j] + 1, d[i * W + j - 1] + 1, d[(i - 1) * W + j - 1] + c);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, d[(i - 2) * W + j - 2] + 1);
+      d[i * W + j] = v;
+      rowMin = Math.min(rowMin, v);
     }
     if (rowMin > max) return max + 1;
   }
-  return d[a.length][b.length];
+  return d[a.length * W + b.length];
 }
 
 function dice(a: string, b: string): number {
@@ -82,17 +90,38 @@ export class SearchIndex {
   private items: Prepared[];
   private funds: SearchEntry[];
   private facets: SearchEntry[];
+  /** Vocabulaire commun : chaque mot distinct n'est évalué qu'une fois par jeton de requête (milliers d'entrées). */
+  private vocab: string[] = [];
+  private scoreCache = new Map<string, Float64Array>();
 
   constructor(entries: SearchEntry[]) {
+    const ids = new Map<string, number>();
+    const id = (w: string) => {
+      let k = ids.get(w);
+      if (k === undefined) { k = this.vocab.length; ids.set(w, k); this.vocab.push(w); }
+      return k;
+    };
     this.items = entries.map((e) => {
       const full = norm(e.label);
       const codes = e.terms.map((x) => norm(x).replace(/\s+/g, "")).filter(Boolean);
       const words = [...new Set([...full.split(" "), ...e.terms.flatMap((x) => norm(x).split(" "))].filter(Boolean))];
       const sub = norm(e.sub ?? "").split(" ").filter(Boolean);
-      return { e, words, sub, codes, full };
+      return { e, words: Int32Array.from(words, id), sub: Int32Array.from(sub, id), codes, full };
     });
     this.funds = entries.filter((e) => e.t === "fonds");
     this.facets = entries.filter((e) => e.key && e.t !== "fonds");
+  }
+
+  /** Score de chaque mot du vocabulaire pour un jeton (mémorisé : la saisie réutilise les jetons précédents). */
+  private scores(t: string): Float64Array {
+    let sc = this.scoreCache.get(t);
+    if (!sc) {
+      sc = new Float64Array(this.vocab.length);
+      for (let i = 0; i < this.vocab.length; i++) sc[i] = wordScore(t, this.vocab[i]);
+      if (this.scoreCache.size > 64) this.scoreCache.clear();
+      this.scoreCache.set(t, sc);
+    }
+    return sc;
   }
 
   search(q: string, withAsk = true): Results {
@@ -104,6 +133,7 @@ export class SearchIndex {
     const core = tokens.filter((t) => !TYPE_HINTS[t] && !["encours", "aum", "actif", "actifs", "montant", "total"].includes(t));
     if (core.length) tokens = core;
     const compact = nq.replace(/\s+/g, "");
+    const tokenScores = tokens.map((t) => this.scores(t));
     const hits: Hit[] = [];
     for (const it of this.items) {
       let score = 0;
@@ -119,15 +149,15 @@ export class SearchIndex {
       }
       if (codeHit) score = codeHit;
       else {
-        for (const t of tokens) {
+        for (const sc of tokenScores) {
           let best = 0;
-          for (const w of it.words) {
-            const s = wordScore(t, w);
+          for (let k = 0; k < it.words.length; k++) {
+            const s = sc[it.words[k]];
             if (s > best) best = s;
             if (best === 1) break;
           }
           if (best < 0.5) {
-            for (const w of it.sub) best = Math.max(best, wordScore(t, w) * 0.55);
+            for (let k = 0; k < it.sub.length; k++) best = Math.max(best, sc[it.sub[k]] * 0.55);
           }
           if (best < 0.3) {
             ok = false;

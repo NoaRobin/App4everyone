@@ -6,7 +6,7 @@ import { useApp } from "../lib/context";
 import { date as fdate, eur, pct, pctRaw, plural } from "../lib/format";
 import { famVar } from "../lib/families";
 import type { Control, FamilyKey } from "../lib/types";
-import { Bool, ErrorState, Loading, SriScale, useReveal } from "../components/ui";
+import { Bool, ErrorState, Loading, MoreRows, SriScale, useProgressive, useReveal } from "../components/ui";
 import { RiskReturn } from "../components/viz";
 import { FAMILY_LABEL, FAMILY_ORDER, SRI_RAMP } from "../lib/families";
 import { Head, PageHero } from "../components/Editorial";
@@ -75,6 +75,7 @@ function RiskTab({ data, error }: { data: RiskResp | null; error: Error | null }
   useReveal(data);
   const rows = useMemo(() => [...(data?.funds ?? [])].filter((f) => !sriF || f.sri === sriF)
     .sort((a, b) => ((b[sort] as number) ?? -Infinity) - ((a[sort] as number) ?? -Infinity)), [data, sort, sriF]);
+  const page = useProgressive(60);
   if (error) return <ErrorState error={error} />;
   if (!data) return <Loading h={480} />;
   const total = data.sri.reduce((s, x) => s + x.aum, 0);
@@ -130,7 +131,7 @@ function RiskTab({ data, error }: { data: RiskResp | null; error: Error | null }
           <table className="t">
             <caption className="sr-only">Indicateurs de risque par fonds</caption>
             <thead><tr><th>Fonds</th><th>SRI</th>{th("aum", "Encours")}{th("vol", "Volatilité 1 an")}{th("mdd", "Perte max. 1 an")}{th("te", "Tracking error")}{th("top10", "Top 10")}{th("cash", "Liquidités")}{th("derivatives", "Dérivés")}<th>Risque global</th><th>Levier</th><th>Liquidité</th></tr></thead>
-            <tbody>{rows.map((f) => (
+            <tbody>{rows.slice(0, page.limit).map((f) => (
               <tr key={f.id} className="clickable" onClick={() => nav(`/fonds/${encodeURIComponent(f.id)}`)}>
                 <td className="strong"><span className="dot" style={{ background: famVar(f.family), marginRight: 10 }} /><Link className="rowlink-inline" to={`/fonds/${encodeURIComponent(f.id)}`} onClick={(e) => e.stopPropagation()}>{f.name}</Link></td>
                 <td><SriScale value={f.sri} previous={f.sri_prev} /></td>
@@ -148,6 +149,7 @@ function RiskTab({ data, error }: { data: RiskResp | null; error: Error | null }
             ))}</tbody>
           </table>
         </div>
+        <MoreRows shown={Math.min(page.limit, rows.length)} total={rows.length} step={page.step} onMore={page.more} onAll={page.all} what="fonds affichés" />
       </section>
     </>
   );
@@ -158,6 +160,25 @@ const SEV: Record<string, { label: string; icon: React.ReactElement }> = {
   warning: { label: "À vérifier", icon: <I.Alert size={20} /> },
   info: { label: "Information", icon: <I.Info size={20} /> },
 };
+
+/** Éléments d'un contrôle : affichage progressif (des milliers de parts possibles avec les données réelles). */
+function CtlItems({ items }: { items: Control["items"] }) {
+  const page = useProgressive(100);
+  return (
+    <>
+      <ul className="ctl__items">
+        {items.slice(0, page.limit).map((it, i) => (
+          <li key={i}>
+            {it.fund_id ? <Link className="link strong" to={it.share_id ? `/parts/${encodeURIComponent(it.share_id)}` : `/fonds/${encodeURIComponent(it.fund_id)}`}>{it.name}</Link> : <span className="strong">{it.name}</span>}
+            <span className="small">{it.detail}</span>
+            {it.aum != null && <span className="num small muted">{eur(it.aum)}</span>}
+          </li>
+        ))}
+      </ul>
+      <MoreRows shown={Math.min(page.limit, items.length)} total={items.length} step={page.step} onMore={page.more} onAll={page.all} what="éléments affichés" />
+    </>
+  );
+}
 
 function ControlsTab({ data, error }: { data: { date: string; controls: Control[] } | null; error: Error | null }) {
   const [open, setOpen] = useState<string | null>(null);
@@ -188,17 +209,7 @@ function ControlsTab({ data, error }: { data: { date: string; controls: Control[
                 <span className="ctl__meta small"><span className="tag tag--s">{c.audience}</span>{!ok && <span className="tag tag--s">{SEV[c.severity].label}</span>}</span>
                 <span className="ctl__n num">{ok ? "Aucun" : c.count}</span>
               </button>
-              {isOpen && (
-                <ul className="ctl__items">
-                  {c.items.map((it, i) => (
-                    <li key={i}>
-                      {it.fund_id ? <Link className="link strong" to={it.share_id ? `/parts/${encodeURIComponent(it.share_id)}` : `/fonds/${encodeURIComponent(it.fund_id)}`}>{it.name}</Link> : <span className="strong">{it.name}</span>}
-                      <span className="small">{it.detail}</span>
-                      {it.aum != null && <span className="num small muted">{eur(it.aum)}</span>}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              {isOpen && <CtlItems items={c.items} />}
             </div>
           );
         })}

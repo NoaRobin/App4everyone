@@ -26,7 +26,11 @@ class _Cur:
             e = self.conn.fail.pop(0)
             if e:
                 raise e
-    def fetchall(self): return [(1, "x"), (2, "y")]
+    rows = [(1, "x"), (2, "y")]
+    def fetchall(self): return list(self.rows)
+    def fetchmany(self, n):
+        out, self.rows = self.rows[:n], self.rows[n:]
+        return out
     def close(self): pass
 
 
@@ -144,8 +148,11 @@ def test_reconnexion_unique_apres_coupure(settings, monkeypatch):
 
 def test_ping_et_verification_de_table(settings, monkeypatch):
     conn = _Conn()
-    conn.cursor = lambda: types.SimpleNamespace(execute=lambda sql, p: conn.log.append(sql), description=[("ok",)],
-                                               fetchall=lambda: [(1,)], close=lambda: None)
+    def cursor():
+        rows = [[(1,)]]
+        return types.SimpleNamespace(execute=lambda sql, p: conn.log.append(sql), description=[("ok",)],
+                                     fetchmany=lambda n: rows.pop() if rows else [], close=lambda: None)
+    conn.cursor = cursor
     _fake_mssql(monkeypatch, [conn])
     src = FabricSource(settings)
     assert src.ping() >= 0

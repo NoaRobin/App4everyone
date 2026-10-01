@@ -35,11 +35,19 @@ export default function Holdings() {
   const input = useRef<HTMLInputElement>(null);
   const nav = useNavigate();
   useReveal(data);
-  const lines = useMemo(() => entries.filter((e) => e.t === "ligne"), [entries]);
+  // Libellés et codes normalisés une fois (des dizaines de milliers de lignes possibles), pas à chaque frappe
+  const lines = useMemo(() => entries.filter((e) => e.t === "ligne")
+    .map((l) => ({ l, label: norm(l.label), codes: l.terms.map((t) => norm(t).replace(/\s/g, "")) })), [entries]);
   const found = useMemo(() => {
     const n = norm(q);
     if (n.length < 2) return [];
-    return lines.filter((l) => norm(l.label).includes(n) || l.terms.some((t) => norm(t).replace(/\s/g, "").includes(n.replace(/\s/g, "")))).slice(0, 10);
+    const c = n.replace(/\s/g, "");
+    const out = [];
+    for (const x of lines) {
+      if (x.label.includes(n) || x.codes.some((t) => t.includes(c))) out.push(x.l);
+      if (out.length >= 10) break;
+    }
+    return out;
   }, [q, lines]);
   // Couleur d'une classe d'actifs : fixée par son rang dans l'inventaire de la maison
   const classColor = useMemo(() => {

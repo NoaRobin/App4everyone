@@ -8,7 +8,7 @@ import { norm } from "../lib/search";
 import { clearRecents, togglePin, usePins, useRecents, type DeskItem } from "../lib/desk";
 import type { Control, FamilyKey, FundRow, Overview } from "../lib/types";
 import { SearchResults, useResultNav } from "../components/SearchResults";
-import { Delta, useReveal } from "../components/ui";
+import { Delta, MoreRows, useProgressive, useReveal } from "../components/ui";
 import * as I from "../components/Icon";
 
 /** Espace métiers : trouver une information le plus vite possible. */
@@ -196,10 +196,17 @@ function Directory({ funds }: { funds: FundRow[] }) {
   const rows = live
     .filter((f) => (!fam || f.family === fam) && (!nq || norm([f.name, f.manager, f.range, f.asset_class, f.sfdr].filter(Boolean).join(" ")).includes(nq)))
     .sort((a, b) => key(a.name).localeCompare(key(b.name), "fr"));
+  const letterOf = (f: FundRow) => (key(f.name)[0] ?? "#").toUpperCase();
+  const present = new Set(rows.map(letterOf));
+  // Affichage progressif : les premières lignes tout de suite, la suite à la demande (ou en sautant à une lettre)
+  const page = useProgressive(80);
   const groups = new Map<string, FundRow[]>();
-  rows.forEach((f) => { const l = (key(f.name)[0] ?? "#").toUpperCase(); groups.set(l, [...(groups.get(l) ?? []), f]); });
+  rows.slice(0, page.limit).forEach((f) => { const l = letterOf(f); groups.set(l, [...(groups.get(l) ?? []), f]); });
   const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-  const jump = (l: string) => document.getElementById(`rep-${l}`)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  const [pending, setPending] = useState<string | null>(null);
+  const scrollTo = (l: string) => document.getElementById(`rep-${l}`)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  const jump = (l: string) => { if (groups.has(l)) scrollTo(l); else { page.all(); setPending(l); } };
+  useEffect(() => { if (pending && groups.has(pending)) { scrollTo(pending); setPending(null); } });
   return (
     <section className="section reveal" id="repertoire" aria-labelledby="h-rep">
       <div className="section__head">
@@ -217,7 +224,7 @@ function Directory({ funds }: { funds: FundRow[] }) {
         </div>
       </div>
       <nav className="rep__az" aria-label="Aller à la lettre">
-        {letters.map((l) => <button key={l} type="button" disabled={!groups.has(l)} onClick={() => jump(l)}>{l}</button>)}
+        {letters.map((l) => <button key={l} type="button" disabled={!present.has(l)} onClick={() => jump(l)}>{l}</button>)}
       </nav>
       <div className="table-wrap">
         <table className="t rep">
@@ -243,6 +250,7 @@ function Directory({ funds }: { funds: FundRow[] }) {
         </table>
         {!rows.length && <div className="empty small">Aucun fonds ne correspond à « {q} ». La recherche en haut de page tolère les fautes de frappe.</div>}
       </div>
+      <MoreRows shown={Math.min(page.limit, rows.length)} total={rows.length} step={page.step} onMore={page.more} onAll={page.all} what="fonds affichés" />
     </section>
   );
 }

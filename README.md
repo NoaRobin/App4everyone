@@ -59,6 +59,8 @@ démarre le serveur et ouvre le navigateur. Les données fictives sont utilisée
 | `--doctor` | diagnostic du poste : Python, accès aux paquets, proxy, Node.js, port |
 | `--port 8080` | autre port (si le port demandé est pris, le suivant libre est choisi automatiquement) |
 | `--test` | lance les tests |
+| `--bench` | mesure le temps de chargement, de chaque vue et la mémoire (avec `--fabric` : sur les données réelles, sans les afficher) |
+| `--scale 17` | données fictives démultipliées (≈ 75 millions de cellules) pour éprouver l'application |
 | `--dev` / `--rebuild` | modifier le front (Node.js 20+ requis) |
 | `--no-browser` | n'ouvre pas le navigateur |
 
@@ -116,6 +118,32 @@ Toutes les erreurs sont renvoyées en JSON `{error, message, hint}` : `fabric_co
 `fabric_auth`, `fabric_timeout`, `fabric_query` (table ou colonne nommée), `model_loading` (503 pendant le chargement).
 Les journaux indiquent, par table, la durée et le nombre de lignes, jamais leur contenu. L'historique (4 ans par défaut,
 `APP_HISTORY_YEARS`) est gardé en mémoire et jamais écrit sur disque.
+
+### Volumétrie (des dizaines de millions de cellules)
+
+L'application est éprouvée sur des données fictives démultipliées à l'échelle réelle : `python run.py --scale 17`
+(≈ 75 millions de cellules lues, 765 fonds, 3 247 parts, 3 millions de lignes d'encours).
+
+- **Lecture compacte de `JUMP_portfolio_aum`** (la table la plus lourde) : deux `SELECT` au lieu d'un. Les montants
+  quotidiens (identifiant de part, dates et 8 colonnes numériques converties en `FLOAT` côté SQL), puis seulement les lignes
+  où un libellé de part change (fonds, ISIN, nom, devise, indicateur), calculées par Fabric (`LAG`/`ROW_NUMBER`).
+  Les libellés ne sont plus répétés sur chaque ligne quotidienne ; chaque ligne est ensuite reconstituée à l'identique. Si
+  Fabric refusait cette requête, l'application relit les libellés ligne à ligne (plus lent, même résultat).
+- **Lecture en colonnes** : avec `pyarrow` (installé automatiquement par pip s'il manque, sans droits administrateur ;
+  facultatif), mssql-python transmet des colonnes Arrow : aucun objet Python par cellule. Sans `pyarrow`, lecture par lots de
+  50 000 lignes convertis au fur et à mesure (jamais toute la table en objets `Decimal`).
+- **Colonnes utiles seulement** : 18 colonnes d'encours lues sur 23, 17 d'inventaires sur 30.
+- **Calculs vectorisés** (tris, dédoublonnage, matrices date × part, risques, compositions) et mémorisés par date :
+  résultats identiques au chiffre près à la version précédente (vérifié route par route).
+- **Vues préparées pendant le chargement** (liste des fonds, panorama, recherche, risques, contrôles…) : une fois le bandeau
+  « Chargement » disparu, les pages répondent immédiatement. Le bandeau indique l'étape en cours et, avec Fabric, le nombre
+  de lignes lues sur le total (`/api/health` : `model.step`, `model.progress`).
+- **Interface** : recherche universelle 15 à 90 fois plus rapide sur 24 000 entrées (mêmes résultats), longues listes
+  affichées par tranches (« Afficher 60 de plus », « Tout afficher »), ville 3D allégée (textures partagées, 4 fois moins
+  d'appels de dessin, cadrage et brouillard adaptés au nombre de fonds).
+
+Mesure sur votre poste : `python run.py --bench` (données fictives) ou `python run.py --fabric --bench` (données réelles) :
+durées de lecture, de calcul et de chaque vue, et mémoire maximale ; aucune donnée affichée.
 
 ## Garanties
 
@@ -224,7 +252,8 @@ les hausses et baisses portent toujours un signe et une flèche. Tout est dans `
 backend/rco/
   config.py            variables d'environnement
   data/  sql_guard.py  garde-fou lecture seule
-         fabric.py     connexion mssql-python ou pyodbc (Entra ID interactif)
+         fabric.py     connexion mssql-python ou pyodbc (Entra ID interactif), lecture par lots (Arrow ou lignes)
+         aum.py        lecture compacte des encours (faits + changements de libellés)
          mock.py       données fictives au schéma exact
          schema.json   noms et types des colonnes (aucune donnée)
   domain/ model.py     jointures, matrices d'encours à date, collecte
@@ -233,6 +262,7 @@ backend/rco/
           fields.py    vocabulaire métier (libellés de ~250 colonnes)
           labels.py    familles, pays, booléens
   service.py / api.py  réponses de l'API (FastAPI) et service du front
+  bench.py             mesure du chargement (python run.py --bench)
 frontend/src/
   three/  CityScene.ts, KeyboardScene.ts   scènes Three.js
   pages/  Panorama, Workspace, FundsSearch, Fund, Share, Encours, Selection, Holdings, Instrument, Distribution, Country, Risk

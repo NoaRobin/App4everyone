@@ -15,7 +15,7 @@ from .domain import fields as F
 from .domain import holdings as H
 from .domain import labels as L
 from .domain.numeric import fmt_meur, numeric_series, safe_divide, safe_float
-from .domain.model import PERIODS, Model, _clean
+from .domain.model import PERIODS, Model, _clean, memo, rows_of
 
 FUND_DIMS = {
     "family": ("Famille de gestion", "family"), "range": ("Gamme", "Fund_Range"), "asset_class": ("Classe d'actifs", "Asset_Class"),
@@ -277,7 +277,8 @@ class Service:
         perf = A.share_performance(m, main, end) if main else None
         perf_payload = None
         if perf:
-            idx, bench = perf.pop("_index"), perf.pop("_bench")
+            idx, bench = perf["_index"], perf["_bench"]
+            perf = {k: v for k, v in perf.items() if not k.startswith("_")}  # résultat mémorisé : jamais modifié
             b = _rebase(bench)
             perf_payload = {**perf, "share": self._share_brief(main, end),
                             "index": A.daily_points(idx, end), "bench_index": A.daily_points(b, end) if b is not None else []}
@@ -323,27 +324,74 @@ class Service:
         }
         return payload
 
+    _BRIEF_COLS = ("Share_Name", "ISIN_Code", "Share_Class", "Subscription_Currency", "Share_Hedged_Against_FX_Exposure",
+                   "Income_Distribution", "Investor_Type", "Initial_Subscription_Minimum_Amount", "Ongoing_Charges_ex_post",
+                   "Max_Financial_Management_Fees", "Performance_fees", "Subscription_cut_off_time",
+                   "Subscription_Settlement_Date", "Morningstar_rating", "Main_Share", "Lifecycle")
+
+    def _share_refs(self) -> dict:
+        """Champs du référentiel utiles aux fiches résumées des parts (extraits une fois)."""
+        refs = getattr(self, "_refs", None)
+        if refs is None:
+            cols = [c for c in self._BRIEF_COLS if c in self.m.shares.columns]
+            refs = self.m.shares[cols].to_dict("index")
+            self._refs = refs
+        return refs
+
     def _share_brief(self, jp: str, end: pd.Timestamp) -> dict:
+        cache = self.__dict__.setdefault("_briefs", {})
+        key = (jp, end)
+        if key not in cache:
+            cache[key] = self._share_brief_calc(jp, end)
+        return dict(cache[key])
+
+    def _brief_context(self, end: pd.Timestamp) -> dict:
+        """Grandeurs de toutes les parts à une date, calculées en une fois (encours, collecte YTD, dernière VL)."""
+        cache = self.__dict__.setdefault("_brief_ctx", {})
+        if end in cache:
+            return cache[end]
         m = self.m
-        sid = m.link.at[jp, "pi_shareid"]
-        ref = m.shares.loc[sid].to_dict() if isinstance(sid, str) and sid in m.shares.index else {}
-        a = _num(m.share_aum.at[end, jp]) if jp in m.share_aum.columns else None
+        aum_end = m.share_aum.loc[end]
         start = m.period_start(end, "YTD")
-        v = A.variation(m.share_aum[jp], m.share_flow_cum[jp], start, end)
-        nav = A.nav_rows(m, jp)
-        nav = nav[nav["DATE_VL"] <= end].tail(1)
+        if start is None:
+            flows = {}
+        else:
+            fe, fs = m.share_flow_cum.loc[end], m.share_flow_cum.loc[start]
+            flows = {jp: float(fe[jp] - fs[jp]) for jp in m.share_flow_cum.columns}
+        raw = m.aum_raw
+        dates = raw["DATE_VL"].to_numpy()
+        pos = {}
+        e = np.datetime64(end, "ns")
+        for jp, (a, b) in memo_nav_pos(m).items():
+            k = int(np.searchsorted(dates[a:b], e, side="right"))
+            pos[jp] = a + k - 1 if k > 0 else -1
+        ctx = {"aum": aum_end.to_dict(), "flows": flows, "start": start, "pos": pos,
+               "vl": raw["VL_UNITAIRE"].to_numpy(), "ccy": raw["DEVISE_VL"].to_numpy(dtype=object), "dates": dates,
+               "link": m.link[["pi_shareid", "NOM_PART", "CODE_ISIN_PART", "link"]].to_dict("index")}
+        cache[end] = ctx
+        return ctx
+
+    def _share_brief_calc(self, jp: str, end: pd.Timestamp) -> dict:
+        m = self.m
+        ctx = self._brief_context(end)
+        lk = ctx["link"][jp]
+        sid = lk["pi_shareid"]
+        ref = self._share_refs().get(sid, {}) if isinstance(sid, str) else {}
+        a = _num(ctx["aum"].get(jp)) if jp in ctx["aum"] else None
+        flows = ctx["flows"].get(jp) if ctx["start"] is not None else None
+        p = ctx["pos"].get(jp, -1)
         return {
-            "id": self._share_key(jp), "jump": jp, "name": ref.get("Share_Name") or m.link.at[jp, "NOM_PART"],
-            "isin": ref.get("ISIN_Code") or m.link.at[jp, "CODE_ISIN_PART"], "link": m.link.at[jp, "link"],
-            "class": _str(ref.get("Share_Class")), "ccy": _str(ref.get("Subscription_Currency")) or (nav["DEVISE_VL"].iloc[0] if len(nav) else None),
+            "id": self._share_key(jp), "jump": jp, "name": ref.get("Share_Name") or lk["NOM_PART"],
+            "isin": ref.get("ISIN_Code") or lk["CODE_ISIN_PART"], "link": lk["link"],
+            "class": _str(ref.get("Share_Class")), "ccy": _str(ref.get("Subscription_Currency")) or (ctx["ccy"][p] if p >= 0 else None),
             "hedged": L.to_bool(ref.get("Share_Hedged_Against_FX_Exposure")), "distribution": _str(ref.get("Income_Distribution")),
             "investor": _str(ref.get("Investor_Type")), "min_sub": _num(ref.get("Initial_Subscription_Minimum_Amount")),
             "ongoing": _num(ref.get("Ongoing_Charges_ex_post")), "mgmt_fee": _num(ref.get("Max_Financial_Management_Fees")),
             "perf_fee": L.to_bool(ref.get("Performance_fees")), "cutoff": _str(ref.get("Subscription_cut_off_time")),
             "settlement": _str(ref.get("Subscription_Settlement_Date")), "rating": _num(ref.get("Morningstar_rating")),
-            "main": L.to_bool(ref.get("Main_Share")), "aum": a, "flows_YTD": v["flows"],
-            "nav": _num(nav["VL_UNITAIRE"].iloc[0]) if len(nav) else None,
-            "nav_date": nav["DATE_VL"].iloc[0].date().isoformat() if len(nav) else None,
+            "main": L.to_bool(ref.get("Main_Share")), "aum": a, "flows_YTD": flows,
+            "nav": _num(ctx["vl"][p]) if p >= 0 else None,
+            "nav_date": pd.Timestamp(ctx["dates"][p]).date().isoformat() if p >= 0 else None,
             "status": _str(ref.get("Lifecycle")),
         }
 
@@ -373,7 +421,8 @@ class Service:
         perf = A.share_performance(m, jp, end) if jp else None
         perf_payload = None
         if perf:
-            idx, bench = perf.pop("_index"), perf.pop("_bench")
+            idx, bench = perf["_index"], perf["_bench"]
+            perf = {k: v for k, v in perf.items() if not k.startswith("_")}  # résultat mémorisé : jamais modifié
             b = _rebase(bench)
             nav = A.share_nav_frame(m, jp)[:end]["VL_UNITAIRE"]
             perf_payload = {**perf, "index": A.daily_points(idx, end), "bench_index": A.daily_points(b, end) if b is not None else [],
@@ -569,12 +618,15 @@ class Service:
         df = self._fund_table(d)
         live = df[df["aum"].fillna(0) > 0]
         rows = []
-        for _, r in live.iterrows():
+        risk_cols = ["Official_Risk_Scale", "Previous_month_SRI", "Global_Exposure_Calculation", "Leveraged_Financial_or_Contingent_Liability_Instr",
+                     "Liquidity_risk", "Credit_risk", "Counterparty_risk"]
+        fattrs = dict(rows_of(m.funds.loc[live["id"]], risk_cols))
+        for _, r in rows_of(live, live.columns):
             fid = r["id"]
-            f = m.funds.loc[fid]
+            f = fattrs[fid]
             jp = A.main_part(m, fid, end)
             p = A.share_performance(m, jp, end) if jp else None
-            comp = H.fund_composition(m, fid, end)
+            comp = H.composition_summary(m, fid, end)
             rows.append({
                 "id": fid, "name": r["name"], "family": r["family"], "aum": r["aum"],
                 "sri": _str(f.get("Official_Risk_Scale")), "sri_prev": _str(f.get("Previous_month_SRI")),
@@ -599,7 +651,11 @@ class Service:
     def controls(self, d: str | None) -> dict:
         m, end = self.m, self.end(d)
         out = []
-        prods = m.funds[m.funds["referenced"]]
+        prods_df = m.funds[m.funds["referenced"]]
+        prods = rows_of(prods_df, ["name", "Official_Risk_Scale", "Previous_month_SRI", "Auditors_Mandate_Termination_Date",
+                                   "Commissaire_Aux_Comptes", "ESG_SFDR_Article", "PerCent_Min_SI_EET_20420",
+                                   "PerCent_Min_with_ES_Characteristics_EET_20400", *(c for c, _ in F.VALIDATIONS)])
+        share_rows = rows_of(m.shares, ["ProductID", "Share_Name", "Share_Class", "ISIN_Code", *(c for c, _ in F.VALIDATIONS)])
         name = lambda fid: m.funds.at[fid, "name"] if fid in m.funds.index else fid
 
         def add(key, title, audience, severity, description, items):
@@ -608,7 +664,7 @@ class Service:
 
         # 1. Changement de SRI
         items = []
-        for fid, f in prods.iterrows():
+        for fid, f in prods:
             a, b = _str(f.get("Official_Risk_Scale")), _str(f.get("Previous_month_SRI"))
             if a and b and a != b:
                 items.append({"fund_id": fid, "name": f["name"], "detail": f"SRI passé de {b} à {a}"})
@@ -618,7 +674,7 @@ class Service:
         # 2. Mandats des commissaires aux comptes
         items = []
         horizon = end + pd.DateOffset(months=12)
-        for fid, f in prods.iterrows():
+        for fid, f in prods:
             t = pd.to_datetime(f.get("Auditors_Mandate_Termination_Date"), errors="coerce")
             if pd.notna(t) and t <= horizon:
                 state = "échu" if t < end else "arrive à échéance"
@@ -629,11 +685,11 @@ class Service:
 
         # 3. Circuit de validation incomplet
         items = []
-        for fid, f in prods.iterrows():
+        for fid, f in prods:
             missing = [lab for col, lab in F.VALIDATIONS if col in f and L.to_bool(f.get(col)) is False]
             if missing:
                 items.append({"fund_id": fid, "name": f["name"], "detail": "Validation manquante : " + ", ".join(missing)})
-        for sid, s in m.shares.iterrows():
+        for sid, s in share_rows:
             missing = [lab for col, lab in F.VALIDATIONS if col in s and L.to_bool(s.get(col)) is False]
             if missing and s.get("ProductID") in m.funds.index:
                 items.append({"fund_id": s["ProductID"], "share_id": sid, "name": s.get("Share_Name"),
@@ -705,7 +761,7 @@ class Service:
 
         # 8. SFDR : engagements minimum non renseignés
         items = []
-        for fid, f in prods.iterrows():
+        for fid, f in prods:
             art = L.norm(f.get("ESG_SFDR_Article"))
             if "9" in art and _num(f.get("PerCent_Min_SI_EET_20420")) is None:
                 items.append({"fund_id": fid, "name": f["name"], "detail": "Article 9 sans part minimale d'investissements durables renseignée"})
@@ -716,7 +772,7 @@ class Service:
 
         # 9. Parts sans ISIN
         items = [{"fund_id": s.get("ProductID") if s.get("ProductID") in m.funds.index else None, "share_id": sid, "name": s.get("Share_Name"),
-                  "detail": f"{s.get('Share_Name')} — ISIN non renseigné"} for sid, s in m.shares.iterrows() if not _str(s.get("ISIN_Code"))]
+                  "detail": f"{s.get('Share_Name')} — ISIN non renseigné"} for sid, s in share_rows if not _str(s.get("ISIN_Code"))]
         add("isin", "Parts sans code ISIN", "Données", "warning", "Parts du référentiel dont le code ISIN est vide.", items)
 
         # 10. Qualité des chargements du Lakehouse
@@ -738,8 +794,10 @@ class Service:
         m, end = self.m, self.end(d)
         df = self._fund_table(d)
         entries: list[dict] = []
-        for _, r in df.iterrows():
-            f = m.funds.loc[r["id"]]
+        codes = dict(rows_of(m.funds, ("Product_Global_ID", "LEI_Code", "AMF_Code", "CSSF_Code", "AIM_Portfolio_Code", "Umbrella_Name")))
+        share_codes = dict(rows_of(m.shares, ("Bloomberg_Ticker", "Wkn_Number", "Sedol_Code", "Code_RIC", "Swiss_Valor_Number")))
+        for _, r in rows_of(df, df.columns):
+            f = codes[r["id"]]
             terms = [_str(f.get(c)) for c in ("Product_Global_ID", "LEI_Code", "AMF_Code", "CSSF_Code", "AIM_Portfolio_Code", "Umbrella_Name")]
             entries.append({"t": "fonds", "id": r["id"], "label": r["name"], "family": r["family"], "aum": _num(r["aum"]),
                             "sub": _join(r.get("range"), r.get("manager"), L.sfdr_short(_str(r.get("sfdr")))),
@@ -751,8 +809,8 @@ class Service:
             fid = m.link.at[jp, "fund_id"]
             sid = m.link.at[jp, "pi_shareid"]
             extra = []
-            if isinstance(sid, str) and sid in m.shares.index:
-                s = m.shares.loc[sid]
+            if isinstance(sid, str) and sid in share_codes:
+                s = share_codes[sid]
                 extra = [_str(s.get(c)) for c in ("Bloomberg_Ticker", "Wkn_Number", "Sedol_Code", "Code_RIC", "Swiss_Valor_Number")]
             entries.append({"t": "part", "id": b["id"], "label": b["name"], "family": m.funds.at[fid, "family"] if fid in m.funds.index else "nc",
                             "aum": b["aum"], "sub": _join(b["isin"], b["ccy"], b["distribution"]),
@@ -787,6 +845,13 @@ class Service:
             entries.append({"t": "ligne", "id": r["instr_key"], "label": r["name"], "sub": f"Détenue par {r['n_funds']} fonds",
                             "terms": [x for x in [_str(r["isin"])] if x], "aum": _num(r["amount_eur"])})
         return {"date": end.date().isoformat(), "entries": entries}
+
+
+def memo_nav_pos(m: Model) -> dict:
+    """Positions (début, fin) des lignes de chaque part dans aum_raw (voir analytics.nav_rows)."""
+    if "nav_pos" not in memo(m) and len(m.link):
+        A.nav_rows(m, m.link.index[0])
+    return memo(m).get("nav_pos", {})
 
 
 def _fr_date(v: Any) -> str:

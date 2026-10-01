@@ -23,6 +23,8 @@ class Settings:
     # Délais (secondes) : connexion (fenêtre Microsoft comprise) et exécution d'une requête.
     fabric_login_timeout: int = 120
     fabric_query_timeout: int = 600
+    # Données fictives démultipliées (essais de volumétrie : 17 ≈ 75 millions de cellules lues), 1 par défaut
+    mock_scale: int = 1
     # Repérage des fonds Rothschild Martin Maurel (« RMM ») : aucune colonne dédiée dans le référentiel,
     # on cherche ce motif dans ces colonnes produit. À valider sur les données réelles.
     rmm_pattern: str = r"\bRMM\b|martin\s*maurel"
@@ -51,6 +53,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         fabric_client=(get("FABRIC_CLIENT", "mssql-python") or "mssql-python").strip().lower(),
         fabric_login_timeout=_int(e, "FABRIC_LOGIN_TIMEOUT", 120),
         fabric_query_timeout=_int(e, "FABRIC_QUERY_TIMEOUT", 600),
+        mock_scale=max(1, _int(e, "APP_MOCK_SCALE", 1)),
         **({"rmm_pattern": e["APP_RMM_PATTERN"]} if get("APP_RMM_PATTERN") else {}),
         **({"rmm_columns": tuple(c.strip() for c in e["APP_RMM_COLUMNS"].split(",") if c.strip())} if get("APP_RMM_COLUMNS") else {}),
     )

@@ -12,11 +12,13 @@ import logging
 import sys
 import time
 import warnings
+from datetime import date
 
 from .config import fabric_config_problems, load_settings
 from .data import schema as S
 from .data.fabric import FabricError, FabricQueryError, FabricSource
-from .domain.model import AUM_COLS
+from .data import aum as AQ
+from .domain.model import AUM_COLS, HOLDINGS_COLS
 
 
 def _p(ok: bool | None, msg: str) -> None:
@@ -53,6 +55,11 @@ def main(argv: list[str] | None = None) -> int:
         _p(False, f"Connecteur {s.fabric_client} absent de cet environnement Python ({sys.executable})")
         return 3
     _p(True, f"Connecteur {s.fabric_client} présent" + ("" if mod == "pyodbc" else " (aucun pilote ODBC requis)"))
+    if mod == "mssql_python":
+        if importlib.util.find_spec("pyarrow") is not None:
+            _p(True, "pyarrow présent : lecture des grandes tables en colonnes")
+        else:
+            _p(None, "pyarrow absent : lecture par lots de lignes, plus lente (python -m pip install -r backend/requirements-arrow.txt)")
 
     src = FabricSource(s)
     print("Connexion à Fabric : une fenêtre Microsoft peut s'ouvrir…", flush=True)
@@ -71,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     tables = [(S.PRODUCT, S.columns(S.PRODUCT)), (S.SHARE, S.columns(S.SHARE)), (S.COUNTRY, S.columns(S.COUNTRY)),
-              (S.AUM, AUM_COLS), (S.HOLDINGS, S.columns(S.HOLDINGS)), (S.DQ, S.columns(S.DQ))]
+              (S.AUM, AUM_COLS), (S.HOLDINGS, HOLDINGS_COLS), (S.DQ, S.columns(S.DQ))]
     bad = 0
     for name, cols in tables:
         t = time.perf_counter()
@@ -84,6 +91,14 @@ def main(argv: list[str] | None = None) -> int:
         except FabricError as e:
             bad += 1
             _p(False, f"Table {name} : {e.message}")
+    if not bad:
+        # Requête compacte des encours (fonctions de fenêtre) : exécutée sans renvoyer de ligne
+        t = time.perf_counter()
+        try:
+            src.query(AQ.attributes_sql(probe=True), [date(2000, 1, 1)], table=S.AUM)
+            _p(True, f"Lecture compacte des encours acceptée par Fabric ({time.perf_counter() - t:.1f} s)")
+        except FabricError as e:
+            _p(None, f"Lecture compacte des encours refusée ({e.code}) : l'application lira les libellés ligne à ligne (plus lent)")
     src.close()
     if bad:
         print("Des tables ou colonnes manquent : transmettez les noms ci-dessus pour adapter l'application.")

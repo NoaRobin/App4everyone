@@ -738,3 +738,40 @@ class MockSource:
             col, value = since
             df = df[pd.to_datetime(df[col]) >= pd.Timestamp(value)]
         return df[list(columns)].reset_index(drop=True)
+
+
+# Colonnes d'identifiants (et de libellés) suffixées à chaque copie : chaque copie est un jeu de fonds distinct.
+_SCALED_IDS = {
+    S.PRODUCT: ("Id", "pi_productid", "Product_Name"),
+    S.SHARE: ("Id", "pi_shareid", "ProductID", "ISIN_Code", "Share_Name"),
+    S.COUNTRY: ("Id", "pi_countryofregistrationid", "pi_shareid"),
+    S.AUM: ("ID_JUMP_FONDS", "ID_PI_FONDS", "ID_JUMP_PART", "ID_PI_PART", "CODE_ISIN_PART", "NOM_PART"),
+    S.HOLDINGS: ("ID_JUMP_FONDS", "ID_PI_FONDS", "NOM_FONDS"),
+}
+
+
+class ScaledMockSource(MockSource):
+    """Données fictives démultipliées (`factor` copies du jeu de fonds) pour éprouver l'application à l'échelle réelle.
+
+    Les instruments détenus restent communs aux copies (lignes partagées entre fonds, comme en réalité).
+    factor=17 ≈ 3 millions de lignes d'encours et ≈ 75 millions de cellules lues.
+    """
+
+    def __init__(self, factor: int = 17):
+        super().__init__()
+        self.factor = max(1, int(factor))
+
+    def _full(self, name: str) -> pd.DataFrame:
+        if name not in self._cache:
+            base = super()._full(name)
+            ids = _SCALED_IDS.get(name)
+            if ids and self.factor > 1:
+                parts = [base]
+                for k in range(1, self.factor):
+                    c = base.copy()
+                    for col in ids:
+                        s = c[col].astype(object)
+                        c[col] = s.where(s.isna(), s.astype(str) + f" ~{k}")
+                    parts.append(c)
+                self._cache[name] = pd.concat(parts, ignore_index=True)
+        return self._cache[name]

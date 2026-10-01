@@ -83,6 +83,10 @@ def return_between(v1: Any, v0: Any) -> float | None:
     return None if r is None else r - 1.0
 
 
+# Types (pandas.api.types.infer_dtype) convertibles en bloc sans risque : aucun booléen possible.
+_VECTOR_KINDS = {"empty", "floating", "integer", "mixed-integer-float", "decimal", "string"}
+
+
 def _is_bool(x: Any) -> bool:
     return isinstance(x, (bool, np.bool_))
 
@@ -93,15 +97,22 @@ def numeric_series(series: pd.Series, name: str | None = None) -> pd.Series:
     ±inf deviennent NaN. Les booléens ne sont pas des montants : NaN. Si `name` est fourni, le nombre de valeurs
     renseignées mais écartées (non numériques ou infinies) est journalisé — jamais les valeurs elles-mêmes.
     """
-    if series.dtype == bool:
+    if pd.api.types.is_bool_dtype(series.dtype):
         out = pd.Series(np.nan, index=series.index, dtype="float64")
-    elif pd.api.types.is_numeric_dtype(series.dtype) and not pd.api.types.is_bool_dtype(series.dtype):
-        out = series.astype("float64")
+    elif pd.api.types.is_numeric_dtype(series.dtype):
+        out = series if series.dtype == np.float64 else series.astype("float64")
     else:
         obj = series.astype(object)
-        obj = obj.map(lambda x: np.nan if _is_bool(x) else (float(x) if isinstance(x, Decimal) and x.is_finite()
-                                                             else (np.nan if isinstance(x, Decimal) else x)))
-        out = pd.to_numeric(obj, errors="coerce").astype("float64")
+        kind = pd.api.types.infer_dtype(obj, skipna=True)
+        if kind in _VECTOR_KINDS:
+            # Cas courant (Decimal de mssql-python, nombres, chaînes numériques) : conversion vectorisée.
+            # Decimal NaN/Infinity deviennent NaN/±inf, ramenés à NaN ci-dessous.
+            out = pd.to_numeric(obj, errors="coerce").astype("float64")
+        else:
+            # Mélange avec des booléens ou des objets inattendus : examen valeur par valeur
+            obj = obj.map(lambda x: np.nan if _is_bool(x) else (float(x) if isinstance(x, Decimal) and x.is_finite()
+                                                                 else (np.nan if isinstance(x, Decimal) else x)))
+            out = pd.to_numeric(obj, errors="coerce").astype("float64")
     inf = np.isinf(out.to_numpy())
     if inf.any():
         out = out.mask(inf)
