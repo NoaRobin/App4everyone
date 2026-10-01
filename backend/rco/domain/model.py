@@ -23,6 +23,7 @@ from ..data import aum as AQ
 from ..data import schema as S
 from . import labels as L
 from . import ids as IDS
+from . import linking as LK
 from .numeric import numeric_series, safe_float
 
 log = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ AUM_COLS = AQ.AUM_READ_COLS
 # Colonnes des inventaires utilisées par l'application (les autres ne sont pas lues)
 HOLDINGS_COLS = ["ID_JUMP_FONDS", "ID_PI_FONDS", "NOM_FONDS", "DATE_INVENTAIRE", "ID_JUMP_INSTRUMENT", "CODE_ISIN_INSTRUMENT",
                  "CODE_BLOOMBERG", "NOM_INSTRUMENT", "CODE_TYPE_INSTRUMENT", "DEVISE_INSTRUMENT", "CLASSE_ACTIF", "TYPE_HOLDING",
-                 "TYPE_DETTE", "DEVISE_FONDS", "MONTANT_DEVISE_FONDS", "EXPOSITION_DEVISE_FONDS", "POIDS_LIGNE_EXPO"]
+                 "TYPE_DETTE", "CODE_AIM_FONDS", "DEVISE_FONDS", "MONTANT_DEVISE_FONDS", "EXPOSITION_DEVISE_FONDS", "POIDS_LIGNE_EXPO"]
 
 
 def _clean(v: Any) -> Any:
@@ -68,94 +69,23 @@ def rows_of(df: pd.DataFrame, cols) -> list[tuple[Any, dict]]:
     return list(zip(df.index, df[present].astype(object).to_dict("records")))
 
 
-def link_shares(aum: pd.DataFrame, shares: pd.DataFrame, products: pd.DataFrame,
-                report: dict | None = None) -> pd.DataFrame:
-    """Une ligne par part JUMP : rattachement à la part du référentiel puis au fonds.
+def link_shares(aum: pd.DataFrame, shares: pd.DataFrame, products: pd.DataFrame, report: dict | None = None,
+                holdings: pd.DataFrame | None = None, raw_shapes: dict | None = None) -> pd.DataFrame:
+    """Une ligne par part JUMP : rattachement à la part du référentiel puis au fonds (règles : domain/linking.py).
 
     `aum` : lignes JUMP (table complète ou seulement les changements de libellés : pour chaque libellé, sa dernière
-    valeur renseignée). Les identifiants sont comparés sous forme canonique (domain/ids.py).
-
-    Part : 1. ID_PI_PART = pi_shareid ; 2. en secours, CODE_ISIN_PART = ISIN_Code, seulement si cet ISIN désigne une
-    seule part du référentiel, une seule part JUMP à rattacher, et une part que l'identifiant n'a pas déjà rattachée.
-    Fonds : 1. ProductID de la part (fonds actif du référentiel) ; 2. ID_PI_FONDS de JUMP ; 3. à défaut, le fonds auquel
-    les autres parts du même fonds JUMP sont rattachées (s'il est unique). Jamais de rapprochement sur le nom.
-    Colonnes : ID_JUMP_PART, ID_JUMP_FONDS, NOM_PART, CODE_ISIN_PART, pi_shareid, link (id|isin|none), fund_id,
-    fund_link (product_id|pi_fonds|jump_fund|none), fund_linked. `report` reçoit les compteurs de rattachement.
+    valeur renseignée). Colonnes : ID_JUMP_PART, ID_JUMP_FONDS, NOM_PART, CODE_ISIN_PART, pi_shareid,
+    link (id|isin|none), fund_id, fund_link, fund_linked, part_reason, fund_reason. `report` reçoit le diagnostic.
     """
     last = AQ.latest_attributes(aum)
     for c in ("ID_JUMP_FONDS", "ID_PI_FONDS", "ID_PI_PART", "CODE_ISIN_PART", "NOM_PART"):
         if c not in last:
             last[c] = None
-    last = last[["ID_JUMP_PART", "ID_JUMP_FONDS", "ID_PI_FONDS", "ID_PI_PART", "CODE_ISIN_PART", "NOM_PART"]].copy()
-    prod_ids = IDS.clean_ids(products["pi_productid"])
-    sh = pd.DataFrame({"sid": IDS.clean_ids(shares["pi_shareid"]), "isin": IDS.isins(shares["ISIN_Code"]),
-                       "pid": IDS.align(shares["ProductID"], prod_ids) if "ProductID" in shares else None}).dropna(subset=["sid"])
-    sh = sh.drop_duplicates("sid")
-    share_ids = set(sh["sid"])
-    product_ids = set(prod_ids.dropna())
-    # Identifiants JUMP réécrits sous la forme exacte du référentiel (comparaison insensible à la casse, aux espaces, au type)
-    pi_part = IDS.align(last["ID_PI_PART"], sh["sid"])
-    pi_fund = IDS.align(last["ID_PI_FONDS"], prod_ids)
-    j_isin = IDS.isins(last["CODE_ISIN_PART"])
-
-    by_id = pi_part.where(pi_part.isin(share_ids))
-    # Secours ISIN : uniquement sans ambiguïté, d'un côté comme de l'autre
-    ref_counts = sh["isin"].dropna().value_counts()
-    ref_unique = sh.dropna(subset=["isin"]).loc[lambda d: d["isin"].map(ref_counts) == 1].set_index("isin")["sid"]
-    need = by_id.isna() & j_isin.notna()
-    jump_counts = j_isin[need].value_counts()
-    claimed = set(by_id.dropna())
-    cand = j_isin.map(ref_unique)
-    ok_isin = need & cand.notna() & j_isin.map(jump_counts).eq(1) & ~cand.isin(claimed)
-    by_isin = cand.where(ok_isin)
-    last["pi_shareid"] = by_id.fillna(by_isin).astype(object).where(lambda x: x.notna(), None)
-    last["link"] = np.where(by_id.notna(), "id", np.where(by_isin.notna(), "isin", "none"))
-
-    share_product = sh.set_index("sid")["pid"]
-    via_share = last["pi_shareid"].map(share_product)
-    via_share = via_share.where(via_share.isin(product_ids))
-    via_jump = pi_fund.where(pi_fund.isin(product_ids))
-    fund = via_share.fillna(via_jump)
-    method = np.where(via_share.notna(), "product_id", np.where(via_jump.notna(), "pi_fonds", "none")).astype(object)
-    # Même fonds JUMP : une part non rattachée suit les autres parts du fonds si elles désignent un seul produit
-    jf = IDS.jump_ids(last["ID_JUMP_FONDS"])
-    resolved = pd.DataFrame({"jf": jf, "fund": fund}).dropna()
-    per_jf = resolved.groupby("jf")["fund"].agg(lambda x: sorted(set(x)))
-    single = per_jf[per_jf.map(len) == 1].map(lambda x: x[0])
-    sibling = jf.map(single).where(fund.isna())
-    fund = fund.fillna(sibling)
-    method = np.where((method == "none") & sibling.notna(), "jump_fund", method)
-    last["fund_link"] = method
-    last["fund_linked"] = fund.notna()
-    fallback = "J:" + jf.fillna("part-" + last["ID_JUMP_PART"].astype(str)).astype(str)
-    last["fund_id"] = fund.astype(object).where(fund.notna(), fallback)
-    last["CODE_ISIN_PART"] = j_isin.where(j_isin.notna(), last["CODE_ISIN_PART"])
-    last["ID_JUMP_FONDS"] = jf
-
+    last = last[["ID_JUMP_PART", "ID_JUMP_FONDS", "ID_PI_FONDS", "ID_PI_PART", "CODE_ISIN_PART", "NOM_PART"]]
+    link, rep = LK.link(last, shares, products, holdings=holdings, raw_shapes=raw_shapes)
     if report is not None:
-        report.update(_link_report(last, sh, ref_counts, j_isin, need, jump_counts, cand, claimed, per_jf, product_ids))
-    return last.drop(columns=["ID_PI_PART", "ID_PI_FONDS"])
-
-
-def _link_report(last, sh, ref_counts, j_isin, need, jump_counts, cand, claimed, per_jf, product_ids) -> dict:
-    """Compteurs de rattachement (aucune donnée métier hormis les ISIN ambigus, affichés dans les contrôles)."""
-    parts = {"total": int(len(last)), "by_pi_shareid": int((last["link"] == "id").sum()),
-             "by_isin": int((last["link"] == "isin").sum()), "unlinked": int((last["link"] == "none").sum())}
-    # Niveau fonds JUMP : meilleure méthode parmi ses parts
-    rank = {"product_id": 0, "pi_fonds": 1, "jump_fund": 2, "none": 3}
-    jf = last["ID_JUMP_FONDS"].fillna("part-" + last["ID_JUMP_PART"].astype(str))
-    best = pd.Series(last["fund_link"].map(rank).to_numpy(), index=jf.to_numpy()).groupby(level=0).min()
-    funds = {"total": int(len(best)), "by_product_id": int((best == 0).sum()), "by_id_pi_fonds": int((best == 1).sum()),
-             "unlinked": int((best == 3).sum()),
-             "split_across_products": int((per_jf.map(len) > 1).sum())}
-    amb_ref = sorted(ref_counts[ref_counts > 1].index)
-    amb_jump = sorted(jump_counts[jump_counts > 1].index)
-    blocked = sorted(set(j_isin[need & cand.isin(claimed)].dropna()))
-    ambiguous = sorted(set(amb_ref) & set(j_isin.dropna())) + [x for x in amb_jump if x not in amb_ref] + \
-        [x for x in blocked if x not in amb_ref and x not in amb_jump]
-    return {"parts": parts, "funds": funds, "ambiguous_isins": ambiguous,
-            "ambiguous_isins_in_referential": len(amb_ref), "parts_without_product": int(sh["pid"].isna().sum()) if "pid" in sh else None,
-            "products_active": len(product_ids)}
+        report.update(rep)
+    return link
 
 
 def find_duplicate_funds(funds: pd.DataFrame, fund_aum: pd.DataFrame, end) -> list[dict]:
@@ -364,9 +294,16 @@ def assemble(ref: date, products: pd.DataFrame, shares: pd.DataFrame, countries:
     """Assemble le modèle. `aum` : table JUMP complète, ou seulement ses faits si `aum_attrs` (changements de libellés)
     est fourni (lecture compacte, voir data/aum.py)."""
     # Identifiants sous forme canonique avant toute jointure (types, espaces, casse, valeurs vides : voir domain/ids.py)
+    # Audit des formats bruts (formes et comptes seulement, jamais les valeurs)
+    raw_shapes = {f"{t}.{c}": IDS.shapes(df[c]) for t, df, cols in (
+        ("PI_OUT_Share", shares, ("pi_shareid", "ProductID", "ISIN_Code")), ("pi_out_product_active", products, ("pi_productid",)),
+        ("JUMP", aum_attrs if aum_attrs is not None else aum, ("ID_JUMP_FONDS",))) for c in cols if df is not None and c in df}
+    n_products, n_shares = len(products), len(shares)
     products = products.copy()
     products["pi_productid"] = IDS.clean_ids(products["pi_productid"])
-    products = products.dropna(subset=["pi_productid"]).drop_duplicates("pi_productid")
+    # Une ligne par identifiant : l'enregistrement actif et le plus complet, pas le premier venu
+    products = products.dropna(subset=["pi_productid"])
+    products = LK.best_rows(products, "pi_productid", [LK.is_active(products)])
     shares = shares.copy()
     shares["pi_shareid"] = IDS.clean_ids(shares["pi_shareid"])
     if "ProductID" in shares:
@@ -374,7 +311,13 @@ def assemble(ref: date, products: pd.DataFrame, shares: pd.DataFrame, countries:
     if "ISIN_Code" in shares:
         clean = IDS.isins(shares["ISIN_Code"])
         shares["ISIN_Code"] = clean.where(clean.notna(), shares["ISIN_Code"].astype(object).where(shares["ISIN_Code"].notna(), None))
-    shares = shares.dropna(subset=["pi_shareid"]).drop_duplicates("pi_shareid")
+    shares = shares.dropna(subset=["pi_shareid"])
+    prefer = [LK.is_active(shares)]
+    if "ProductID" in shares:
+        prefer.append(shares["ProductID"].isin(set(products["pi_productid"])))
+    if "ISIN_Code" in shares:
+        prefer.append(shares["ISIN_Code"].notna())
+    shares = LK.best_rows(shares, "pi_shareid", prefer)
     if countries is not None and "pi_shareid" in countries:
         countries = countries.copy()
         countries["pi_shareid"] = IDS.align(countries["pi_shareid"], shares["pi_shareid"])
@@ -404,13 +347,17 @@ def assemble(ref: date, products: pd.DataFrame, shares: pd.DataFrame, countries:
     aum = AQ.join_attributes(aum, attrs, AQ.ROW_ATTRS)
 
     link_report: dict = {}
-    link = link_shares(attrs, shares, products, report=link_report)
+    link = link_shares(attrs, shares, products, report=link_report, holdings=holdings, raw_shapes=raw_shapes)
+    link_report["referential_duplicates"] = {"products": int(n_products - len(products)), "shares": int(n_shares - len(shares))}
     log.info("Rattachement des parts : %(total)d parts, %(by_pi_shareid)d par pi_shareid, %(by_isin)d par ISIN, "
              "%(unlinked)d non rattachées", link_report["parts"])
     log.info("Rattachement des fonds JUMP : %(total)d fonds, %(by_product_id)d par ProductID, %(by_id_pi_fonds)d par "
-             "ID_PI_FONDS, %(unlinked)d non rattachés", link_report["funds"])
-    if link_report["ambiguous_isins"]:
-        log.warning("Rattachement : %d ISIN ambigu(s), secours par ISIN écarté pour ceux-ci", len(link_report["ambiguous_isins"]))
+             "ID_PI_FONDS, %(by_propagation)d par propagation, %(unlinked)d non rattachés", link_report["funds"])
+    for cause, k in link_report["ambiguous_isin_causes"].items():
+        log.warning("Rattachement : %d ISIN ambigu(s) — %s", k, cause)
+    if link_report["fund_reasons"]:
+        log.info("Rattachement : parts sans fonds par raison technique : %s",
+                 ", ".join(f"{r} = {k}" for r, k in link_report["fund_reasons"].items()))
 
     # Calendrier de calcul : jours ouvrés entre la première et la dernière VL
     dates = pd.bdate_range(aum["DATE_VL"].min(), aum["DATE_VL"].max())

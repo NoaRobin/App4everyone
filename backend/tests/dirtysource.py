@@ -55,3 +55,54 @@ class DirtySource(MockSource):
             base.loc[orphan, ["ID_PI_PART", "CODE_ISIN_PART", "ID_PI_FONDS"]] = None
         self._dirty[name] = base
         return base
+
+
+class HardSource(DirtySource):
+    """Écarts plus sévères, chacun plausible sur les données réelles (cas « R-co Valor C EUR » non rattaché) ; sur six
+    fonds JUMP, toutes les parts sont touchées à la fois, si bien qu'aucune part sœur ne peut les rattraper :
+    - fiches part en double (rechargement), la première sans ProductID ;
+    - anciennes fiches inactives réutilisant l'ISIN des parts actives (autre identifiant, autre ProductID) ;
+    - parts sans ID_PI_PART, fonds sans ID_PI_FONDS : seuls l'ISIN et les inventaires peuvent les rattacher ;
+    - sur l'un d'eux, ISIN absents aussi : seuls les inventaires (ID_PI_FONDS du même fonds JUMP) le rattachent ;
+    - ailleurs, identifiants de part entourés d'espaces insécables et de caractères invisibles.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._hard: dict[str, pd.DataFrame] = {}
+
+    def _full(self, name: str) -> pd.DataFrame:
+        if name in self._hard:
+            return self._hard[name]
+        from rco.domain import ids as IDS
+        aum0 = DirtySource._full(self, S.AUM)
+        targets = self.targets()
+        if name == S.SHARE:
+            base = DirtySource._full(self, name).copy()
+            pids = set(IDS.ids(aum0.loc[aum0["ID_JUMP_FONDS"].isin(targets), "ID_PI_FONDS"]).dropna())
+            hit = IDS.ids(base["ProductID"]).isin(pids) | IDS.ids(base["pi_shareid"]).isin(
+                set(IDS.ids(aum0.loc[aum0["ID_JUMP_FONDS"].isin(targets), "ID_PI_PART"]).dropna()))
+            first = base[hit].assign(ProductID=None)                                 # doublons sans ProductID, en tête
+            old = base[hit].copy()                                                   # anciennes fiches inactives, même ISIN
+            old["pi_shareid"] = old["pi_shareid"].astype(str) + "-old"
+            old["Id"] = old["pi_shareid"]
+            old["ProductID"] = base.loc[~hit, "ProductID"].dropna().iloc[0]
+            old[["statecodename", "statuscodename"]] = "Inactive"
+            base = pd.concat([first, base, old], ignore_index=True)
+        elif name == S.AUM:
+            base = aum0.copy()
+            t = base["ID_JUMP_FONDS"].isin(targets)
+            base.loc[t, ["ID_PI_PART", "ID_PI_FONDS"]] = None
+            base.loc[base["ID_JUMP_FONDS"] == targets[0], "CODE_ISIN_PART"] = None
+            parts = list(pd.unique(base.loc[~t, "ID_JUMP_PART"]))
+            nb = base["ID_JUMP_PART"].isin(parts[5::9]) & base["ID_PI_PART"].notna()
+            base.loc[nb, "ID_PI_PART"] = "\u00a0" + base.loc[nb, "ID_PI_PART"].astype(str) + "\u200b"
+        else:
+            base = DirtySource._full(self, name)
+        self._hard[name] = base
+        return base
+
+    def targets(self) -> list:
+        held = set(pd.unique(DirtySource._full(self, S.HOLDINGS)["ID_JUMP_FONDS"].dropna()))
+        aum0 = DirtySource._full(self, S.AUM)
+        return [f for f in sorted(pd.unique(aum0["ID_JUMP_FONDS"].dropna())) if f in held][2:8]

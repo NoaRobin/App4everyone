@@ -83,17 +83,77 @@ def main(argv: list[str] | None = None) -> int:
     for label, dt in timings:
         print(f"  vue {label:<22s}: {dt:6.1f} s")
     print(f"Prêt en                     : {total:6.1f} s")
-    rep = svc.links()
-    p, f = rep["parts"], rep["funds"]
-    print(f"Parts JUMP                  : {p['total']} · {p['by_pi_shareid']} par pi_shareid · {p['by_isin']} par ISIN · {p['unlinked']} non rattachées")
-    print(f"Fonds JUMP                  : {f['total']} · {f['by_product_id']} par ProductID · {f['by_id_pi_fonds']} par ID_PI_FONDS · {f['unlinked']} non rattachés")
-    print(f"ISIN ambigus                : {len(rep['ambiguous_isins'])} · doublons de fonds restants : {len(rep['duplicates'])} · fonds JUMP seuls : {rep['funds_jump_only']}")
+    print_links(svc.links())
     mem = peak_memory_mb()
     print(f"Mémoire maximale            : {mem:,.0f} Mo".replace(",", " ") if mem else "Mémoire maximale            : indisponible")
     close = getattr(src, "close", None)
     if close:
         close()
     return 0
+
+
+def print_links(rep: dict) -> None:
+    """Diagnostic du rattachement JUMP ↔ Product Info : comptes, raisons, formes d'identifiants et identifiants
+    techniques seulement (ni nom de fonds, ni montant : les encours sont donnés en part du total)."""
+    p, f = rep["parts"], rep["funds"]
+    line = lambda k, v: print(f"{k:<28s}: {v}")  # noqa: E731
+    print("\nRattachement JUMP ↔ Product Info")
+    line("Parts JUMP distinctes", f"{p['total']} · {p['by_pi_shareid']} par pi_shareid · {p['by_isin']} par ISIN unique · "
+         f"{p['unlinked']} non rattachées" + (f" (dont {p['by_alternate_share_key']} par clé alternative)" if p.get("by_alternate_share_key") else ""))
+    line("Fonds JUMP", f"{f['total']} · {f['by_product_id']} par ProductID · {f['by_id_pi_fonds']} par ID_PI_FONDS · "
+         f"{f['by_propagation']} par propagation · {f['unlinked']} non rattachés")
+    line("Fonds non rattachés", f"{f.get('unlinked_with_aum', 0)} avec encours · {f['unlinked_multi_parts']} avec plusieurs parts · "
+         f"{f['split_across_products']} fonds JUMP répartis sur plusieurs produits")
+    causes = rep.get("ambiguous_isin_causes") or {}
+    line("ISIN ambigus", f"{len(rep['ambiguous_isins'])}" + (" (" + ", ".join(f"{k} : {v}" for k, v in causes.items()) + ")" if causes else ""))
+    line("Doublons après consolidation", f"{rep.get('exact_duplicates', 0)} exacts (même identifiant) · {len(rep['duplicates'])} de même nom")
+    a = rep.get("aum") or {}
+    tot = (a.get("linked") or 0) + (a.get("unlinked") or 0)
+    if tot:
+        line("Encours", f"{100 * a['linked'] / tot:.2f} % rattachés · {100 * a['unlinked'] / tot:.2f} % non rattachés "
+             "(montants : /api/diagnostics/links)")
+    nc = rep.get("family_nc") or {}
+    line("Famille nc", f"{nc.get('referenced', 0)} fonds du référentiel · {nc.get('jump_only', 0)} fonds JUMP seuls")
+    rd = rep.get("referential_duplicates") or {}
+    line("Doublons du référentiel", f"{rd.get('shares', 0)} parts · {rd.get('products', 0)} fonds (ligne la plus fiable conservée)")
+    line("Référentiel", f"{rep.get('shares_referential')} parts · {rep.get('products_active')} fonds actifs · "
+         f"{rep.get('parts_without_product')} parts sans ProductID · {rep.get('parts_with_inactive_product')} parts d'un fonds hors référentiel actif")
+    print("  Méthodes (parts)          : " + ", ".join(f"{k} = {v}" for k, v in rep.get("methods", {}).items()))
+    for title, key in (("Raisons (parts non rattachées)", "part_reasons"), ("Raisons (parts sans fonds)", "fund_reasons")):
+        if rep.get(key):
+            print(f"  {title} :")
+            for k, v in rep[key].items():
+                print(f"    {v:>6d}  {k}")
+    print("  Jointures (renseignés · égalité brute · après normalisation) :")
+    for k, v in rep.get("joins", {}).items():
+        print(f"    {k} : " + " · ".join(f"{a} {b}" for a, b in v.items()))
+    print("  Formes des identifiants (valeurs jamais affichées) :")
+    for k, v in rep.get("shapes", {}).items():
+        print(f"    {k} : " + ", ".join(f"{a} {b}" for a, b in list(v.items())[:6]))
+    if rep.get("probes"):
+        print("  Sondes (identifiants non résolus retrouvés dans une autre colonne) :")
+        for k, v in rep["probes"].items():
+            hits = {a: b for a, b in v.items() if b and a != "renseignés"}
+            print(f"    {k} ({v['renseignés']}) : " + (", ".join(f"{a} {b}" for a, b in hits.items()) or "aucune"))
+    watch = rep.get("watch") or []
+    if watch:
+        import re as _re
+        print("  Fonds suivis (APP_LINK_WATCH ; identifiants seulement) :")
+        for w in watch:
+            pat = _re.search(r"valor|4\s*change", str(w.get("name")), _re.I)
+            tag = pat.group(0).lower().replace(" ", "") if pat else "motif"
+            missing = [k for k, ok in w["fields"].items() if not ok]
+            print(f"    [{tag}] {w['fund_id']} · {'référentiel' if w['referenced'] else 'JUMP seul'} · {w['parts']} parts · "
+                  f"parts {w['part_links']} · fonds {w['fund_links']}" + (f" · champs vides : {', '.join(missing)}" if missing else "")
+                  + (f" · raisons : {'; '.join(w['reasons'])}" if w["reasons"] else ""))
+    ex = rep.get("unlinked_funds_examples") or []
+    if ex:
+        print("  Fonds JUMP non rattachés (20 premiers, identifiants techniques) :")
+        for e in ex:
+            print(f"    {e['ID_JUMP_FONDS']} · {e['parts']} parts · " + "; ".join(f"{k} ×{v}" for k, v in e["raisons_fonds"].items()))
+            for pe in e["parts_exemples"]:
+                print(f"      part {pe['ID_JUMP_PART']} · ID_PI_PART {pe['forme_ID_PI_PART']} · ID_PI_FONDS {pe['forme_ID_PI_FONDS']}"
+                      f" · ISIN {pe['ISIN'] or '—'} · {pe['raison_part'] or 'part rattachée'}")
 
 
 if __name__ == "__main__":

@@ -84,7 +84,7 @@ def test_meme_fonds_reparti_entre_plusieurs_identifiants():
     """Une part du fonds JUMP n'a aucun identifiant exploitable : elle suit les autres parts du même fonds JUMP."""
     rows = [aum_row("F1", "P1", D, 10, 100, pi_part="S1"), aum_row("F1 ", "P2", D, 10, 100)]
     m = build(rows, [product("PR1", "Fonds Un")], [share("S1", "PR1", "FR1", "Un C")])
-    assert m.link.at["P2", "fund_id"] == "PR1" and m.link.at["P2", "fund_link"] == "jump_fund"
+    assert m.link.at["P2", "fund_id"] == "PR1" and m.link.at["P2", "fund_link"] == "propagation"
     assert list(m.funds.index) == ["PR1"] and float(m.fund_aum.loc[D, "PR1"]) == 2000
 
 

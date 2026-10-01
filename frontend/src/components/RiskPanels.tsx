@@ -45,24 +45,37 @@ export function FundsRiskControls() {
 
 type Links = {
   parts: { total: number; by_pi_shareid: number; by_isin: number; unlinked: number };
-  funds: { total: number; by_product_id: number; by_id_pi_fonds: number; unlinked: number; split_across_products?: number };
+  funds: { total: number; by_product_id: number; by_id_pi_fonds: number; by_propagation?: number; unlinked: number;
+    unlinked_with_aum?: number; unlinked_multi_parts?: number; split_across_products?: number };
   ambiguous_isins: string[]; duplicates: { name: string; funds: { id: string; referenced: boolean; aum: number | null }[] }[];
-  funds_displayed?: number; funds_jump_only?: number; parts_without_product?: number | null;
+  funds_displayed?: number; funds_jump_only?: number; parts_without_product?: number | null; exact_duplicates?: number;
+  aum?: { date: string; linked: number; unlinked: number };
+  family_nc?: { referenced: number; jump_only: number };
+  unlinked_funds?: { fund_id: string; parts: number; has_aum: boolean; reasons: string[] }[];
+  watch?: { fund_id: string; name: string | null; referenced: boolean; parts: number; has_aum: boolean;
+    fund_links: Record<string, number>; reasons: string[]; fields: Record<string, boolean> }[];
 };
+
+const FIELD_LABEL: Record<string, string> = { manager: "gérant", sfdr: "SFDR", sri: "SRI", currency: "devise", range: "gamme",
+  asset_class: "classe d'actifs", expertise: "expertise" };
+const reasonText = (r: string) => r.replace(/_/g, " ");
 
 /** Compteurs de rattachement JUMP ↔ Product Info : parts (pi_shareid, ISIN, non rattachées) et fonds. */
 function LinksSummary({ links }: { links: Links }) {
   const p = links.parts, f = links.funds;
+  const prop = f.by_propagation ?? Math.max(0, f.total - f.by_product_id - f.by_id_pi_fonds - f.unlinked);
   const bar = (rows: { k: string; v: number; cls: string }[]) => (
     <div className="lnk__bar" aria-hidden="true">{rows.map((r) => <span key={r.k} className={r.cls} style={{ flexGrow: r.v, flexBasis: 0, display: r.v ? undefined : "none" }} />)}</div>
   );
   const prow = [{ k: "id", v: p.by_pi_shareid, cls: "is-a" }, { k: "isin", v: p.by_isin, cls: "is-b" }, { k: "none", v: p.unlinked, cls: "is-c" }];
   const frow = [{ k: "pid", v: f.by_product_id, cls: "is-a" }, { k: "pif", v: f.by_id_pi_fonds, cls: "is-b" },
-    { k: "sib", v: Math.max(0, f.total - f.by_product_id - f.by_id_pi_fonds - f.unlinked), cls: "is-d" }, { k: "none", v: f.unlinked, cls: "is-c" }];
+    { k: "sib", v: prop, cls: "is-d" }, { k: "none", v: f.unlinked, cls: "is-c" }];
+  const watch = links.watch ?? [];
+  const orphans = (links.unlinked_funds ?? []).filter((u) => u.has_aum || u.parts > 1);
   return (
     <section className="section reveal lnk" aria-labelledby="h-lnk">
       <Head id="lnk" eyebrow="Qualité des données" title="Rattachement JUMP ↔ Product Info"
-        lede="Chaque part JUMP est rattachée à sa part du référentiel par son identifiant (pi_shareid), à défaut par son ISIN lorsqu'il est unique ; chaque fonds par le ProductID de ses parts, à défaut par l'ID_PI_FONDS de JUMP. Jamais sur le nom." />
+        lede="Chaque part JUMP est rattachée à sa part du référentiel par son identifiant (pi_shareid), à défaut par son ISIN lorsqu'il est unique ; chaque fonds par le ProductID de ses parts, à défaut par l'ID_PI_FONDS de JUMP, puis par les autres parts du même fonds JUMP. Jamais sur le nom." />
       <div className="lnk__grid">
         <div className="lnk__card">
           <div className="eyebrow">Parts JUMP · {p.total}</div>
@@ -79,19 +92,56 @@ function LinksSummary({ links }: { links: Links }) {
           <dl className="lnk__kv">
             <div><dt><span className="lnk__dot is-a" />Par ProductID</dt><dd className="num">{f.by_product_id}</dd></div>
             <div><dt><span className="lnk__dot is-b" />Par ID_PI_FONDS</dt><dd className="num">{f.by_id_pi_fonds}</dd></div>
+            <div><dt><span className="lnk__dot is-d" />Par propagation (même fonds JUMP)</dt><dd className="num">{prop}</dd></div>
             <div><dt><span className="lnk__dot is-c" />Non rattachés</dt><dd className="num">{f.unlinked}</dd></div>
+            {f.unlinked_with_aum != null && <div><dt>… dont avec encours</dt><dd className={`num${f.unlinked_with_aum ? " down-t" : ""}`}>{f.unlinked_with_aum}</dd></div>}
+            {f.unlinked_multi_parts != null && <div><dt>… dont avec plusieurs parts</dt><dd className="num">{f.unlinked_multi_parts}</dd></div>}
           </dl>
         </div>
         <div className="lnk__card">
           <div className="eyebrow">Après consolidation</div>
           <dl className="lnk__kv">
+            {links.aum && <div><dt>Encours rattachés</dt><dd className="num">{eur(links.aum.linked)}</dd></div>}
+            {links.aum && <div><dt>Encours non rattachés</dt><dd className={`num${links.aum.unlinked ? " down-t" : ""}`}>{eur(links.aum.unlinked)}</dd></div>}
             <div><dt>ISIN ambigus</dt><dd className="num">{links.ambiguous_isins.length}</dd></div>
-            <div><dt>Fonds en double restants</dt><dd className={`num${links.duplicates.length ? " down-t" : ""}`}>{links.duplicates.length}</dd></div>
-            <div><dt>Fonds « JUMP seul »</dt><dd className="num">{links.funds_jump_only ?? "—"}</dd></div>
+            {links.exact_duplicates != null && <div><dt>Doublons exacts</dt><dd className={`num${links.exact_duplicates ? " down-t" : ""}`}>{links.exact_duplicates}</dd></div>}
+            <div><dt>Fonds de même nom restants</dt><dd className={`num${links.duplicates.length ? " down-t" : ""}`}>{links.duplicates.length}</dd></div>
+            <div><dt>Fonds « JUMP seul » affichés (avec encours)</dt><dd className="num">{links.funds_jump_only ?? "—"}</dd></div>
+            {links.family_nc && <div><dt>Famille nc (référentiel)</dt><dd className="num">{links.family_nc.referenced}</dd></div>}
             {links.parts_without_product != null && <div><dt>Parts du référentiel sans ProductID</dt><dd className="num">{links.parts_without_product}</dd></div>}
           </dl>
         </div>
       </div>
+      {(watch.length > 0 || orphans.length > 0) && (
+        <div className="lnk__grid" style={{ marginTop: 16 }}>
+          {watch.length > 0 && <div className="lnk__card" style={{ gridColumn: orphans.length ? "span 2" : "1 / -1" }}>
+            <div className="eyebrow">Fonds suivis · {watch.length}</div>
+            <dl className="lnk__kv">
+              {watch.map((w) => {
+                const missing = Object.entries(w.fields ?? {}).filter(([, ok]) => !ok).map(([k]) => FIELD_LABEL[k] ?? k);
+                return <div key={w.fund_id}>
+                  <dt><span className={`lnk__dot ${w.referenced ? "is-a" : "is-c"}`} />
+                    {w.referenced ? <Link to={`/fonds/${encodeURIComponent(w.fund_id)}`}>{w.name ?? w.fund_id}</Link> : <span>{w.name ?? w.fund_id}</span>}
+                  </dt>
+                  <dd className="num" title={w.reasons.map(reasonText).join(" · ")}>
+                    {w.referenced ? "référentiel" : "JUMP seul"} · {plural(w.parts, "part")}
+                    {missing.length ? ` · vide : ${missing.join(", ")}` : ""}
+                  </dd>
+                </div>;
+              })}
+            </dl>
+          </div>}
+          {orphans.length > 0 && <div className="lnk__card" style={{ gridColumn: watch.length ? undefined : "1 / -1" }}>
+            <div className="eyebrow">Fonds encore non rattachés · {orphans.length}</div>
+            <dl className="lnk__kv">
+              {orphans.slice(0, 12).map((u) => <div key={u.fund_id}>
+                <dt>{u.fund_id}</dt>
+                <dd className="num" title={u.reasons.map(reasonText).join(" · ")}>{plural(u.parts, "part")}{u.has_aum ? " · encours" : ""}</dd>
+              </div>)}
+            </dl>
+          </div>}
+        </div>
+      )}
     </section>
   );
 }

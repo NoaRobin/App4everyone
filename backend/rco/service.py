@@ -14,6 +14,7 @@ from .domain import analytics as A
 from .domain import fields as F
 from .domain import holdings as H
 from .domain import labels as L
+from .domain import linking as LK
 from .domain.numeric import fmt_meur, numeric_series, safe_divide, safe_float
 from .domain.model import PERIODS, Model, _clean, find_duplicate_funds, memo, rows_of
 
@@ -831,7 +832,53 @@ class Service:
         rep["duplicates"] = find_duplicate_funds(live, m.fund_aum, end)
         rep["funds_displayed"] = int(len(live))
         rep["funds_jump_only"] = int((~live["referenced"].astype(bool)).sum())
+        # Encours à la dernière date : rattachés à un fonds du référentiel / restés « JUMP seul »
+        aum = m.fund_aum.loc[end] if len(m.fund_aum) else pd.Series(dtype=float)
+        ref = m.funds["referenced"].astype(bool)
+        jump_only = set(m.funds.index[~ref])
+        a_un = aum[aum.index.isin(jump_only)]
+        rep["aum"] = {"date": end.date().isoformat(), "linked": float(aum[~aum.index.isin(jump_only)].sum()),
+                      "unlinked": float(a_un.sum())}
+        lk = m.link
+        n_parts = lk.groupby("fund_id").size()
+        rep["funds"] = {**rep.get("funds", {}), "unlinked_with_aum": int((a_un.fillna(0) > 0).sum())}
+        # Doublons exacts : même identifiant de fonds sur plusieurs lignes de /api/funds (doit rester 0)
+        rep["exact_duplicates"] = int(m.funds.index.duplicated().sum())
+        nc = m.funds["family"].eq("nc")
+        rep["family_nc"] = {"referenced": int((nc & ref).sum()), "jump_only": int((nc & ~ref).sum())}
+        # Fonds JUMP seuls : identifiants, nombre de parts, raisons techniques (ni nom ni encours)
+        reasons = lk[~lk["fund_linked"]].groupby("fund_id")["fund_reason"].agg(lambda x: sorted(set(v for v in x if v)))
+        rep["unlinked_funds"] = sorted(
+            [{"fund_id": f, "parts": int(n_parts.get(f, 0)), "has_aum": bool((_num(aum.get(f)) or 0) > 0),
+              "reasons": reasons.get(f, [])} for f in jump_only], key=lambda x: (not x["has_aum"], -x["parts"], x["fund_id"]))
+        rep["watch"] = self._link_watch(aum)
+        rep.pop("_unlinked_jf", None)
         return rep
+
+    def _link_watch(self, aum: pd.Series) -> list[dict]:
+        """Fonds suivis (motif APP_LINK_WATCH, par défaut Valor et 4Change) : état du rattachement et champs renseignés.
+        Affiché dans l'application (où ces noms figurent déjà), jamais journalisé."""
+        m = self.m
+        pat = LK.watch_pattern()
+        lk = m.link
+        fields = {"manager": "Portfolio_Manager", "sfdr": "ESG_SFDR_Article", "sri": "Official_Risk_Scale",
+                  "currency": "Accounting_Currency", "range": "Fund_Range", "asset_class": "Asset_Class",
+                  "expertise": "Management_Expertise_Level_2"}
+        fields = {k: c for k, c in fields.items() if c in m.funds.columns}
+        out = []
+        for fid, r in rows_of(m.funds, ("name", "referenced", "family", *fields.values())):
+            name = r.get("name")
+            parts = lk[lk["fund_id"] == fid]
+            names = [n for n in parts["NOM_PART"] if isinstance(n, str)]
+            if not (isinstance(name, str) and pat.search(name)) and not any(pat.search(n) for n in names):
+                continue
+            out.append({"fund_id": fid, "name": name, "referenced": bool(r.get("referenced")), "family": r.get("family"),
+                        "parts": int(len(parts)), "has_aum": bool((_num(aum.get(fid)) or 0) > 0),
+                        "part_links": {k: int(v) for k, v in parts["link"].value_counts().items()},
+                        "fund_links": {k: int(v) for k, v in parts["fund_link"].value_counts().items()},
+                        "reasons": sorted(set(v for v in parts["fund_reason"] if isinstance(v, str))),
+                        "fields": {k: _str(r.get(c)) is not None for k, c in fields.items()}})
+        return sorted(out, key=lambda x: (x["referenced"], str(x["name"])))
 
     # ------------------------------------------------------------------ recherche
     @lru_cache(maxsize=4)
