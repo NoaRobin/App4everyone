@@ -143,7 +143,7 @@ function HeatTable({ cells, rows, cols, deskPct, classPct }: { cells: MatrixCell
   );
 }
 
-/** Mosaïque (marimekko) : largeur d'une colonne = part de l'encours du teneur ; hauteur d'un pavé = part de la classification dans le teneur. */
+/** Barres empilées par teneur de compte : longueur = part de l'encours détenue via le teneur ; segments = ses classifications de comptes. */
 function ClientMosaic({ p, comptes }: { p: Positions; comptes: Comptes | null | undefined }) {
   const ref = useRef<HTMLDivElement>(null);
   const [tip, setTip] = useState<{ t: string; label: string; pct: number; tranche: PassifTr; nat: Nature; x: number; y: number } | null>(null);
@@ -152,13 +152,13 @@ function ClientMosaic({ p, comptes }: { p: Positions; comptes: Comptes | null | 
   const cl = arr(p.by_client);
   const cols = (byTen.length ? byTen.map((t) => ({ teneur: t.teneur, pct: t.pct, tranche: t.tranche })) : [...new Set(cl.map((c) => c.teneur))].map((t) => ({ teneur: t, pct: cl.filter((c) => c.teneur === t).reduce((s, c) => s + c.pct, 0), tranche: null })))
     .filter((c) => c.pct > 0);
-  const total = cols.reduce((s, c) => s + c.pct, 0) || 1;
+  const maxCol = Math.max(...cols.map((c) => c.pct), 1);
   useEffect(() => {
     const el = ref.current;
     if (!el || prefersReducedMotion()) return;
-    const segs = el.querySelectorAll(".pa-mk__s");
-    gsap.set(segs, { scaleY: 0, transformOrigin: "50% 100%" });
-    return onVisible(el, () => gsap.to(segs, { scaleY: 1, duration: 0.9, ease: "power3.out", stagger: { each: 0.03, from: "start" }, clearProps: "transform" }));
+    const bars = el.querySelectorAll(".pa-mk__bar");
+    gsap.set(bars, { scaleX: 0, transformOrigin: "0% 50%" });
+    return onVisible(el, () => gsap.to(bars, { scaleX: 1, duration: 1.1, ease: "expo.out", stagger: 0.08, clearProps: "transform" }));
   }, [cl.length]);
   if (!cl.length) return null;
   const label = (c: string) => flags.get(c)?.label ?? (c.split("/").slice(1).join("/").trim() || c);
@@ -166,7 +166,7 @@ function ClientMosaic({ p, comptes }: { p: Positions; comptes: Comptes | null | 
     <div className="pa-sub">
       <div className="pa-sub__h">
         <h3 className="pa-sub__t">Par type de client</h3>
-        <p className="small muted">Largeur d'une colonne&nbsp;: part de l'encours détenue via le teneur de compte. Pavés&nbsp;: classifications de comptes, empilées par nature. Surface = part de l'encours.</p>
+        <p className="small muted">Une barre par teneur de compte&nbsp;: sa longueur est la part de l'encours détenue via ce teneur, ses segments les classifications de comptes, rangées par nature.</p>
       </div>
       <div className="pa-mk" ref={ref} onMouseLeave={() => setTip(null)}>
         <div className="pa-mk__plot" role="img" aria-label={`Part de l'encours par teneur et classification : ${cl.map((c) => `${label(c.classification)} (${c.teneur}) ${fp(c.pct)}`).join(", ")}`}>
@@ -175,22 +175,24 @@ function ClientMosaic({ p, comptes }: { p: Positions; comptes: Comptes | null | 
               .map((c) => ({ ...c, nat: natureOf(flags.get(c.classification) ?? { label: label(c.classification) }) }))
               .sort((a, b) => NATURE_ORDER.indexOf(a.nat) - NATURE_ORDER.indexOf(b.nat) || b.pct - a.pct);
             const sum = segs.reduce((s, c) => s + c.pct, 0) || 1;
-            const w = (col.pct / total) * 100;
+            const w = (col.pct / maxCol) * 100;
             return (
-              <div key={col.teneur} className="pa-mk__col" style={{ flexBasis: `${w}%` }}>
-                <div className="pa-mk__stack">
-                  {segs.map((s) => {
-                    const h = (s.pct / sum) * 100;
-                    const fits = w > 9 && h > 12;
-                    return (
-                      <div key={s.classification} className="pa-mk__s" style={{ height: `calc(${h}% - 2px)`, background: natureColor(s.nat) }}
-                        onMouseMove={(e) => { const b = ref.current!.getBoundingClientRect(); setTip({ t: s.teneur, label: label(s.classification), pct: s.pct, tranche: s.tranche, nat: s.nat, x: e.clientX - b.left, y: e.clientY - b.top }); }}>
-                        {fits && <span className="pa-mk__l"><span>{label(s.classification)}</span><b className="num">{fp(s.pct)}</b></span>}
-                      </div>
-                    );
-                  })}
+              <div key={col.teneur} className="pa-mk__row">
+                <div className="pa-mk__rl"><span className="pa-mk__n">{col.teneur}</span><b className="num">{fp(col.pct)}</b></div>
+                <div className="pa-mk__track">
+                  <div className="pa-mk__bar" style={{ width: `${w}%` }}>
+                    {segs.map((sg) => {
+                      const k = (sg.pct / sum) * 100;
+                      const fits = (w * k) / 100 > 13;
+                      return (
+                        <div key={sg.classification} className="pa-mk__s" style={{ flexBasis: `${k}%`, background: natureColor(sg.nat) }}
+                          onMouseMove={(e) => { const r0 = ref.current!.getBoundingClientRect(); setTip({ t: sg.teneur, label: label(sg.classification), pct: sg.pct, tranche: sg.tranche, nat: sg.nat, x: e.clientX - r0.left, y: e.clientY - r0.top }); }}>
+                          {fits && <span className="pa-mk__l"><span>{label(sg.classification)}</span><b className="num">{fp(sg.pct)}</b></span>}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="pa-mk__foot">{w > 6 ? <><span className="pa-mk__n">{col.teneur}</span><span className="num small">{fp(col.pct)}</span></> : <span className="pa-mk__n pa-mk__n--s" title={`${col.teneur} ${fp(col.pct)}`}>{col.teneur.slice(0, 3)}</span>}</div>
               </div>
             );
           })}

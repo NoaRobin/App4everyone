@@ -181,5 +181,7 @@ def test_revenus_et_comparateur_sur_le_fictif():
     assert [x["id"] for x in c["funds"]] == list(ids)
     for x in c["funds"]:
         assert x["series"][0]["d"] == c["start"] and x["series"][0]["v"] == pytest.approx(100)
+        ds = [p["d"] for p in x["series"]]
+        assert ds == sorted(set(ds)) and ds[-1] <= c["date"]
         assert x["ind"]["vol"] is None or x["ind"]["vol"] > 0
         assert x["ind"]["mdd"] is None or x["ind"]["mdd"] <= 0

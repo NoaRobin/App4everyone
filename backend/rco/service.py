@@ -130,9 +130,8 @@ class Service:
                 continue
             fid, p, idx = o["id"], o["p"], o["_idx"][o["_idx"].index >= common]
             base = float(idx.iloc[0]) if len(idx) else None
-            wk = idx.resample("W-FRI").last().dropna() if len(idx) > 260 else idx
-            if len(idx) and wk.index[-1] != idx.index[-1]:
-                wk = pd.concat([wk, idx.iloc[-1:]])
+            # Une valeur par semaine au-delà d'un an d'historique, chacune à sa date réelle (jamais après l'arrêté)
+            wk = idx.groupby(idx.index.to_period("W")).tail(1) if len(idx) > 260 else idx
             series = [{"d": t.date().isoformat(), "v": round(float(v) / base * 100, 4)} for t, v in wk.items()] if base else []
             mon = idx.resample("ME").last().pct_change().dropna()
             r_tot = float(idx.iloc[-1] / idx.iloc[0] - 1) if len(idx) > 1 else None

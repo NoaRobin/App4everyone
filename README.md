@@ -11,11 +11,10 @@ dividendes, indices, inventaires) croisé avec **Product Info** (référentiel f
 
 Le site a **deux espaces**, commutés par le sélecteur de l'en-tête :
 
-- **Accueil** (`/`) — l'histoire de la maison, racontée au défilement (GSAP) : ouverture (les cinq flèches, la devise
-  *Concordia · Integritas · Industria*), une fresque horizontale de 1744 à aujourd'hui (22 étapes datées et sourcées,
-  `frontend/public/histoire/histoire.json`), les cinq maisons sur la carte de l'Europe, Rothschild & Co Asset Management
-  aujourd'hui (chiffres publics), la maison vue par l'application, le tableau des départs (pays de commercialisation) et
-  l'entrée vers l'espace métiers.
+- **Accueil** (`/`) — **ce qui rapporte** : en trois secondes, la cité des revenus se construit (une tour par fonds, hauteur
+  = revenus de gestion annuels estimés, quatre quartiers = les familles), puis le classement des fonds qui rapportent le plus,
+  ce qui a fait bouger les revenus en un an (collecte ou marché), la répartition par famille, gamme et classe d'actifs, la
+  trajectoire mois par mois, les encours, le tableau des départs (pays, drapeaux) et l'entrée vers l'espace métiers.
 - **Espace métiers** (`/metiers` et toutes les rubriques ci-dessous) — pour aller chercher une information vite.
 
 | Rubrique | Question à laquelle elle répond |
@@ -25,8 +24,10 @@ Le site a **deux espaces**, commutés par le sélecteur de l'en-tête :
 | **Fiche fonds** | Tout sur un fonds : encours et leur décomposition (collecte / marché), performance vs indice, parts, portefeuille, ESG, distribution, caractéristiques, contrôles. |
 | **Encours** | En deux parties : **I. la ville des encours** (ville 3D, un immeuble par fonds, rejouable mois par mois, familles en surbrillance) ; **II. l'analyse** (l'équation de l'année, répartition par famille, gamme, classe d'actifs, expertise, gérant, SFDR, SRI, domicile, devise, type de part…). |
 | **Sélection** | Toute combinaison de critères, avec agrégat en tête et détail en dessous, exportable. |
-| **Portefeuilles** | Ce que nous détenons (anneaux par classe d'actifs et par devise, mosaïque des 40 premières positions, lignes les plus partagées), et quels fonds détiennent une ligne donnée. |
-| **Distribution** | Où nos fonds sont commercialisés : le parcours d'une autorisation en Sankey 3D **clientèle → pays → famille de gestion**, un globe 3D interactif (rotation, survol, clic pour centrer un pays, filtre par clientèle, arcs depuis le pays de domiciliation), frise de l'ouverture des pays année après année, carte en tuiles et classement, plateformes ; par pays, les fonds et parts autorisés. Un interrupteur retire les fonds **Rothschild Martin Maurel (RMM)** de toute la rubrique (chiffres, visuels, pays), et reste appliqué d'une page à l'autre (`?rmm=exclure`). |
+| **Portefeuilles** | Ce que nous détenons (anneaux par classe d'actifs et par devise, ruban et classement des premières positions, lignes les plus partagées), et quels fonds détiennent une ligne donnée. |
+| **Distribution** | Où nos fonds sont commercialisés : le parcours d'une autorisation en Sankey 3D **clientèle → pays → famille de gestion**, un globe 3D interactif (rotation, survol, clic pour centrer un pays, filtre par clientèle, arcs depuis le pays de domiciliation), frise de l'ouverture des pays année après année, tableau des départs (drapeaux, palettes), teneurs de compte du passif, plateformes ; par pays, les fonds et parts autorisés. Un interrupteur retire les fonds **Rothschild Martin Maurel (RMM)** de toute la rubrique (chiffres, visuels, pays), et reste appliqué d'une page à l'autre (`?rmm=exclure`). |
+| **Passif** | Qui détient nos fonds : carte 3D du modèle (clients → comptes → positions / transactions → fonds), teneurs de compte et classifications, la photo de l'encours (matrice 3D desk × classe d'actifs, par type de client, par fonds), soixante jours d'opérations (souscriptions, rachats, transferts, après cut-off, par desk), et la lecture des tables sources. Uniquement des parts et des tranches, jamais un montant ni un flux net. |
+| **Comparateur** | Jusqu'à six fonds sur une même base 100 en 3D (vue de face en 2D), tableau d'indicateurs (performances, volatilité, perte maximale, ratios, mois en hausse, encours, collecte, revenus, frais, SRI), podium 3D par indicateur et carte risque / rendement ; sélection dans l'adresse. |
 
 La recherche universelle est accessible partout (`Ctrl K` / `⌘ K` ou `/`). Elle comprend les combinaisons
 (« article 9 italie », « encours fixed income », « fonds de Claire Vasseur ») et répond directement : nombre de fonds et encours.
@@ -126,19 +127,38 @@ numériques lus en nombre (`12345.0`) ou en texte, valeurs vides (`""`, `NULL`, 
 
 1. Part : `ID_PI_PART` = `pi_shareid` ; à défaut `CODE_ISIN_PART` = `ISIN_Code`, **seulement si l'ISIN est unique** (une seule
    part du référentiel, une seule part JUMP à rattacher, part non déjà rattachée par son identifiant).
-2. Fonds : `ProductID` de la part (fonds actif) ; à défaut `ID_PI_FONDS` de JUMP ; à défaut le fonds auquel sont rattachées les
-   autres parts du **même fonds JUMP** (s'il est unique). **Jamais de rapprochement sur le nom** : deux fonds de même nom
+2. Fonds : `ProductID` de la part (fonds actif) ; à défaut `ID_PI_FONDS` de JUMP (encours, puis inventaires du même fonds
+   JUMP) ; à défaut `ID_JUMP_FONDS` égal au code portefeuille du référentiel (`Fund_Administrator_Portfolio_Code`,
+   `AIM_Portfolio_Code`), s'il est unique ; à défaut le fonds auquel sont rattachées les autres parts du **même fonds JUMP**.
+   Les clés techniques alternatives (Id, Share_ID_Global, BOne_Share_ID, FIC_Code, Product_Global_ID) ne servent que si elles
+   désignent un seul enregistrement et ne sont contredites par aucun autre identifiant (ISIN, ID_PI_FONDS). **Jamais de rapprochement sur le nom** : deux fonds de même nom
    restent deux lignes, signalées dans le contrôle « Fonds en double après consolidation ».
 
 Compteurs (parts par pi_shareid / par ISIN / non rattachées ; fonds par ProductID / par ID_PI_FONDS / non rattachés ; ISIN
-ambigus ; doublons restants) : rubrique Fonds → Contrôles, `GET /api/diagnostics/links`, et `python run.py --fabric --bench`.
+ambigus ; doublons restants ; **couverture du référentiel**) : rubrique Fonds → Contrôles, `GET /api/diagnostics/links`, et
+`python run.py --fabric --bench`. La lecture tranche entre deux cas : si les fonds actifs du référentiel reçoivent leurs parts
+JUMP, les fonds « JUMP seuls » restants sont des portefeuilles hors du référentiel des fonds ouverts (mandats, fonds dédiés,
+fonds liquidés) ; sinon, les identifiants ne se rejoignent pas (formes, sondes et raisons techniques détaillées).
 
-### Photos de l'Accueil
+### Revenus de gestion estimés (Accueil, fiche fonds, comparateur)
 
-La fresque affiche une planche gravée lorsqu'aucune photographie n'est fournie. Pour ajouter des photos (droits vérifiés,
-par exemple Wikimedia Commons), déposez les fichiers dans `frontend/dist/histoire/` (et `frontend/public/histoire/` pour
-qu'ils survivent à une recompilation), puis renseignez `"image": "nom.jpg"` dans l'étape concernée de `histoire.json` et la
-légende, l'auteur et la licence dans `"images"`. Aucune recompilation ni Node.js n'est nécessaire.
+Revenu annuel d'une part = encours en euros × taux de frais de gestion financière : `Actual_Financial_Management_Fees` de la
+part, à défaut `Max_Financial_Management_Fees`, puis les frais réels ou maximum du fonds. Une part sans taux n'est pas
+valorisée (sa part d'encours est signalée). Montants bruts, avant rétrocessions ; une estimation nette des rétrocessions
+standard (`Standard_Trailer_Fees_Holdings`, en % des frais) est donnée lorsqu'elle est renseignée. Une colonne de taux
+exprimée en fraction (0,015) est détectée et convertie. `GET /api/revenue`.
+
+### Passif (tables `compte`, `position`, `transaction`)
+
+Tables du Lakehouse aux colonnes génériques `_c0…_cN` (texte). La correspondance de `compte` est connue ; pour `position` et
+`transaction`, le rôle de chaque colonne est reconnu automatiquement (vocabulaires métier, formes ISIN, dates, nombres,
+recouvrement avec les identifiants de comptes) et affiché dans la page, avec un niveau de confiance ; il s'impose au besoin
+par `APP_PASSIF_MAP_POSITION` / `APP_PASSIF_MAP_TRANSACTION` (voir `.env.example`). Tout est agrégé dans Fabric
+(`SELECT … GROUP BY`, garde-fou lecture seule) : aucune ligne de compte ni d'opération ne quitte le Lakehouse. Groupes de
+moins de 5 jamais montrés, effectifs en tranches, positions en part de l'encours, transactions en part du volume absolu du
+jour (souscriptions et rachats côte à côte, jamais soustraits). Agrégats recalculés toutes les 6 heures
+(`APP_PASSIF_TTL_HOURS`), les tables étant mises à jour chaque jour. Sans Fabric : données entièrement synthétiques.
+`GET /api/passif`, `GET /api/passif/fonds/{id}`.
 
 ### Volumétrie (des dizaines de millions de cellules)
 
@@ -184,8 +204,8 @@ durées de lecture, de calcul et de chaque vue, et mémoire maximale ; aucune do
 | Rattachement d'une part | `JUMP_portfolio_aum.ID_PI_PART = PI_OUT_Share.pi_shareid`, à défaut `CODE_ISIN_PART = ISIN_Code` (ISIN unique). Les parts non rattachées restent comptées et sont signalées dans *Contrôles*. |
 | Rattachement au fonds | `PI_OUT_Share.ProductID = pi_out_product_active.pi_productid`, à défaut `JUMP.ID_PI_FONDS`. Un fonds JUMP absent du référentiel actif reste visible comme « hors référentiel ». |
 | Encours d'un fonds | Somme de `ACTIF_NET_PART_EURO` de ses parts. `ACTIF_NET_TOTAL_EURO`, répété sur chaque part, n'est jamais additionné : il sert au contrôle de cohérence. |
-| Encours à date | Dernière VL connue à la date d'arrêté, si elle date de moins de 12 jours (`APP_STALE_DAYS`) — gère les VL hebdomadaires. |
-| Collecte nette estimée | Σ (parts_t − parts_t−1 × coefficient OST) × VL en euros ; lancement d'une part = souscription initiale, disparition = rachat. |
+| Encours à date | Dernière VL connue à la date d'arrêté, si elle date de moins de 12 jours (`APP_STALE_DAYS`), délai allongé à 3 × l'écart habituel entre deux VL (100 jours au plus) pour les VL hebdomadaires et mensuelles. |
+| Collecte nette estimée | Σ (parts_t − parts_t−1 × k) × VL en euros, k = facteur d'opération sur titres retrouvé par continuité de la VL (coefficient vide, nul, cumulé ou inversé, division non déclarée). Lancement d'une part = souscription initiale ; seule la disparition définitive d'une part est un rachat (un trou de VL n'en est pas un) ; nombre de parts nul avec un actif net positif = valeur erronée, ignorée. |
 | Effet marché | Variation d'encours − collecte nette estimée. |
 | Performance | Indice base 100 : (VL + dividende) × coefficient OST / VL précédente ; part principale du fonds (`Main_Share`), sinon la plus grosse. 3 ans annualisé. |
 | Risque réalisé | Volatilité et tracking error annualisées sur 1 an (fréquence quotidienne ou hebdomadaire détectée), perte maximale sur 1 an. |
@@ -211,7 +231,7 @@ durées de lecture, de calcul et de chaque vue, et mémoire maximale ; aucune do
 - Les quatre familles (*Actions internationales et gestion diversifiée*, *Actions européennes*, *Fixed Income*,
   *Architecture ouverte*) sont déduites de `Management_Expertise_Level_1` (puis niveau 2, gamme, classe d'actifs) par
   mots-clés : la table de correspondance est dans `backend/rco/domain/labels.py` et se règle en une ligne.
-- `COEFFICIENT_OST` est lu comme le multiplicateur de parts à la date de l'opération (1 sinon) ; `DIVIDEND_AMOUNT` comme le
+- `COEFFICIENT_OST` : pour la collecte, sa convention est déduite de la continuité de la VL ; `DIVIDEND_AMOUNT` est lu comme le
   dividende par part à la date de détachement, dans la devise de la VL.
 - Les frais et pourcentages du référentiel sont supposés exprimés en points de pourcentage (1,35 = 1,35 %).
 - Holdings : `ID_PI_FONDS` est supposé égal à `pi_productid` (secours par l'identifiant JUMP du fonds).
@@ -255,14 +275,17 @@ les hausses et baisses portent toujours un signe et une flèche. Tout est dans `
 |---|---|---|
 | Ville 3D | Encours | Le poids de chaque fonds et de chaque famille, et son évolution dans le temps |
 | Équation de l'année | Encours | Encours au 31/12 + collecte + effet marché = encours du jour, barres proportionnelles |
-| Tableau à palettes | Accueil | Les pays de commercialisation, par nombre de parts enregistrées |
+| Cité des revenus 3D | Accueil | Ce que chaque fonds rapporte (hauteur), son encours (emprise), sa famille (quartier) |
+| Tableau des départs | Accueil, Distribution | Les pays de commercialisation, avec drapeaux, par nombre de parts enregistrées |
 | Globe 3D | Distribution | Où nos parts sont autorisées (colonnes de lumière = fonds ou parts enregistrés), filtrable par clientèle, arcs depuis le pays de domiciliation |
 | Sankey 3D | Distribution | Le parcours des autorisations : clientèle → pays → famille de gestion, une famille par couloir de profondeur |
 | Frise d'ouverture | Distribution | Depuis quand chaque pays est ouvert, et le rythme des enregistrements |
 | Échelle du risque | Risques | Encours par SRI de 1 à 7 ; une marche filtre les fonds |
 | Bande proportionnelle | Portefeuilles | De quoi sont faits nos portefeuilles (classes d'actifs, devises) |
 | Pont des encours | Fiche fonds, fiche part, sélection | D'où vient la variation : encours de départ → collecte → marché → encours d'arrivée (axe tronqué signalé) |
-| Mosaïque | Sélection, Encours, fiche fonds | Qui pèse (surface) et qui progresse (couleur) ; pour un portefeuille, ce qui a été renforcé, allégé ou acheté |
+| Ruban et classement | Sélection, Encours, Portefeuilles, fiche fonds | Qui pèse (ruban 100 % et barres classées, valeurs lues directement) et, pour un portefeuille, ce qui a été renforcé, allégé ou acheté |
+| Courbes base 100 en 3D, podium | Comparateur | Les trajectoires et les indicateurs de plusieurs fonds, côte à côte |
+| Carte du modèle, matrice 3D | Passif | La chaîne clients → comptes → positions / transactions ; desk × classe d'actifs |
 | Risque / rendement | Sélection, Risques | Performance et volatilité sur 1 an, taille = encours |
 | Comparateur de parts | Fiche fonds | Quelle part proposer : filtres client / devise / revenus, frais les plus bas signalés |
 | Année par année | Fiche fonds | Performances civiles du fonds et de son indice, écart en clair |
@@ -276,8 +299,12 @@ backend/rco/
          fabric.py     connexion mssql-python ou pyodbc (Entra ID interactif), lecture par lots (Arrow ou lignes)
          aum.py        lecture compacte des encours (faits + changements de libellés)
          mock.py       données fictives au schéma exact
+         passif_mock.py passif synthétique (comptes, positions, transactions au schéma _c0…_cN)
          schema.json   noms et types des colonnes (aucune donnée)
-  domain/ model.py     jointures, matrices d'encours à date, collecte
+  domain/ model.py     matrices d'encours à date, collecte
+          linking.py   rattachement JUMP ↔ Product Info et son diagnostic
+          revenue.py   revenus de gestion estimés
+          passif.py    passif : reconnaissance des colonnes, agrégats anonymes (seuil 5, tranches)
           analytics.py variations, performances, risques
           holdings.py  inventaires
           fields.py    vocabulaire métier (libellés de ~250 colonnes)
@@ -285,8 +312,8 @@ backend/rco/
   service.py / api.py  réponses de l'API (FastAPI) et service du front
   bench.py             mesure du chargement (python run.py --bench)
 frontend/src/
-  three/  CityScene.ts, KeyboardScene.ts, SankeyScene.ts, GlobeScene.ts   scènes Three.js
-  pages/  Home, Workspace, FundsSearch (+ risques et contrôles), Fund, Share, Encours, Selection, Holdings, Instrument, Distribution, Country
+  three/  CityScene, KeyboardScene, SankeyScene, GlobeScene, RevenueScene, PassifScene, CompareScene, ComparePodium
+  pages/  Home, Workspace, FundsSearch (+ risques et contrôles), Fund, Share, Encours, Selection, Holdings, Instrument, Distribution, Country, Passif, Compare
   lib/    search.ts (recherche tolérante), desk.ts (épingles, récents), format.ts (formats français), api.ts, context.tsx
 ```
 

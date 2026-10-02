@@ -211,6 +211,11 @@ export class ComparePodium {
     this.camera.lookAt(0, mid - 0.2, 0);
     const focus = this.hovered ?? this.external;
     const w = this.host.clientWidth, h = this.host.clientHeight;
+    // Largeur disponible pour un nom sous sa colonne : l'écart à l'écran entre deux colonnes
+    this.v.set(0, 0, BW * 0.8).project(this.camera);
+    const x0 = this.v.x;
+    this.v.set(PITCH, 0, BW * 0.8).project(this.camera);
+    this.opts.labelLayer.style.setProperty("--pw", `${Math.max(64, Math.min(150, ((this.v.x - x0) / 2) * w - 10))}px`);
     this.cols.forEach((c) => {
       c.dim += ((focus && focus !== c.id ? 1 : 0) - c.dim) * 0.15;
       const on = focus === c.id;

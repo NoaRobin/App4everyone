@@ -194,7 +194,6 @@ export class CompareScene {
     const step = niceStep(hi - lo, 5);
     this.yLo = Math.floor(lo / step) * step;
     this.yHi = Math.ceil(hi / step) * step;
-    if (this.yHi - hi < step * 0.15) this.yHi += step * 0.0; // garde le haut aligné sur une graduation
     this.t0 = t0; this.t1 = t1;
     this.y100 = this.y(100); this.yFloor = this.y(this.yLo); this.yTop = this.y(this.yHi);
     this.depthHalf = Math.max(1.6, ((series.length - 1) / 2) * GAP + 1.6);
@@ -294,7 +293,6 @@ export class CompareScene {
       seg(new THREE.Vector3(L, y, zB), new THREE.Vector3(L, y, zF), is100 ? GOLD : GRID, is100 ? 0.35 : 0.06);
       label(this.opts.fmtTick(v), new THREE.Vector3(L - 0.6, y, zB), "l", is100 ? "is-100" : "");
     }
-    if (!(this.yLo <= 100 && this.yHi >= 100)) { /* l'axe 100 est toujours dans l'étendue (point de départ commun) */ }
     // Plan 100 : un voile d'or très léger sur toute la profondeur, et un filet par fonds
     const planeGeo = new THREE.PlaneGeometry(W, zF - zB);
     const planeMat = new THREE.MeshBasicMaterial({ color: GOLD, transparent: true, opacity: 0.045, side: THREE.DoubleSide, depthWrite: false });

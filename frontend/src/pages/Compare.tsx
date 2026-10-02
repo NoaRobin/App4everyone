@@ -326,7 +326,7 @@ function Trajectories({ funds, live, focus, onFocus, start, end, periodLabel, re
     <section className="section cmp-traj reveal" aria-labelledby="h-traj">
       <Head id="traj" eyebrow={`Trajectoires · ${periodLabel}`} title="Cent euros placés au même jour"
         lede={<>Base 100 au {start ? fdate(start) : "—"}, part principale, dividendes réinvestis. {use3d ? <>Un fonds par plan&nbsp;: faites pivoter la scène, survolez un ruban pour l'isoler, déplacez la souris pour lire les valeurs à une date. Cliquer un ruban ouvre la fiche du fonds.</> : <>Touchez ou survolez le graphique pour lire les valeurs à une date.</>}</>}
-        right={use3d ? (
+        right={use3d && hasLive ? (
           <div className="cmp-traj__tools">
             <button type="button" className="btn btn--ghost" aria-pressed={flat} onClick={() => setFlat((v) => !v)}>
               {flat ? <><I.Cube size={16} /> Vue en relief</> : <><I.List size={16} /> Vue de face</>}
@@ -404,6 +404,7 @@ function PodiumBlock({ funds, focus, onFocus }: { funds: CFund[]; focus: string 
   const bars = () => ranked(row, funds).map((f) => ({ id: f.id, name: f.name, color: f.color, slot: f.slot, value: row.val(f), text: row.fmt(f) }));
   const barsRef = useRef(bars); barsRef.current = bars;
   const sig = funds.map((f) => `${f.id}:${row.val(f)}`).join("|") + k;
+  const allNull = funds.every((f) => row.val(f) == null);
   const pick = (v: string) => { setK(v); try { sessionStorage.setItem("rco.cmp.pod", v); } catch { /* stockage indisponible */ } };
 
   useEffect(() => {
@@ -436,16 +437,16 @@ function PodiumBlock({ funds, focus, onFocus }: { funds: CFund[]; focus: string 
       <p className="small muted cmp-pod__sub">
         {row.label} · {row.dir === "up" ? "la plus haute valeur l'emporte" : row.dir === "down" ? "la plus basse valeur l'emporte" : "sans sens de classement"}
       </p>
-      {funds.every((f) => row.val(f) == null) && <p className="cmp-note small cmp-pod__none"><I.Info size={16} /> Aucune valeur disponible pour cet indicateur sur la période.</p>}
+      {allNull && <p className="cmp-note small cmp-pod__none"><I.Info size={16} /> Aucune valeur disponible pour cet indicateur sur la période.</p>}
       {use3d ? (
-        <div className="pod3d">
+        <div className={`pod3d${allNull ? " is-empty" : ""}`}>
           <div className="pod3d__canvas" ref={host} data-cursor="Ouvrir" />
           <div className="pod3d__labels" ref={labels} aria-hidden="true" />
           <ol className="sr-only">
             {ranked(row, funds).map((f) => <li key={f.id}>{f.name} : {row.fmt(f)}</li>)}
           </ol>
         </div>
-      ) : <RankBars funds={funds} row={row} focus={focus} onFocus={onFocus} />}
+      ) : !allNull && <RankBars funds={funds} row={row} focus={focus} onFocus={onFocus} />}
     </div>
   );
 }

@@ -300,7 +300,7 @@ export function IndTable({ funds, focus, onFocus }: { funds: CFund[]; focus: str
                   <span className="cmp-badge" style={{ background: f.color }} aria-hidden="true">{f.letter}</span>
                   <Link to={`/fonds/${f.id}`} className="cmp-t__fn link" onFocus={() => onFocus(f.id)} onBlur={() => onFocus(null)}>{f.name}</Link>
                 </span>
-                <span className="cmp-t__fs"><span className="dot" style={{ background: famVar(f.family, true) }} />{FAMILY_SHORT[f.family] ?? "Non classé"}{f.share?.id ? <> · {f.share.id}</> : null}</span>
+                <span className="cmp-t__fs"><span className="dot" style={{ background: famVar(f.family, true) }} /> {FAMILY_SHORT[f.family] ?? "Non classé"}{f.share?.id ? <> · <span className="mono">{f.share.id}</span></> : null}</span>
               </th>
             ))}
           </tr>
@@ -423,12 +423,19 @@ export function RiskMap({ funds, focus, onFocus, periodLabel }: { funds: CFund[]
           <line x1={m.l} x2={m.l + iw} y1={m.t + ih} y2={m.t + ih} className="cmprr__axis" />
           <text x={m.l + iw} y={h - 4} textAnchor="end" className="cmprr__axl">Volatilité annualisée →</text>
           <text x={m.l - 44} y={m.t - 22} className="cmprr__axl">↑ Performance annualisée</text>
-          {[0.5, 1].map((k) => { const gd = guide(k); return gd.x2 > gd.x1 + 20 && (
-            <g key={k}>
-              <line {...gd} className="cmprr__guide" />
-              <text x={gd.lx - 4} y={gd.ly + 14} textAnchor="end" className="cmprr__gl">ratio {num(k, k < 1 ? 1 : 0)}</text>
-            </g>
-          ); })}
+          {[0.5, 1].map((k) => {
+            const gd = guide(k);
+            if (gd.x2 <= gd.x1 + 20) return null;
+            // Étiquette du repère masquée si un disque la recouvrirait
+            const lx = gd.lx - 4, ly = gd.ly + 14;
+            const clash = pts.some((f) => Math.hypot(X(f.ind.vol!) - (lx - 18), Y(f.ind.perf_ann!) - (ly - 4)) < R(f) + 22);
+            return (
+              <g key={k}>
+                <line x1={gd.x1} y1={gd.y1} x2={gd.x2} y2={gd.y2} className="cmprr__guide" />
+                {!clash && <text x={lx} y={ly} textAnchor="end" className="cmprr__gl">ratio {num(k, k < 1 ? 1 : 0)}</text>}
+              </g>
+            );
+          })}
           {[...pts].sort((a, b) => R(b) - R(a)).map((f) => (
             <g key={f.id} className="cmprr__dot" style={{ transform: `translate(${X(f.ind.vol!)}px, ${Y(f.ind.perf_ann!)}px)`, opacity: focus && focus !== f.id ? 0.3 : 1 }}
               onPointerEnter={() => onFocus(f.id)} onPointerLeave={() => onFocus(null)} tabIndex={0} onFocus={() => onFocus(f.id)} onBlur={() => onFocus(null)}
