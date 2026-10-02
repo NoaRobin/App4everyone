@@ -1,0 +1,192 @@
+date_centralisation,classe_actif,desk,sens,statut,devise,tranche_nombre_operations,part_volume_journalier_pct
+2026-09-18,Diversified,RMM,Rachat,Valorisé,EUR,DE_5_A_19,95.700000
+2026-09-21,Diversified,Valor,Rachat,Valorisé,EUR,DE_20_A_99,52.200000
+2026-09-21,Diversified,Valor,Souscription,Valorisé,EUR,100_ET_PLUS,38.600000
+2026-09-21,Diversified,RMM,Souscription,Valorisé,EUR,DE_5_A_19,1.500000
+2026-09-21,Equities,RMM,Rachat,Valorisé,EUR,DE_5_A_19,0.700000
+2026-09-21,Diversified,OPAL,Souscription,Valorisé,EUR,DE_5_A_19,0.600000
+2026-09-21,Diversified,OPAL,Rachat,Valorisé,EUR,DE_5_A_19,0.500000
+2026-09-21,Equities,Thematic,Souscription,Valorisé,EUR,DE_5_A_19,0.500000
+2026-09-21,Equities,Thematic,Rachat,Valorisé,EUR,DE_5_A_19,0.400000
+2026-09-21,Equities,OPAL,Rachat,Valorisé,EUR,DE_5_A_19,0.300000
+2026-09-21,Equities,OPAL,Souscription,Valorisé,EUR,DE_5_A_19,0.300000
+2026-09-22,Diversified,Valor,Rachat,Valorisé,EUR,100_ET_PLUS,18.500000
+2026-09-22,Equities,Conviction,Rachat,Valorisé,EUR,DE_20_A_99,16.100000
+2026-09-22,Fixed Income,Conviction,Rachat,Valorisé,EUR,DE_20_A_99,12.400000
+2026-09-22,Diversified,Valor,Souscription,Valorisé,EUR,DE_20_A_99,10.600000
+2026-09-22,Fixed Income,Thematic,Rachat,Valorisé,EUR,DE_20_A_99,8.500000
+2026-09-22,Fixed Income,Conviction,Souscription,Valorisé,EUR,DE_20_A_99,7.100000
+2026-09-22,Equities,Thematic,Souscription,Valorisé,EUR,DE_20_A_99,6.700000
+2026-09-22,Fixed Income,Thematic,Souscription,Valorisé,EUR,DE_20_A_99,3.800000
+2026-09-22,Equities,Valor,Rachat,Valorisé,EUR,DE_5_A_19,3.100000
+2026-09-22,Fixed Income,Valor,Rachat,Valorisé,EUR,DE_5_A_19,2.700000
+2026-09-22,Fixed Income,Valor,Souscription,Valorisé,EUR,DE_5_A_19,2.000000
+2026-09-22,Equities,Thematic,Rachat,Valorisé,EUR,DE_20_A_99,1.800000
+2026-09-22,Diversified,Conviction,Souscription,Valorisé,EUR,DE_5_A_19,1.400000
+2026-09-22,Diversified,Conviction,Rachat,Valorisé,EUR,DE_5_A_19,0.800000
+2026-09-22,Equities,4Change,Souscription,Valorisé,EUR,DE_5_A_19,0.500000
+2026-09-22,Equities,Conviction,Souscription,Valorisé,EUR,DE_5_A_19,0.500000
+2026-09-22,Equities,RMM,Rachat,Valorisé,EUR,DE_5_A_19,0.300000
+2026-09-22,Diversified,OPAL,Souscription,Valorisé,EUR,DE_5_A_19,0.200000
+2026-09-22,Diversified,RMM,Souscription,Valorisé,EUR,DE_5_A_19,0.200000
+2026-09-22,Equities,RMM,Souscription,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-23,Fixed Income,Conviction,Rachat,Valorisé,EUR,DE_20_A_99,33.800000
+2026-09-23,Fixed Income,Conviction,Souscription,Valorisé,EUR,DE_20_A_99,20.500000
+2026-09-23,Fixed Income,RMM,Rachat,Valorisé,EUR,DE_5_A_19,13.400000
+2026-09-23,Diversified,Valor,Rachat,Valorisé,EUR,100_ET_PLUS,8.900000
+2026-09-23,Fixed Income,RMM,Souscription,Valorisé,EUR,DE_5_A_19,4.700000
+2026-09-23,Fixed Income,Thematic,Rachat,Valorisé,EUR,DE_20_A_99,4.700000
+2026-09-23,Diversified,Valor,Souscription,Valorisé,EUR,DE_20_A_99,4.000000
+2026-09-23,Fixed Income,Thematic,Souscription,Valorisé,EUR,DE_20_A_99,2.500000
+2026-09-23,Diversified,OPAL,Souscription,Valorisé,EUR,DE_20_A_99,1.200000
+2026-09-23,Equities,Thematic,Souscription,Valorisé,EUR,DE_20_A_99,0.900000
+2026-09-23,Fixed Income,Valor,Rachat,Valorisé,EUR,DE_5_A_19,0.800000
+2026-09-23,Diversified,Conviction,Rachat,Valorisé,EUR,DE_5_A_19,0.800000
+2026-09-23,Equities,OPAL,Souscription,Valorisé,EUR,DE_20_A_99,0.600000
+2026-09-23,Diversified,OPAL,Rachat,Valorisé,EUR,DE_20_A_99,0.500000
+2026-09-23,Equities,Thematic,Rachat,Valorisé,EUR,DE_20_A_99,0.300000
+2026-09-23,Equities,RMM,Souscription,Valorisé,EUR,DE_5_A_19,0.300000
+2026-09-23,Fixed Income,Valor,Souscription,Valorisé,EUR,DE_5_A_19,0.300000
+2026-09-23,Equities,Conviction,Souscription,Valorisé,EUR,DE_5_A_19,0.300000
+2026-09-23,Equities,Conviction,Rachat,Valorisé,EUR,DE_20_A_99,0.200000
+2026-09-23,Diversified,RMM,Rachat,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-23,Equities,OPAL,Rachat,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-23,Diversified,Conviction,Souscription,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-23,Equities,RMM,Rachat,Valorisé,EUR,DE_5_A_19,0.000000
+2026-09-23,Equities,Valor,Souscription,Valorisé,EUR,DE_5_A_19,0.000000
+2026-09-24,Fixed Income,Conviction,Souscription,Valorisé,EUR,DE_20_A_99,16.500000
+2026-09-24,Equities,RMM,Transfert entrant,Valorisé,EUR,DE_5_A_19,11.000000
+2026-09-24,Fixed Income,Conviction,Rachat,Valorisé,EUR,100_ET_PLUS,10.500000
+2026-09-24,Money Market,RMM,Rachat,Valorisé,EUR,DE_20_A_99,10.400000
+2026-09-24,Equities,RMM,Transfert sortant,Valorisé,EUR,DE_5_A_19,10.100000
+2026-09-24,Money Market,RMM,Souscription,Valorisé,EUR,DE_20_A_99,9.500000
+2026-09-24,Fixed Income,RMM,Souscription,Valorisé,EUR,DE_5_A_19,6.100000
+2026-09-24,Fixed Income,RMM,Rachat,Valorisé,EUR,DE_5_A_19,4.600000
+2026-09-24,Fixed Income,Thematic,Rachat,Valorisé,EUR,DE_20_A_99,4.100000
+2026-09-24,Fixed Income,Thematic,Souscription,Valorisé,EUR,DE_20_A_99,3.600000
+2026-09-24,Diversified,Valor,Rachat,Valorisé,EUR,100_ET_PLUS,2.300000
+2026-09-24,Diversified,Valor,Souscription,Valorisé,EUR,100_ET_PLUS,1.400000
+2026-09-24,Diversified,RMM,Rachat,Valorisé,EUR,DE_5_A_19,1.300000
+2026-09-24,Diversified,Valor,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,0.600000
+2026-09-24,Diversified,OPAL,Souscription,Valorisé,EUR,DE_20_A_99,0.600000
+2026-09-24,Diversified,OPAL,Rachat,Valorisé,EUR,DE_20_A_99,0.600000
+2026-09-24,Fixed Income,Valor,Souscription,Valorisé,EUR,DE_5_A_19,0.600000
+2026-09-24,Equities,Thematic,Souscription,Valorisé,EUR,DE_20_A_99,0.500000
+2026-09-24,Equities,RMM,Souscription,Valorisé,EUR,DE_5_A_19,0.400000
+2026-09-24,Diversified,Valor,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.400000
+2026-09-24,Money Market,RMM,Souscription,Valorisé,USD,DE_5_A_19,0.400000
+2026-09-24,Equities,OPAL,Souscription,Valorisé,EUR,DE_5_A_19,0.300000
+2026-09-24,Equities,Thematic,Rachat,Valorisé,EUR,DE_20_A_99,0.300000
+2026-09-24,Equities,RMM,Rachat,Valorisé,EUR,DE_5_A_19,0.200000
+2026-09-24,Equities,Valor,Souscription,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-24,Equities,4Change,Souscription,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-24,Equities,Conviction,Rachat,Valorisé,EUR,DE_20_A_99,0.100000
+2026-09-24,Equities,OPAL,Rachat,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-24,Equities,Valor,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.100000
+2026-09-24,Fixed Income,Valor,Rachat,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-24,Diversified,Conviction,Souscription,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-24,Equities,Conviction,Souscription,Valorisé,EUR,DE_20_A_99,0.100000
+2026-09-24,Diversified,Conviction,Rachat,Valorisé,EUR,DE_5_A_19,0.000000
+2026-09-24,Equities,OPAL,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,0.000000
+2026-09-25,Fixed Income,Conviction,Souscription,Valorisé,EUR,DE_20_A_99,28.800000
+2026-09-25,Money Market,RMM,Rachat,Valorisé,EUR,DE_20_A_99,19.400000
+2026-09-25,Money Market,RMM,Souscription,Valorisé,EUR,DE_20_A_99,16.400000
+2026-09-25,Fixed Income,RMM,Rachat,Valorisé,EUR,DE_20_A_99,3.800000
+2026-09-25,Equities,RMM,Transfert entrant,Valorisé,EUR,DE_5_A_19,2.700000
+2026-09-25,Equities,RMM,Transfert sortant,Valorisé,EUR,DE_5_A_19,2.600000
+2026-09-25,Fixed Income,RMM,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,2.400000
+2026-09-25,Fixed Income,Conviction,Rachat,Valorisé,EUR,DE_20_A_99,1.900000
+2026-09-25,Diversified,Valor,Rachat,Valorisé,EUR,100_ET_PLUS,1.900000
+2026-09-25,Fixed Income,Thematic,Rachat,Valorisé,EUR,DE_20_A_99,1.500000
+2026-09-25,Diversified,Conviction,Souscription,Valorisé,EUR,DE_5_A_19,1.500000
+2026-09-25,Diversified,Valor,Souscription,Valorisé,EUR,100_ET_PLUS,1.200000
+2026-09-25,Fixed Income,Conviction,Rachat,Clôturé / après cut-off,EUR,DE_20_A_99,1.100000
+2026-09-25,Fixed Income,RMM,Souscription,Valorisé,EUR,DE_5_A_19,1.100000
+2026-09-25,Fixed Income,Conviction,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.700000
+2026-09-25,Diversified,Valor,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,0.600000
+2026-09-25,Fixed Income,Thematic,Souscription,Valorisé,EUR,DE_20_A_99,0.600000
+2026-09-25,Fixed Income,Thematic,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,0.600000
+2026-09-25,Diversified,RMM,Rachat,Valorisé,EUR,DE_5_A_19,0.600000
+2026-09-25,Equities,Thematic,Souscription,Valorisé,EUR,DE_20_A_99,0.500000
+2026-09-25,Fixed Income,Thematic,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.400000
+2026-09-25,Equities,RMM,Souscription,Valorisé,EUR,DE_5_A_19,0.400000
+2026-09-25,Fixed Income,RMM,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.400000
+2026-09-25,Money Market,RMM,Rachat,Valorisé,USD,DE_5_A_19,0.300000
+2026-09-25,Equities,Conviction,Souscription,Valorisé,EUR,DE_5_A_19,0.200000
+2026-09-25,Equities,4Change,Rachat,Valorisé,EUR,DE_5_A_19,0.200000
+2026-09-25,Equities,RMM,Rachat,Valorisé,EUR,DE_5_A_19,0.200000
+2026-09-25,Money Market,RMM,Souscription,Valorisé,USD,DE_5_A_19,0.200000
+2026-09-25,Diversified,Valor,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.200000
+2026-09-25,Equities,Conviction,Rachat,Valorisé,EUR,DE_20_A_99,0.200000
+2026-09-25,Equities,Thematic,Rachat,Valorisé,EUR,DE_20_A_99,0.200000
+2026-09-25,Fixed Income,Valor,Rachat,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-25,Equities,Valor,Souscription,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-25,Equities,OPAL,Souscription,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-25,Diversified,OPAL,Rachat,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-25,Fixed Income,Valor,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.100000
+2026-09-25,Equities,Thematic,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.100000
+2026-09-25,Equities,OPAL,Rachat,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-25,Equities,Thematic,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,0.100000
+2026-09-25,Fixed Income,Valor,Souscription,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-25,Diversified,OPAL,Souscription,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-25,Fixed Income,Valor,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,0.100000
+2026-09-25,Equities,OPAL,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,0.000000
+2026-09-25,Diversified,Conviction,Rachat,Valorisé,EUR,DE_5_A_19,0.000000
+2026-09-25,Equities,Conviction,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,0.000000
+2026-09-25,Equities,4Change,Souscription,Valorisé,EUR,DE_5_A_19,0.000000
+2026-09-25,Equities,Conviction,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.000000
+2026-09-25,Equities,RMM,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.000000
+2026-09-25,Equities,4Change,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.000000
+2026-09-28,Money Market,RMM,Rachat,Valorisé,EUR,DE_20_A_99,34.300000
+2026-09-28,Money Market,RMM,Souscription,Valorisé,EUR,DE_20_A_99,17.500000
+2026-09-28,Equities,RMM,Transfert sortant,Valorisé,USD,DE_5_A_19,6.600000
+2026-09-28,Fixed Income,RMM,Rachat,Valorisé,EUR,DE_20_A_99,5.600000
+2026-09-28,Fixed Income,Conviction,Rachat,Valorisé,EUR,100_ET_PLUS,5.500000
+2026-09-28,Fixed Income,RMM,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,5.200000
+2026-09-28,Equities,RMM,Transfert entrant,Valorisé,USD,DE_5_A_19,4.800000
+2026-09-28,Fixed Income,Conviction,Rachat,Clôturé / après cut-off,EUR,DE_20_A_99,3.800000
+2026-09-28,Fixed Income,Thematic,Rachat,Valorisé,EUR,DE_20_A_99,3.300000
+2026-09-28,Money Market,RMM,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,2.300000
+2026-09-28,Fixed Income,Conviction,Souscription,Valorisé,EUR,DE_20_A_99,1.800000
+2026-09-28,Fixed Income,Thematic,Souscription,Valorisé,EUR,DE_20_A_99,1.200000
+2026-09-28,Money Market,RMM,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.800000
+2026-09-28,Fixed Income,RMM,Souscription,Valorisé,EUR,DE_5_A_19,0.800000
+2026-09-28,Diversified,Valor,Rachat,Valorisé,EUR,DE_20_A_99,0.600000
+2026-09-28,Fixed Income,RMM,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.600000
+2026-09-28,Equities,RMM,Rachat,Valorisé,EUR,DE_5_A_19,0.500000
+2026-09-28,Fixed Income,Conviction,Souscription,Clôturé / après cut-off,EUR,DE_20_A_99,0.500000
+2026-09-28,Fixed Income,Thematic,Rachat,Clôturé / après cut-off,EUR,DE_20_A_99,0.500000
+2026-09-28,Money Market,RMM,Rachat,Valorisé,USD,DE_5_A_19,0.400000
+2026-09-28,Fixed Income,Thematic,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.400000
+2026-09-28,Equities,Thematic,Souscription,Valorisé,EUR,DE_20_A_99,0.300000
+2026-09-28,Equities,Thematic,Rachat,Valorisé,EUR,DE_20_A_99,0.300000
+2026-09-28,Diversified,Valor,Souscription,Valorisé,EUR,DE_20_A_99,0.300000
+2026-09-28,Diversified,Conviction,Rachat,Valorisé,EUR,DE_5_A_19,0.200000
+2026-09-28,Equities,Thematic,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,0.200000
+2026-09-28,Equities,RMM,Souscription,Valorisé,EUR,DE_5_A_19,0.200000
+2026-09-28,Fixed Income,Valor,Rachat,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-28,Equities,Conviction,Souscription,Valorisé,EUR,DE_20_A_99,0.100000
+2026-09-28,Fixed Income,Valor,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.100000
+2026-09-28,Equities,Thematic,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.100000
+2026-09-28,Fixed Income,Valor,Souscription,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-28,Fixed Income,Valor,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,0.100000
+2026-09-28,Equities,Conviction,Rachat,Valorisé,EUR,DE_20_A_99,0.100000
+2026-09-28,Equities,4Change,Souscription,Valorisé,EUR,DE_5_A_19,0.100000
+2026-09-28,Equities,4Change,Rachat,Valorisé,EUR,DE_5_A_19,0.000000
+2026-09-28,Equities,Conviction,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,0.000000
+2026-09-28,Diversified,Conviction,Souscription,Valorisé,EUR,DE_5_A_19,0.000000
+2026-09-29,Money Market,RMM,Souscription,Valorisé,EUR,DE_20_A_99,68.600000
+2026-09-29,Money Market,RMM,Rachat,Valorisé,EUR,DE_20_A_99,13.800000
+2026-09-29,Fixed Income,RMM,Souscription,Valorisé,EUR,DE_5_A_19,3.000000
+2026-09-29,Money Market,RMM,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,2.500000
+2026-09-29,Fixed Income,RMM,Rachat,Valorisé,EUR,DE_5_A_19,2.300000
+2026-09-29,Fixed Income,RMM,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,2.200000
+2026-09-29,Fixed Income,RMM,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,1.400000
+2026-09-29,Money Market,RMM,Souscription,Valorisé,USD,DE_5_A_19,1.300000
+2026-09-29,Money Market,RMM,Souscription,Clôturé / après cut-off,EUR,DE_5_A_19,0.600000
+2026-09-29,Money Market,RMM,Rachat,Valorisé,USD,DE_5_A_19,0.300000
+2026-09-30,Money Market,RMM,Rachat,Valorisé,EUR,DE_20_A_99,33.600000
+2026-09-30,Money Market,RMM,Souscription,Valorisé,EUR,DE_5_A_19,31.600000
+2026-09-30,Money Market,RMM,Rachat,Valorisé,USD,DE_5_A_19,7.100000
+2026-09-30,Money Market,RMM,Rachat,Clôturé / après cut-off,EUR,DE_5_A_19,4.200000
+2026-09-30,Money Market,RMM,Souscription,Valorisé,USD,DE_5_A_19,1.600000
