@@ -3,12 +3,13 @@
  * trame orthogonale. Aucune forme ronde.
  *
  * Une tour = un fonds. Hauteur proportionnelle (linéaire, comparable à l'œil) au revenu de gestion annuel estimé ;
- * emprise ∝ √encours. Quatre districts carrés autour d'un carrefour = les quatre familles de gestion, les plus gros
- * revenus au plus près du carrefour. Des traits de lumière montent des tours les plus rentables.
+ * emprise ∝ √encours. Quatre rangées parallèles = les quatre familles de gestion, les fonds classés par revenu
+ * décroissant depuis la tête de rangée. Des traits de lumière montent des tours les plus rentables.
  *
- * Ouverture (≈ 3 s) : nuit totale, une onde carrée parcourt le sol, un plan de lumière balaie la ville, les tours
- * sortent de terre (les plus rentables d'abord) pendant que la caméra descend du zénith. Ensuite la page pilote les
- * plans au défilement (goTo) : vue d'ensemble, les trois fonds qui rapportent le plus, plan des districts.
+ * Ouverture (≈ 3 s) : une onde carrée parcourt le sol, un plan de lumière balaie la ville, les tours sortent de terre
+ * (les plus rentables d'abord). Ensuite la page pilote les plans au défilement (goTo) : vue d'ensemble, les trois fonds
+ * qui rapportent le plus, puis l'empilement : chaque tour quitte sa rangée et vient s'empiler sur celles de sa famille,
+ * à la même échelle — la ville devient l'histogramme exact des revenus par famille.
  * Rendu suspendu hors écran, qualité adaptée au poste (quality.ts), pause globale des animations respectée.
  */
 import * as THREE from "three";
@@ -27,33 +28,38 @@ export type RevOptions = {
   colors: Record<string, string>;
   familyLabels: Record<string, string>;
   familyShares: Record<string, number | null>;
+  familyRevenue: Record<string, number>;
+  formatEur: (v: number) => string;
   reduced: boolean;
   labelLayer: HTMLElement;
   onHover: (f: RevFund | null, x: number, y: number) => void;
   onSelect: (f: RevFund) => void;
   onIntroDone?: () => void;
 };
-export type Shot = { kind: "overview" } | { kind: "map" } | { kind: "fund"; i: number };
+export type Shot = { kind: "overview" } | { kind: "stack" } | { kind: "fund"; i: number };
 
 const H_MAX = 64;
 const CELL = 10.5;
-const AVENUE = 7;
-/** Quadrant de chaque district (les fonds non classés rejoignent le district « autres expertises »). */
-const QUAD: Record<string, [number, number, string]> = { ae: [1, -1, "ae"], aid: [-1, -1, "aid"], fi: [-1, 1, "fi"], ao: [1, 1, "ao"], nc: [1, 1, "ao"] };
-const OVERVIEW = { pos: new THREE.Vector3(122, 78, 138), target: new THREE.Vector3(-6, 8, 0) };
+const AVENUE = 9;
+const LANES = ["aid", "ae", "fi", "ao"];
+/** Rangée de chaque famille (les fonds non classés rejoignent la rangée « architecture ouverte »). */
+const laneOf = (fam: string) => (LANES.includes(fam) ? fam : "ao");
+const STACK_W = 13, STACK_H = 96, STACK_GAP = 0.7;
 
 type Tower = { f: RevFund; tall: THREE.Group; body: THREE.Mesh; mat: THREE.MeshStandardMaterial; edge: THREE.LineBasicMaterial;
-  cap: THREE.Mesh; capMat: THREE.MeshBasicMaterial; baseMat: THREE.MeshBasicMaterial; h: number; w: number; x: number; z: number;
-  k: number; hover: number; dim: number };
+  cap: THREE.Mesh; capMat: THREE.MeshBasicMaterial; base: THREE.Mesh; baseMat: THREE.MeshBasicMaterial; h: number; w: number; x: number; z: number;
+  /** Position dans la pile de sa famille : abscisse, profondeur, bas du bloc, hauteur du bloc */
+  sx: number; sz: number; sy: number; sh: number;
+  k: number; m: { v: number }; hover: number; dim: number; rank: number };
 
 const STREAK_VS = /* glsl */ `
   attribute float aSeed; attribute vec3 aBase; attribute float aH;
-  uniform float uTime; uniform float uPixel; uniform float uOn;
+  uniform float uTime; uniform float uPixel; uniform float uOn; uniform float uFade;
   varying float vA;
   void main() {
     float t = fract(uTime * (0.05 + aSeed * 0.08) + aSeed * 11.0);
     vec3 p = aBase + vec3((fract(aSeed * 37.0) - 0.5) * 3.0, aH + t * (26.0 + aSeed * 30.0), (fract(aSeed * 91.0) - 0.5) * 3.0);
-    vA = (1.0 - t) * smoothstep(0.0, 0.12, t) * uOn;
+    vA = (1.0 - t) * smoothstep(0.0, 0.12, t) * uOn * uFade;
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     gl_PointSize = (10.0 + aSeed * 16.0) * uPixel * (90.0 / -mv.z);
     gl_Position = projectionMatrix * mv;
@@ -94,7 +100,12 @@ export class RevenueScene {
   private sweepMat!: THREE.MeshBasicMaterial;
   private sweepX = -1e4;
   private districtLabels: HTMLDivElement[] = [];
-  private mapK = { v: 0 };
+  private frames: THREE.LineBasicMaterial[] = [];
+  private stackK = { v: 0 };
+  private overview = { pos: new THREE.Vector3(120, 80, 140), target: new THREE.Vector3(0, 8, 0) };
+  private stackTop = 0;
+  private stackGoal = 0;
+  private extentZ = 60;
   private intro = { k: 0 };
   private ro: ResizeObserver;
   private io: IntersectionObserver;
@@ -152,83 +163,106 @@ export class RevenueScene {
     this.scene.add(rim);
     const gold = new THREE.Color("#f3dcaa");
 
-    // Districts : grilles carrées remplies en équerre depuis le carrefour
-    const byQuad = new Map<string, RevFund[]>();
-    funds.forEach((f) => { const q = (QUAD[f.family] ?? QUAD.nc)[2]; byQuad.set(q, [...(byQuad.get(q) ?? []), f]); });
+    // Rangées : une par famille, deux à six tours de profondeur, les plus gros revenus en tête (à gauche)
+    const byLane = new Map<string, RevFund[]>(LANES.map((k) => [k, []]));
+    funds.forEach((f) => byLane.get(laneOf(f.family))!.push(f));
+    const maxN = Math.max(...[...byLane.values()].map((l) => l.length), 1);
+    const R = Math.max(2, Math.min(6, Math.ceil(Math.sqrt(maxN / 4))));
+    const cols = Math.ceil(maxN / R);
+    const laneD = R * CELL + AVENUE;
+    const x0 = -(cols * CELL) / 2;
+    const famTotal = new Map<string, number>();
+    funds.forEach((f) => { const q = laneOf(f.family); famTotal.set(q, (famTotal.get(q) ?? 0) + f.revenue); });
+    const kStack = STACK_H / ((Math.max(...famTotal.values(), 1) / maxRev) * H_MAX);
     let ext = 40;
-    for (const [q, list] of byQuad) {
-      const [sx, sz] = QUAD[q];
+    LANES.forEach((q, li) => {
+      const list = byLane.get(q)!;
+      if (!list.length) return;
+      const zc = (li - (LANES.length - 1) / 2) * laneD;
+      const stackX = x0 - CELL * 2.2;
+      let acc = 0;
       list.forEach((f, i) => {
-        const ring = Math.floor(Math.sqrt(i)), off = i - ring * ring;
-        const gx = off <= ring ? ring : off - ring - 1, gz = off <= ring ? off : ring;
-        const x = sx * (AVENUE + CELL * (gx + 0.5)), z = sz * (AVENUE + CELL * (gz + 0.5));
+        const x = x0 + CELL * (Math.floor(i / R) + 0.5), z = zc + ((i % R) - (R - 1) / 2) * CELL;
         ext = Math.max(ext, Math.abs(x) + CELL, Math.abs(z) + CELL);
         const color = new THREE.Color(this.o.colors[f.family] ?? "#8d929c");
         const h = Math.max(1.6, (f.revenue / maxRev) * H_MAX);
         const w = 2.4 + 6.2 * Math.sqrt(f.aum / maxAum);
-        const geo = new THREE.BoxGeometry(w, 1, w);
+        const geo = new THREE.BoxGeometry(1, 1, 1);
         geo.translate(0, 0.5, 0);
-        const mat = new THREE.MeshStandardMaterial({ color: 0x0a101c, emissive: color.clone().multiplyScalar(0.55 / Math.max(0.35, color.r * 0.3 + color.g * 0.59 + color.b * 0.11)), emissiveIntensity: 0.05, metalness: 0.92, roughness: 0.22,
-          transparent: true, opacity: 1 });
+        const mat = new THREE.MeshStandardMaterial({ color: 0x0a101c, emissive: color.clone().multiplyScalar(0.55 / Math.max(0.35, color.r * 0.3 + color.g * 0.59 + color.b * 0.11)),
+          emissiveIntensity: 0.05, metalness: 0.92, roughness: 0.22, transparent: true, opacity: 1 });
         const body = new THREE.Mesh(geo, mat);
         body.userData.i = this.towers.length;
         const edge = new THREE.LineBasicMaterial({ color: color.clone().lerp(gold, 0.55), transparent: true, opacity: 0 });
         const tall = new THREE.Group();
         tall.add(body, new THREE.LineSegments(new THREE.EdgesGeometry(geo), edge));
-        tall.position.set(x, 0, z);
-        tall.scale.y = 0.001;
         const capMat = new THREE.MeshBasicMaterial({ color: gold, transparent: true, opacity: 0, depthWrite: false });
-        const cap = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.98, w * 0.98), capMat);
+        const cap = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.98), capMat);
         cap.rotation.x = -Math.PI / 2;
-        cap.position.set(x, 0.02, z);
         const baseMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false });
         const base = new THREE.Mesh(new THREE.PlaneGeometry(w + 2.4, w + 2.4), baseMat);
         base.rotation.x = -Math.PI / 2;
         base.position.set(x, 0.03, z);
         this.scene.add(tall, cap, base);
-        this.towers.push({ f, tall, body, mat, edge, cap, capMat, baseMat, h, w, x, z, k: 0, hover: 0, dim: 1 });
+        const sh = Math.max(0.35, h * kStack - STACK_GAP);
+        this.towers.push({ f, tall, body, mat, edge, cap, capMat, base, baseMat, h, w, x, z, sx: stackX, sz: zc, sy: acc, sh,
+          k: 0, m: { v: 0 }, hover: 0, dim: 1, rank: i });
+        acc += sh + STACK_GAP;
       });
-      // Cadre du district et étiquette (visible sur le plan de dessus)
-      const span = Math.ceil(Math.sqrt(list.length)) * CELL;
-      const cx = sx * (AVENUE + span / 2), cz = sz * (AVENUE + span / 2);
+      this.stackTop = Math.max(this.stackTop, acc);
+      // Cadre de la rangée et étiquette de la pile (visible quand les tours sont empilées)
+      const len = Math.ceil(list.length / R) * CELL;
       const col = this.o.colors[q] ?? "#8d929c";
-      this.scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(square(span / 2 + 1.5, 0.06, cx, cz)),
-        new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.5 })));
+      const fm = new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.5 });
+      this.frames.push(fm);
+      const hx = len / 2 + 1.5, hz = (R * CELL) / 2 + 1.5, cx = x0 + len / 2;
+      this.scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(
+        [[-hx, -hz], [hx, -hz], [hx, -hz], [hx, hz], [hx, hz], [-hx, hz], [-hx, hz], [-hx, -hz]].map(([a, b]) => new THREE.Vector3(cx + a, 0.06, zc + b))), fm));
       const lab = document.createElement("div");
       lab.className = "rev3d__district";
-      const sw = document.createElement("i"), nm = document.createElement("b"), sh = document.createElement("span");
+      const sw = document.createElement("i"), nm = document.createElement("b"), shr = document.createElement("span");
       sw.style.background = col;
       nm.textContent = this.o.familyLabels[q] ?? q;
-      const share = this.o.familyShares[q];
-      sh.textContent = share != null ? `${Math.round(share * 100)} % des revenus` : "";
-      lab.append(sw, nm, sh);
-      lab.dataset.x = String(cx);
-      lab.dataset.z = String(cz);
+      const share = this.o.familyShares[q], rev = this.o.familyRevenue[q];
+      shr.textContent = [share != null ? `${Math.round(share * 100)} % des revenus` : "", rev != null ? this.o.formatEur(rev) : ""].filter(Boolean).join(" · ");
+      lab.append(sw, nm, shr);
+      lab.dataset.x = String(stackX);
+      lab.dataset.y = "0";
+      lab.dataset.z = String(zc);
       lab.style.opacity = "0";
       this.o.labelLayer.appendChild(lab);
       this.districtLabels.push(lab);
-    }
-    this.extent = ext;
+    });
+    // Socle des piles : une ligne d'or, comme l'axe d'un histogramme
+    const sX = x0 - CELL * 2.2, half = (LANES.length * laneD) / 2;
+    const plinth = new THREE.LineBasicMaterial({ color: 0xf3dcaa, transparent: true, opacity: 0 });
+    this.frames.push(plinth);
+    plinth.userData.stack = true;
+    this.scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(sX, 0.07, -half), new THREE.Vector3(sX, 0.07, half)]), plinth));
+    const E = Math.max(ext, half);
+    this.extentZ = half;
+    this.overview = { pos: new THREE.Vector3(E * 1.25, E * 0.8, E * 1.45), target: new THREE.Vector3(-E * 0.08, 8, 0) };
+    this.extent = E;
     this.sorted = [...this.towers].sort((a, b) => b.f.revenue - a.f.revenue);
 
     // Sol : dalle sombre, trame orthogonale fine et deux avenues dorées
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), new THREE.MeshStandardMaterial({ color: 0x03060c, roughness: 0.92, metalness: 0.2 }));
     ground.rotation.x = -Math.PI / 2;
     this.scene.add(ground);
-    const size = Math.ceil((ext * 2 + 60) / CELL) * CELL;
+    const size = Math.ceil((Math.max(ext, half) * 2 + 80) / CELL) * CELL;
     const grid = new THREE.GridHelper(size, Math.round(size / (CELL / 2)), 0x1c355e, 0x14243f);
     const gm = grid.material as THREE.LineBasicMaterial;
     gm.transparent = true;
     gm.opacity = 0.32;
     grid.position.y = 0.01;
     this.scene.add(grid);
-    const L = ext + 40;
-    this.scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(-L, 0.05, 0), new THREE.Vector3(L, 0.05, 0), new THREE.Vector3(0, 0.05, -L), new THREE.Vector3(0, 0.05, L)]),
-      new THREE.LineBasicMaterial({ color: 0xcc9f53, transparent: true, opacity: 0.6 })));
-    this.scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(square(ext + 8, 0.05)),
-      new THREE.LineBasicMaterial({ color: 0xcc9f53, transparent: true, opacity: 0.22 })));
-
+    // Allées : filets d'or entre les rangées
+    const lines: THREE.Vector3[] = [];
+    for (let i = 0; i <= LANES.length; i++) {
+      const z = (i - LANES.length / 2) * laneD;
+      lines.push(new THREE.Vector3(x0 - CELL * 4, 0.05, z), new THREE.Vector3(-x0 + CELL * 1.5, 0.05, z));
+    }
+    this.scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(lines), new THREE.LineBasicMaterial({ color: 0xcc9f53, transparent: true, opacity: 0.35 })));
     // Onde carrée d'ouverture
     this.waveMat = new THREE.LineBasicMaterial({ color: 0xf3dcaa, transparent: true, opacity: 0 });
     this.wave = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(square(1, 0.08)), this.waveMat);
@@ -236,7 +270,7 @@ export class RevenueScene {
     // Plan de lumière qui balaie la ville
     this.sweepMat = new THREE.MeshBasicMaterial({ color: 0xf3dcaa, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false,
       blending: THREE.AdditiveBlending });
-    this.sweep = new THREE.Mesh(new THREE.BoxGeometry(0.6, 140, ext * 2 + 60), this.sweepMat);
+    this.sweep = new THREE.Mesh(new THREE.BoxGeometry(0.6, 140, half * 2 + 40), this.sweepMat);
     this.sweep.position.set(-1e4, 70, 0);
     this.scene.add(this.sweep);
 
@@ -258,7 +292,7 @@ export class RevenueScene {
       g.setAttribute("aH", new THREE.BufferAttribute(hh, 1));
       g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 40, 0), 500);
       this.streakMat = new THREE.ShaderMaterial({ vertexShader: STREAK_VS, fragmentShader: STREAK_FS, transparent: true, depthWrite: false,
-        blending: THREE.AdditiveBlending, uniforms: { uTime: { value: 0 }, uPixel: { value: 1 }, uOn: { value: 0 } } });
+        blending: THREE.AdditiveBlending, uniforms: { uTime: { value: 0 }, uPixel: { value: 1 }, uOn: { value: 0 }, uFade: { value: 1 } } });
       this.scene.add(new THREE.Points(g, this.streakMat));
     }
   }
@@ -266,8 +300,8 @@ export class RevenueScene {
   private playIntro() {
     if (this.o.reduced) {
       this.towers.forEach((t) => this.setHeight(t, 1));
-      this.camera.position.copy(OVERVIEW.pos);
-      this.controls.target.copy(OVERVIEW.target);
+      this.camera.position.copy(this.overview.pos);
+      this.controls.target.copy(this.overview.target);
       this.intro.k = 1;
       if (this.streakMat) this.streakMat.uniforms.uOn.value = 1;
       this.o.onIntroDone?.();
@@ -289,48 +323,64 @@ export class RevenueScene {
       const g = { k: 0 };
       tl.to(g, { k: 1, duration: 1.4, ease: "expo.out", onUpdate: () => this.setHeight(t, g.k) }, 0.55 + i * (1.3 / Math.max(this.sorted.length, 1)));
     });
-    tl.to(this.camera.position, { x: OVERVIEW.pos.x, y: OVERVIEW.pos.y, z: OVERVIEW.pos.z, duration: 3, ease: "power3.inOut" }, 0.1)
-      .to(this.controls.target, { x: OVERVIEW.target.x, y: OVERVIEW.target.y, z: OVERVIEW.target.z, duration: 3, ease: "power3.inOut" }, 0.1);
+    tl.to(this.camera.position, { x: this.overview.pos.x, y: this.overview.pos.y, z: this.overview.pos.z, duration: 3, ease: "power3.inOut" }, 0.1)
+      .to(this.controls.target, { x: this.overview.target.x, y: this.overview.target.y, z: this.overview.target.z, duration: 3, ease: "power3.inOut" }, 0.1);
     if (this.streakMat) tl.to(this.streakMat.uniforms.uOn, { value: 1, duration: 1.2 }, 1.9);
     tl.to(this.intro, { k: 1, duration: 0.4 }, 2.7);
   }
 
-  private setHeight(t: Tower, k: number) {
-    t.k = k;
-    const h = Math.max(0.001, t.h * k);
-    t.tall.scale.y = h;
-    t.cap.position.y = h + 0.03;
-  }
+  private setHeight(t: Tower, k: number) { t.k = k; }
 
   // ---------------------------------------------------------------- plans pilotés par la page
-  /** Mouvement de caméra vers un plan : vue d'ensemble, fonds n° i (par revenu), plan des districts. */
+  /** Mouvement de caméra vers un plan : vue d'ensemble, fonds n° i (par revenu), empilement par famille. */
   goTo(shot: Shot, dur = 1.6) {
     this.idleSpin = shot.kind === "overview";
     let pos: THREE.Vector3, target: THREE.Vector3;
     const t = shot.kind === "fund" ? this.sorted[shot.i] : undefined;
+    const narrow = this.camera.aspect < 1;
     if (t) {
       this.focusId = t.f.id;
-      const out = new THREE.Vector3(t.x, 0, t.z).normalize();
+      // Caméra hors de la ville, de biais, tour cadrée dans la moitié droite de l'écran
+      const out = new THREE.Vector3(Math.sign(t.x) * 0.55 || 0.55, 0, Math.sign(t.z) || 1).normalize();
       const side = new THREE.Vector3(-out.z, 0, out.x);
-      const d = Math.max(46, t.h * 1.15 + 26);
-      // Caméra à l'extérieur de la ville, légèrement de biais, tour cadrée dans la moitié droite de l'écran
+      const d = Math.max(70, t.h * 1.55 + 34);
       pos = new THREE.Vector3(t.x, 0, t.z).addScaledVector(out, d).addScaledVector(side, d * 0.6);
-      pos.y = Math.max(12, t.h * 0.62);
-      target = new THREE.Vector3(t.x, t.h * 0.46, t.z).addScaledVector(side, this.camera.aspect < 1 ? 0 : d * 0.32);
-    } else if (shot.kind === "map") {
+      pos.y = t.h * 0.85 + 14;
+      target = new THREE.Vector3(t.x, t.h * 0.5, t.z).addScaledVector(side, narrow ? 0 : d * 0.24);
+    } else if (shot.kind === "stack") {
       this.focusId = null;
-      const narrow = this.camera.aspect < 1;
-      target = new THREE.Vector3(narrow ? 0 : -this.extent * 0.55, 0, narrow ? -this.extent * 0.35 : 0);
-      pos = target.clone().add(new THREE.Vector3(0.01, this.extent * (narrow ? 5.2 : 3.7), 0.02));
+      // De face, dans l'axe des rangées : les quatre piles côte à côte, comme un histogramme
+      const sX = this.towers[0]?.sx ?? 0, top = this.stackTop;
+      const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)), half = this.extentZ;
+      if (narrow) {
+        // Écran étroit : les piles occupent le tiers haut, la fiche le bas
+        const d = Math.max((half * 1.15) / (this.camera.aspect * tanV), top / (0.66 * tanV));
+        target = new THREE.Vector3(sX, top / 2 - 0.42 * d * tanV, 0);
+        pos = new THREE.Vector3(sX - d, top * 0.5, d * 0.1);
+      } else {
+        const d = Math.max((half * 2.2) / (this.camera.aspect * tanV), (top * 0.72) / tanV);
+        target = new THREE.Vector3(sX, top * 0.4, -half * 0.58);
+        pos = new THREE.Vector3(sX - d, top * 0.46, target.z + d * 0.16);
+      }
     } else {
       this.focusId = null;
-      pos = OVERVIEW.pos.clone();
-      target = OVERVIEW.target.clone();
+      pos = this.overview.pos.clone();
+      target = this.overview.target.clone();
     }
     const d = this.o.reduced ? 0 : dur;
     gsap.to(this.camera.position, { x: pos.x, y: pos.y, z: pos.z, duration: d, ease: "power3.inOut", overwrite: true });
     gsap.to(this.controls.target, { x: target.x, y: target.y, z: target.z, duration: d, ease: "power3.inOut", overwrite: true });
-    gsap.to(this.mapK, { v: shot.kind === "map" ? 1 : 0, duration: d * 0.8, overwrite: true });
+    const stack = shot.kind === "stack" ? 1 : 0;
+    if (stack !== this.stackGoal) {
+      this.stackGoal = stack;
+      gsap.to(this.stackK, { v: stack, duration: d * 0.9, delay: stack ? d * 0.35 : 0, overwrite: true });
+      // Chaque tour quitte sa rangée et vient se poser sur la pile de sa famille (du bas vers le haut ; l'inverse au retour)
+      const n = Math.max(...this.towers.map((x) => x.rank), 1);
+      for (const tw of this.towers) {
+        const order = stack ? tw.rank : n - tw.rank;
+        gsap.to(tw.m, { v: stack, duration: d ? 1.25 : 0, delay: d ? order * (1.1 / n) : 0, ease: "power3.inOut", overwrite: true });
+      }
+    }
   }
 
   /** Rotation autour du point visé (boutons et flèches du clavier : alternative au glisser). */
@@ -392,7 +442,7 @@ export class RevenueScene {
   private loop = (now: number) => {
     this.raf = requestAnimationFrame(this.loop);
     if (!this.visible) return;
-    const busy = this.intro.k < 1 || gsap.isTweening(this.camera.position) || gsap.isTweening(this.mapK);
+    const busy = this.intro.k < 1 || gsap.isTweening(this.camera.position) || gsap.isTweening(this.stackK) || this.towers.some((t) => gsap.isTweening(t.m));
     if (!this.quality.gate(now, busy)) return;
     const still = motionPaused();
     if (this.streakMat && !still) this.streakMat.uniforms.uTime.value = (now - this.t0) / 1000;
@@ -406,17 +456,29 @@ export class RevenueScene {
     for (const tw of this.towers) {
       const on = this.hovered === tw || this.focusId === tw.f.id ? 1 : 0;
       tw.hover += (on - tw.hover) * 0.12;
-      const famOff = this.famFocus && (QUAD[tw.f.family] ?? QUAD.nc)[2] !== this.famFocus;
+      const famOff = this.famFocus && laneOf(tw.f.family) !== laneOf(this.famFocus);
       const dimT = famOff ? 0.1 : this.focusId && this.focusId !== tw.f.id ? 0.28 : this.hovered && this.hovered !== tw ? 0.55 : 1;
       tw.dim += (dimT - tw.dim) * 0.1;
       const swept = this.sweepX > -1e3 ? Math.max(0, 1 - Math.abs(tw.x - this.sweepX) / 14) : 0;
       const grown = Math.min(1, tw.k * 2);
-      tw.mat.emissiveIntensity = 0.04 + 0.6 * swept + tw.hover * 0.4;
+      // Interpolation ville → pile, avec un arc : le bloc se soulève, glisse, puis se pose
+      const m = tw.m.v, hy = Math.max(0.001, tw.h * tw.k);
+      const px = tw.x + (tw.sx - tw.x) * m, pz = tw.z + (tw.sz - tw.z) * m;
+      const py = tw.sy * m + Math.sin(Math.PI * m) * (10 + tw.rank * 1.2);
+      const sy = hy + (tw.sh - hy) * m, sxz = tw.w + (STACK_W - tw.w) * m;
+      tw.tall.position.set(px, py, pz);
+      tw.tall.scale.set(sxz, sy, sxz);
+      tw.cap.position.set(px, py + sy + 0.03, pz);
+      tw.cap.scale.set(sxz * 0.98, sxz * 0.98, 1);
+      tw.mat.emissiveIntensity = 0.04 + 0.6 * swept + tw.hover * 0.4 + 0.1 * Math.sin(Math.PI * m);
       tw.mat.opacity = 0.18 + 0.82 * tw.dim;
-      tw.edge.opacity = Math.min(1, (0.12 + 0.68 * tw.dim) * grown + swept * 0.4 + tw.hover * 0.35);
-      tw.capMat.opacity = Math.min(0.85, grown * (0.08 + 0.4 * (tw.h / H_MAX)) * (0.25 + 0.75 * tw.dim) * (1 - 0.6 * this.mapK.v) + tw.hover * 0.35 + swept * 0.5);
-      tw.baseMat.opacity = (0.08 * tw.dim + tw.hover * 0.4) * grown;
+      tw.edge.opacity = Math.min(1, (0.12 + 0.68 * tw.dim) * grown + swept * 0.4 + tw.hover * 0.35 + 0.15 * m);
+      tw.capMat.opacity = Math.min(0.85, grown * (0.08 + 0.4 * (tw.h / H_MAX)) * (0.25 + 0.75 * tw.dim) * (1 - 0.7 * m) + tw.hover * 0.35 + swept * 0.5);
+      tw.baseMat.opacity = (0.08 * tw.dim + tw.hover * 0.4) * grown * (1 - m);
     }
+    const sk = this.stackK.v;
+    for (const fm of this.frames) fm.opacity = fm.userData.stack ? 0.9 * sk : 0.5 * (1 - sk);
+    if (this.streakMat) this.streakMat.uniforms.uFade.value = 1 - sk;
     this.placeLabels();
     if (this.composer) this.composer.render();
     else this.renderer.render(this.scene, this.camera);
@@ -426,9 +488,9 @@ export class RevenueScene {
     const w = this.host.clientWidth, h = this.host.clientHeight;
     const v = new THREE.Vector3();
     for (const lab of this.districtLabels) {
-      v.set(Number(lab.dataset.x), 0, Number(lab.dataset.z)).project(this.camera);
-      lab.style.opacity = this.mapK.v.toFixed(3);
-      lab.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px) translate(-50%, -50%)`;
+      v.set(Number(lab.dataset.x), Number(lab.dataset.y), Number(lab.dataset.z)).project(this.camera);
+      lab.style.opacity = Math.max(0, this.stackK.v * 1.6 - 0.6).toFixed(3);
+      lab.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px) translate(-50%, 14px)`;
     }
   }
 
@@ -436,7 +498,7 @@ export class RevenueScene {
     cancelAnimationFrame(this.raf);
     this.ro.disconnect();
     this.io.disconnect();
-    gsap.killTweensOf([this.camera.position, this.controls.target, this.intro, this.mapK]);
+    gsap.killTweensOf([this.camera.position, this.controls.target, this.intro, this.stackK, ...this.towers.map((t) => t.m)]);
     const el = this.renderer.domElement;
     el.removeEventListener("pointermove", this.onMove);
     el.removeEventListener("pointerleave", this.onLeave);

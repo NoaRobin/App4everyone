@@ -8,7 +8,7 @@ import { prefersReducedMotion, useReducedMotion, webglAvailable } from "../lib/m
 import { gsap, onVisible, ScrollTrigger, SplitText } from "../lib/gsap";
 import type { FamilyKey, Overview } from "../lib/types";
 import { Board, Money, type BoardRow } from "../components/Story";
-import { TimeChart } from "../components/charts";
+import { TimeChart, useWidth } from "../components/charts";
 import type { RevenueScene, RevFund } from "../three/RevenueScene";
 import * as I from "../components/Icon";
 
@@ -123,6 +123,7 @@ function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
         colors, reduced, labelLayer: lab,
         familyLabels: Object.fromEntries(r.families.map((g) => [g.key, FAMILY_LABEL[g.key as FamilyKey] ?? g.label])),
         familyShares: Object.fromEntries(r.families.map((g) => [g.key, g.share])),
+        familyRevenue: Object.fromEntries(r.families.map((g) => [g.key, g.revenue])), formatEur: (v) => eur(v),
         onHover: (f, x, y) => setTip(f ? { f, x, y } : null), onSelect: (f) => nav(`/fonds/${encodeURIComponent(f.id)}`),
       });
       scene.current = s;
@@ -168,7 +169,7 @@ function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
   useEffect(() => {
     const s = scene.current;
     if (!s || !filmOn) return;
-    s.goTo(chap === 0 ? { kind: "overview" } : chap === CHAPTERS.length - 1 ? { kind: "map" } : { kind: "fund", i: chap - 1 });
+    s.goTo(chap === 0 ? { kind: "overview" } : chap === CHAPTERS.length - 1 ? { kind: "stack" } : { kind: "fund", i: chap - 1 });
   }, [chap, filmOn]);
 
   const jump = (i: number) => {
@@ -219,7 +220,7 @@ function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
             </ol>
           </nav>
         )}
-        <div className="home__cue rv__cue" aria-hidden="true"><span>{filmOn ? "Faire défiler" : "Ce qui rapporte"}</span><i /></div>
+        <div className="home__cue rv__cue" aria-hidden="true" style={chap > 0 ? { opacity: 0 } : undefined}><span>{filmOn ? "Faire défiler" : "Ce qui rapporte"}</span><i /></div>
       </div>
 
       {r && top.length > 0 && (
@@ -243,8 +244,9 @@ function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
           ))}
           <article className="rv__chap rv__chap--map" aria-labelledby="h-fams">
             <div className="rv__cbody">
-              <div className="eyebrow rv__cf">Vue de dessus · quatre districts</div>
-              <h2 className="rv__ct" id="h-fams">Quatre familles, un seul carrefour.</h2>
+              <div className="eyebrow rv__cf">Répartition des revenus</div>
+              <h2 className="rv__ct" id="h-fams">Empilées, les tours donnent le poids de chaque famille.</h2>
+              <p className="rv__cp">Chaque bloc est un fonds, à la même échelle que dans la ville&nbsp;: la hauteur d'une pile est la somme de ses revenus.</p>
               <i className="rv__crule" aria-hidden="true" />
               <div className="rv__cd"><FamilyList fams={fams} focus={focus} setFocus={setFocus} label="Part des revenus par famille" big /></div>
               <a className="rv__clink" href="#h-rank">Le classement complet <I.Arrow size={16} /></a>
@@ -449,17 +451,95 @@ function Drivers({ r }: { r: Revenue }) {
       <Rise><h2 className="home__h2" id="h-drv">Ce qui fait bouger les revenus.</h2></Rise>
       <Rise><p className="home__lede">Variation des revenus annualisés en un an, séparée entre ce qu'apporte la collecte nette (au taux de chaque part) et ce qu'apportent les marchés.</p></Rise>
       <div className="dv" ref={ref}>
-        <div className="dv__eq">
-          {row("Collecte nette", c.flows, "is-flow", "argent confié ou retiré")}
-          {row("Effet marché", c.market, "is-mkt", "valorisation des encours")}
-          {row("Variation des revenus", c.total, "is-tot", "revenus annualisés, un an")}
-        </div>
+        {c.total != null && c.flows != null && c.market != null ? <Bridge total={r.total} change={c.total} flows={c.flows} market={c.market} /> : (
+          <div className="dv__eq">
+            {row("Collecte nette", c.flows, "is-flow", "argent confié ou retiré")}
+            {row("Effet marché", c.market, "is-mkt", "valorisation des encours")}
+            {row("Variation des revenus", c.total, "is-tot", "revenus annualisés, un an")}
+          </div>
+        )}
         <div className="dv__lists">
           {list("Plus forte hausse", up)}
           {down.length > 0 && list("Plus forte baisse", down)}
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * Pont des revenus sur un an : revenus annualisés il y a un an + collecte nette + effet marché = revenus d'aujourd'hui.
+ * Le mouvement fait l'addition : la première barre monte, un filet porte son niveau vers la colonne suivante, chaque
+ * effet part de ce niveau (vers le haut s'il ajoute, vers le bas s'il retire), puis la barre d'arrivée monte du sol.
+ * Échelle partant de zéro : les effets gardent leur vraie proportion face au total.
+ */
+function Bridge({ total, change, flows, market }: { total: number; change: number; flows: number; market: number }) {
+  const [box, W] = useWidth<HTMLDivElement>();
+  const svg = useRef<SVGSVGElement>(null);
+  const start = total - change;
+  const other = change - flows - market;
+  const steps: { key: string; label: string; note: string; from: number; to: number; kind: "total" | "delta" }[] = [
+    { key: "a", label: "Il y a un an", note: "revenus annualisés", from: 0, to: start, kind: "total" },
+    { key: "f", label: "Collecte nette", note: "argent confié ou retiré", from: start, to: start + flows, kind: "delta" },
+    { key: "m", label: "Effet marché", note: "valorisation des encours", from: start + flows, to: start + flows + market, kind: "delta" },
+    ...(Math.abs(other) > Math.abs(change) * 0.005 ? [{ key: "o", label: "Autres effets", note: "écart d'arrondi et de périmètre", from: start + flows + market, to: total, kind: "delta" as const }] : []),
+    { key: "z", label: "Aujourd'hui", note: "revenus annualisés", from: 0, to: total, kind: "total" },
+  ];
+  const H = W < 600 ? 300 : 360, top = 46, bottom = 64;
+  const max = Math.max(...steps.map((x) => Math.max(x.from, x.to))) * 1.06 || 1;
+  const y = (v: number) => top + (1 - v / max) * (H - top - bottom);
+  const n = steps.length, slot = (W || 1) / n, bw = Math.min(96, slot * 0.56);
+  const cx = (i: number) => slot * (i + 0.5);
+  useEffect(() => {
+    const el = svg.current;
+    if (!el || !W || prefersReducedMotion()) return;
+    const q = (sel: string) => Array.from(el.querySelectorAll<SVGElement>(sel));
+    const num = (e: Element, k: string) => Number(e.getAttribute(k));
+    const tl = gsap.timeline({ paused: true, defaults: { ease: "power3.inOut" } });
+    // Uniquement des attributs SVG (pas de transformations) : rien ne peut rester décalé si la largeur change
+    q(".br__axis").forEach((e) => tl.fromTo(e, { attr: { x2: 0 } }, { attr: { x2: num(e, "x2") }, duration: 0.7 }, 0));
+    steps.forEach((st, i) => {
+      const at = 0.35 + i * 0.62;
+      const up = st.to >= st.from;
+      const g = el.querySelector(`[data-k="${st.key}"]`);
+      if (!g) return;
+      const bar = g.querySelector(".br__bar")!, yy = num(bar, "y"), hh = num(bar, "height");
+      tl.fromTo(bar, { attr: { y: up ? yy + hh : yy, height: 0 } }, { attr: { y: yy, height: hh }, duration: st.kind === "total" ? 0.9 : 0.6, ease: "expo.out" }, at)
+        .fromTo(g.querySelectorAll(".br__v, .br__x"), { opacity: 0 }, { opacity: 1, duration: 0.45, ease: "power2.out" }, at + 0.3);
+      const link = el.querySelector(`[data-c="${i}"]`);
+      if (link) tl.fromTo(link, { attr: { x2: num(link, "x1") } }, { attr: { x2: num(link, "x2") }, duration: 0.4, ease: "power2.inOut" }, at + 0.45);
+    });
+    q(".br__check").forEach((e) => tl.fromTo(e, { opacity: 0, attr: { x2: num(e, "x1") } }, { opacity: 1, attr: { x2: num(e, "x2") }, duration: 0.8 }, 0.35 + n * 0.62));
+    const stop = onVisible(el, () => tl.play(), "0px 0px -18% 0px");
+    return () => { stop(); tl.progress(1).kill(); };
+  }, [W, total, change, flows, market]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="br" ref={box}>
+      {W > 0 && (
+        <svg ref={svg} width={W} height={H} role="img"
+          aria-label={`Revenus annualisés : ${eur(start)} il y a un an, ${eur(flows, { signed: true })} par la collecte nette, ${eur(market, { signed: true })} par l'effet marché, ${eur(total)} aujourd'hui.`}>
+          <line className="br__axis" x1={0} x2={W} y1={y(0)} y2={y(0)} />
+          {steps.slice(0, -1).map((st, i) => (
+            <line key={`c${i}`} data-c={i} className="br__link" x1={cx(i) + bw / 2} x2={cx(i + 1) - bw / 2} y1={y(st.to)} y2={y(st.to)} />
+          ))}
+          <line className="br__check" x1={cx(0) - bw / 2} x2={cx(n - 1) + bw / 2} y1={y(total)} y2={y(total)} />
+          {steps.map((st, i) => {
+            const lo = Math.min(st.from, st.to), hi = Math.max(st.from, st.to);
+            const up = st.to >= st.from, d = st.to - st.from;
+            const cls = st.kind === "total" ? "is-total" : up ? "is-up" : "is-down";
+            return (
+              <g key={st.key} data-k={st.key} className={cls}>
+                <rect className="br__bar" x={cx(i) - bw / 2} y={y(hi)} width={bw} height={Math.max(1, y(lo) - y(hi))} />
+                {st.kind === "delta" && <rect className="br__x" x={cx(i) - bw / 2} y={up ? y(hi) - 1 : y(lo) - 1} width={bw} height={2} />}
+                <text className="br__v num" x={cx(i)} y={up ? y(hi) - 12 : y(lo) + 24} textAnchor="middle">{st.kind === "total" ? eur(st.to) : eur(d, { signed: true })}</text>
+                <text className="br__l" x={cx(i)} y={H - bottom + 26} textAnchor="middle">{st.label}</text>
+                {W >= 600 && <text className="br__n" x={cx(i)} y={H - bottom + 44} textAnchor="middle">{st.note}</text>}
+              </g>
+            );
+          })}
+        </svg>
+      )}
+    </div>
   );
 }
 
@@ -473,7 +553,9 @@ function Breakdown({ r }: { r: Revenue }) {
     const el = ref.current;
     if (!el || prefersReducedMotion()) return;
     const segs = el.querySelectorAll<HTMLElement>(".bd__strip span");
-    gsap.fromTo(segs, { scaleY: 0 }, { scaleY: 1, duration: 0.8, stagger: 0.04, ease: "back.out(1.6)", transformOrigin: "50% 100%" });
+    // Chaque segment s'ouvre de bas en haut, à l'équerre, dans l'ordre de la part
+    gsap.fromTo(segs, { clipPath: "inset(100% 0% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", duration: 0.75, stagger: 0.05, ease: "power3.out", clearProps: "clipPath" });
+    gsap.fromTo(el.querySelectorAll(".bd__strip b"), { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.05, delay: 0.35, ease: "power2.out" });
   }, [dim]);
   return (
     <section className="rv__sec" aria-labelledby="h-bd">
@@ -486,7 +568,11 @@ function Breakdown({ r }: { r: Revenue }) {
       </div>
       <div className="bd" ref={ref}>
         <div className="bd__strip" role="img" aria-label={rows.map((g) => `${g.label} ${pct(g.share, { signed: false })}`).join(", ")}>
-          {rows.map((g, i) => <span key={g.key} style={{ flexGrow: g.share ?? 0, background: colorOf(g, i) }} title={`${g.label} · ${eur(g.revenue)}`} />)}
+          {rows.map((g, i) => (
+            <span key={g.key} style={{ flexGrow: g.share ?? 0, background: colorOf(g, i) }} title={`${g.label} · ${eur(g.revenue)}`}>
+              {(g.share ?? 0) >= 0.07 && <b className="num" aria-hidden="true">{pct(g.share, { signed: false, digits: 0 })}</b>}
+            </span>
+          ))}
         </div>
         <table className="t bd__t">
           <thead><tr><th>{dim === "families" ? "Famille" : dim === "ranges" ? "Gamme" : "Classe d'actifs"}</th><th className="n">Revenus / an</th><th className="n">Part</th><th className="n">Encours</th><th className="n">Taux moyen</th><th className="n">Fonds</th></tr></thead>
@@ -503,12 +589,36 @@ function Breakdown({ r }: { r: Revenue }) {
 // ------------------------------------------------------------------ trajectoire
 function Trend({ r }: { r: Revenue }) {
   const series = useMemo(() => [{ key: "rev", label: "Revenus annualisés", color: "var(--gold)", points: r.trend, fill: true }], [r.trend]);
+  const ref = useRef<HTMLDivElement>(null);
+  const head = useRef<HTMLSpanElement>(null);
+  // La courbe se trace au rythme du défilement : le temps avance quand on descend, une tête carrée marque le mois lu
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || prefersReducedMotion()) return;
+    const apply = (p: number) => {
+      const line = el.querySelector<SVGPathElement>(".chart path.draw"), area = el.querySelector<SVGPathElement>(".chart path.area");
+      if (!line) return;
+      const len = line.getTotalLength();
+      line.style.strokeDasharray = p >= 0.999 ? "none" : `${len} ${len}`;
+      line.style.strokeDashoffset = `${len * (1 - p)}`;
+      if (area) area.style.clipPath = `inset(0 ${(1 - p) * 100}% 0 0)`;
+      const h = head.current, svg = line.ownerSVGElement;
+      if (h && svg) {
+        const pt = line.getPointAtLength(len * p), o = svg.getBoundingClientRect(), b = el.getBoundingClientRect();
+        h.style.opacity = p > 0.01 && p < 0.999 ? "1" : "0";
+        h.style.transform = `translate(${pt.x + o.left - b.left}px, ${pt.y + o.top - b.top}px) rotate(45deg)`;
+      }
+    };
+    const st = ScrollTrigger.create({ trigger: el, start: "top 88%", end: "bottom 60%", scrub: 0.6, onUpdate: (self) => apply(self.progress), onRefresh: (self) => apply(self.progress) });
+    requestAnimationFrame(() => apply(st.progress));
+    return () => st.kill();
+  }, [r.trend]);
   return (
     <section className="rv__sec" aria-labelledby="h-tr">
       <Rise><div className="eyebrow home__eyebrow">Trajectoire</div></Rise>
       <Rise><h2 className="home__h2" id="h-tr">Le rythme annuel des revenus, mois après mois.</h2></Rise>
       <Rise><p className="home__lede">Encours de fin de mois multiplié par le taux de frais actuel de chaque part&nbsp;: la courbe isole l'effet des encours.</p></Rise>
-      <div className="rv__chart"><TimeChart series={series} height={300} ariaLabel="Revenus de gestion annualisés, fin de mois" /></div>
+      <div className="rv__chart tr" ref={ref}><TimeChart series={series} height={300} ariaLabel="Revenus de gestion annualisés, fin de mois" /><span className="tr__head" ref={head} aria-hidden="true" /></div>
     </section>
   );
 }
