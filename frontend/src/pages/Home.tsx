@@ -43,10 +43,10 @@ export default function Home() {
       {ov.data && <Living o={ov.data} mock={!!meta?.is_mock} />}
       {dist.data && (
         <section className="home__world" aria-labelledby="h-world">
-          <Rise><div className="eyebrow home__eyebrow">Départs · distribution</div></Rise>
+          <Rise><div className="eyebrow home__eyebrow">Distribution</div></Rise>
           <Rise><h2 className="home__h2" id="h-world">Commercialisés dans {dist.data.countries.length}&nbsp;pays.</h2></Rise>
-          <Board rows={[...dist.data.countries].sort((a, b) => b.n_shares - a.n_shares).slice(0, 10)} />
-          <Rise><p className="home__lede">{dist.data.n_shares_registered} parts disposent d'au moins un enregistrement actif. <Link className="link" to="/distribution">Tout le tableau des départs et le globe</Link></p></Rise>
+          <Board title="Commercialisation" rows={[...dist.data.countries].sort((a, b) => b.n_shares - a.n_shares).slice(0, 10)} />
+          <Rise><p className="home__lede">{dist.data.n_shares_registered} parts disposent d'au moins un enregistrement actif. <Link className="link" to="/distribution">Tous les pays de commercialisation et le globe</Link></p></Rise>
         </section>
       )}
       <section className="home__close" aria-labelledby="h-close">

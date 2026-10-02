@@ -42,7 +42,9 @@ export function Money({ v, big, immediate, live }: { v: number | null | undefine
 /** L'équation de l'année : encours de départ + collecte + effet marché = encours d'arrivée, avec des barres proportionnelles. */
 export function Equation({ v, end }: { v: NonNullable<Overview["var"][string]>; end: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  const max = Math.max(v.aum_start ?? 0, v.aum_end ?? 0, 1);
+  // Échelle commune à toutes les barres, étapes intermédiaires comprises (encours de départ + collecte) : rien ne déborde
+  const a0 = v.aum_start ?? 0;
+  const max = Math.max(a0, v.aum_end ?? 0, a0 + (v.flows ?? 0), a0 + (v.flows ?? 0) + (v.market ?? 0), 1);
   const rows: { l: string; x: number | null; kind: "base" | "flow" | "mkt" | "end" }[] = [
     { l: `Encours au ${fdate(v.start)}`, x: v.aum_start, kind: "base" },
     { l: "Collecte nette estimée", x: v.flows, kind: "flow" },
@@ -65,7 +67,8 @@ export function Equation({ v, end }: { v: NonNullable<Overview["var"][string]>; 
         const x = r.x ?? 0;
         let left = 0, width = 0;
         if (r.kind === "base" || r.kind === "end") { left = 0; width = x / max; }
-        else { const a = run, b = run + x; left = Math.min(a, b) / max; width = Math.abs(x) / max; run = b; }
+        else { const a = run, b = run + x; left = Math.max(0, Math.min(a, b) / max); width = Math.min(1 - left, Math.abs(x) / max); run = b; }
+        width = Math.max(0, Math.min(width, 1 - left));
         return (
           <div key={i} className={`eq__row eq__row--${r.kind}`}>
             <span className="eq__op" aria-hidden="true">{i === 0 ? "" : i === 3 ? "=" : x >= 0 ? "+" : "−"}</span>

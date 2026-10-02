@@ -208,7 +208,7 @@ function FlowTip({ tip }: { tip: { h: SkHover; x: number; y: number } }) {
   const l = h.link;
   return (
     <div className="city__tip flow__tip" style={style} role="status">
-      <div className="city__tip-f"><span className="dot" style={{ background: famVar(l.family, true) }} />{FAMILY_LABEL[l.family as FamilyKey]}</div>
+      <div className="city__tip-f">{l.family === "all" ? "Toutes familles" : <><span className="dot" style={{ background: famVar(l.family, true) }} />{FAMILY_LABEL[l.family as FamilyKey]}</>}</div>
       <div className="city__tip-n">{h.from.label} <span className="muted">→</span> {h.to.label}</div>
       <div className="city__tip-v num">{plural(l.value, "enregistrement")}</div>
       <div className="city__tip-s small">{plural(l.n_funds, "fonds", "fonds")} · {plural(l.n_shares, "part")}</div>
@@ -246,7 +246,7 @@ function FlowTable({ d, withRmm }: { d: Resp; withRmm: (u: string) => string }) 
             <tr key={i}>
               <td>{nodes[l.source].label}</td>
               <td>{nodes[l.target].other ? nodes[l.target].label : <Link className="link" to={withRmm(`/distribution/${encodeURIComponent(nodes[l.target].label)}`)}>{nodes[l.target].label}</Link>}</td>
-              <td><span className="dot" style={{ background: famVar(l.family, true) }} /> {FAMILY_LABEL[l.family as FamilyKey]}</td>
+              <td>{l.family === "all" ? <span className="muted">Toutes familles</span> : <><span className="dot" style={{ background: famVar(l.family, true) }} /> {FAMILY_LABEL[l.family as FamilyKey]}</>}</td>
               <td className="n">{num(l.value)}</td><td className="n">{l.n_funds}</td><td className="n">{l.n_shares}</td>
             </tr>
           ))}

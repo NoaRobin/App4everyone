@@ -607,6 +607,72 @@ def is_late(statut: Any) -> bool:
     return bool(statut) and bool(_CUTOFF.search(fold(statut)))
 
 
+# ------------------------------------------------------------------ synthèse : quelques axes lisibles au lieu de milliers de groupes
+SEGMENTS = {"direct": "Clients directs actifs", "prive": "Banque privée et institutionnels", "opc": "OPC et fonds de fonds",
+            "omnibus": "Omnibus et plateformes", "inactif": "Comptes inactifs", "autre": "Autres comptes"}
+ENTREES = {"Souscription", "Transfert entrant"}
+SORTIES = {"Rachat", "Transfert sortant"}
+
+
+def segment_of(c: Any) -> str:
+    """Segment de clientèle d'une classification de compte (« TA/Client Actif » → clients directs actifs…)."""
+    f = fold(c) if c is not None else ""
+    if not f or f in NULL_TOKENS or f == fold(NOT_SET):
+        return "autre"
+    if "inactif" in f:
+        return "inactif"
+    if "omnibus" in f or "plateforme" in f or "passage global" in f:
+        return "omnibus"
+    if re.search(r"\bopc\b", f) or "fonds" in f:
+        return "opc"
+    if "banque privee" in f or "institution" in f or "prive" in f:
+        return "prive"
+    if "actif" in f:
+        return "direct"
+    return "autre"
+
+
+def compare(enc: pd.DataFrame, flows: pd.DataFrame | None, key: str, top: int | None = None, other: str = "Autres") -> list[dict]:
+    """Pour chaque groupe : part de l'encours, part des entrées et part des sorties de la période (volumes absolus, Montant EUR),
+    et la tendance relative (entrées plus fortes que les sorties, en parts). Jamais un flux net, jamais un montant.
+    Les `top` premiers groupes par encours sont détaillés, les autres réunis ; un groupe de moins de 5 n'est pas chiffré."""
+    if enc is None or enc.empty:
+        return []
+    e = enc.assign(**{key: enc[key].map(_label)})
+    order = e.groupby(key)["v"].sum().sort_values(ascending=False)
+    keep = list(order.index[:top]) if top and len(order) > top + 1 else list(order.index)
+    n_other = len(order) - len(keep)
+    other_lab = f"{other} ({n_other})" if n_other else other
+    remap = lambda v: v if v in keep else other_lab  # noqa: E731
+    e[key] = e[key].map(remap)
+    ge = e.groupby(key).agg(n=("n", "sum"), v=("v", "sum"))
+    tot = float(ge["v"].sum())
+    fin = fout = None
+    if flows is not None and not flows.empty:
+        f = flows.assign(**{key: flows[key].map(_label).map(remap)})
+        fin = f[f["sens"].isin(ENTREES)].groupby(key).agg(n=("n", "sum"), v=("v", "sum"))
+        fout = f[f["sens"].isin(SORTIES)].groupby(key).agg(n=("n", "sum"), v=("v", "sum"))
+    rows = []
+    for k in [*[x for x in keep if x in ge.index], *([other_lab] if n_other else [])]:
+        if k not in ge.index:
+            continue
+        n = int(ge.at[k, "n"])
+        t = tranche(n)
+
+        def part(df):
+            if df is None or k not in df.index or int(df.at[k, "n"]) < MIN_GROUP:
+                return None
+            return _pct(float(df.at[k, "v"]), float(df["v"].sum()))
+        pi, po = part(fin), part(fout)
+        trend = None if pi is None or po is None else "hausse" if pi - po >= 2 else "baisse" if po - pi >= 2 else "stable"
+        ep = _pct(float(ge.at[k, "v"]), tot) if t else None
+        # Activité relative : part moyenne des mouvements rapportée à la part de l'encours (1 = au prorata de son poids)
+        act = round(((pi + po) / 2) / ep, 1) if pi is not None and po is not None and ep and ep >= 0.5 else None
+        rows.append({"key": k, "encours_pct": ep, "tranche": t, "in_pct": pi, "out_pct": po, "trend": trend, "activity": act,
+                     "other": k == other_lab and bool(n_other)})
+    return rows
+
+
 def comptes_view(g: pd.DataFrame, clients: pd.DataFrame) -> dict:
     """Structure des comptes. Dissous = DateDissolution valide ; avec parent = Id CompteParent non vide."""
     if g.empty:
@@ -700,6 +766,7 @@ class Passif:
 
     def compute(self) -> dict:
         r = self.reader
+        self._pos, self._trx = {}, {}
         maps = self.mappings()
         stats = {t: r.stats(t, maps[t]) for t in TABLES}
         out: dict[str, Any] = {"available": True, "source": r.kind, "refreshed_at": datetime.now().isoformat(timespec="minutes")}
@@ -751,6 +818,7 @@ class Passif:
         else:
             out["transactions"] = self._transactions(mt, stats["transaction"], problems)
 
+        out["synthese"] = self._synthese()
         links = out["positions"].pop("links", None)
         dups = out["transactions"].pop("duplicates", None)
         out["lecture"] = self._lecture(maps, stats, out, problems, links, dups)
@@ -777,6 +845,7 @@ class Passif:
 
         holders = by({"teneur": ("text", "teneur"), "classification": ("text", "classification")})
         geo = by({"pays": ("text", "pays")})
+        self._pos = {"holders": holders, "geo": geo, "main": main, "tot": tot}
         sdg = by({"sdg": ("text", "sdg"), "type_fonds": ("text", "type_fonds")})
         first = by({"y": ("year", "premier_trade")})
         last = by({"y": ("year", "dernier_trade")})
@@ -817,7 +886,9 @@ class Passif:
         view["links"] = links
         bf = ok.groupby("fund").agg(n=("n", "sum"), v=("v", "sum"))
         funds = {f: {"pct": _pct(float(x.v), tot), "positions": tranche(int(x.n))} for f, x in bf.iterrows() if x.n >= MIN_GROUP}
-        view["top_funds"] = sorted(({"fund": f, "name": self.fund_names.get(f), **v} for f, v in funds.items()), key=lambda z: -(z["pct"] or 0))[:12]
+        view["top_funds"] = sorted(({"fund": f, "name": self.fund_names.get(f), **v} for f, v in funds.items()), key=lambda z: -(z["pct"] or 0))[:8]
+        view["top_funds_pct"] = round(sum(x["pct"] or 0 for x in view["top_funds"]), 1)
+        view["funds_count"] = tranche(len(funds))
         view["_funds"] = funds
         return view
 
@@ -865,10 +936,13 @@ class Passif:
             out_days.append({"date": str(d), "ops": tranche(int(x["n"].sum())), "sens": _shares(x, ["sens"], "v", t), "desks": _shares(x, ["desk"], "v", t),
                              "late_pct": _pct(float(lt["v"].sum()), t) if late["calculable"] and int(lt["n"].sum()) >= MIN_GROUP else None,
                              "groups": _shares(x, ["classe_actif", "desk", "sens", "statut", "devise"], "v", t)[:12]})
-        geo = r.group("transaction", mt, {"pays": ("text", "pays"), "sens": ("text", "sens"), "statut": ("text", "statut")}, meas,
+        who = r.group("transaction", mt, {"pays": ("text", "pays"), "teneur": ("text", "teneur"), "classification": ("text", "classification"),
+                                         "sens": ("text", "sens"), "statut": ("text", "statut")}, meas,
                       [("date_ge", "date_centralisation", keep[0])], dedup=dedup)
-        geo["v"] = pd.to_numeric(geo["v"], errors="coerce").fillna(0.0)
-        geo = geo.loc[geo["statut"].map(lambda v: fold(_label(v)) in allow).astype(bool)].assign(sens=lambda x: x["sens"].map(sens_label))
+        who["v"] = pd.to_numeric(who["v"], errors="coerce").fillna(0.0)
+        who = who.loc[who["statut"].map(lambda v: fold(_label(v)) in allow).astype(bool)].assign(sens=lambda x: x["sens"].map(sens_label))
+        geo = who
+        self._trx = {"g": g, "who": who, "late": late}
         return {"available": True, **base, "measure": "part du volume absolu (Montant EUR)", "first": keep[0], "last": keep[-1],
                 "n_days": len(keep), "days": out_days, "period_sens": _shares(g, ["sens"], "v", tot), "period_desks": _shares(g, ["desk"], "v", tot),
                 "period_classes": _shares(g, ["classe_actif"], "v", tot),
@@ -876,6 +950,46 @@ class Passif:
                 "period_desk_sens": _shares(g, ["desk", "sens"], "v", tot),
                 "late": late, "period_late_pct": late["pct"], "ops": tranche(int(g["n"].sum())),
                 "amount_valid_pct": _pct(float(g["ok"].sum()), float(g["n"].sum()))}
+
+    def _synthese(self) -> dict:
+        """Lecture d'analyste : segments de clientèle, teneurs, pays, classes d'actifs et desks, chacun en part de l'encours
+        face à sa part des entrées et des sorties ; tours (teneurs × segments) et rythme hebdomadaire des mouvements."""
+        P_, T_ = self._pos, self._trx
+        out: dict[str, Any] = {"segment_labels": SEGMENTS}
+        h = P_.get("holders")
+        w = T_.get("who")
+        g = T_.get("g")
+        if h is not None and not h.empty:
+            hs = h.assign(segment=h["classification"].map(segment_of))
+            ws = w.assign(segment=w["classification"].map(segment_of)) if w is not None and not w.empty else None
+            out["segments"] = [{**x, "label": SEGMENTS.get(x["key"], x["key"])} for x in compare(hs, ws, "segment")]
+            out["teneurs"] = compare(h, w, "teneur", top=4, other="Autres teneurs")
+            # Tours : quatre premiers teneurs (les autres réunis) × segments
+            top = list(h.assign(teneur=h["teneur"].map(_label)).groupby("teneur")["v"].sum().sort_values(ascending=False).index[:4])
+            t = hs.assign(teneur=hs["teneur"].map(_label).map(lambda v: v if v in top else "Autres teneurs"))
+            agg = t.groupby(["teneur", "segment"]).agg(n=("n", "sum"), v=("v", "sum")).reset_index()
+            tot = float(P_["tot"])
+            out["towers"] = [{"teneur": x.teneur, "segment": x.segment, "label": SEGMENTS[x.segment], "pct": _pct(float(x.v), tot), "tranche": tranche(int(x.n))}
+                             for x in agg.itertuples(index=False) if x.n >= MIN_GROUP]
+            out["tower_order"] = [*top, *(["Autres teneurs"] if (t["teneur"] == "Autres teneurs").any() else [])]
+        if P_.get("geo") is not None:
+            rows = compare(P_["geo"], w, "pays", top=6, other="Autres pays")
+            out["countries"] = [{**x, "iso": L.country(x["key"])[1] if not x["other"] and x["key"] != NOT_SET else None} for x in rows]
+        if P_.get("main") is not None:
+            out["classes"] = compare(P_["main"], g, "classe_actif")
+            out["desks"] = compare(P_["main"], g, "desk")
+        if g is not None and not g.empty:
+            x = g.assign(w=pd.to_datetime(g["d"]).dt.to_period("W-SUN").dt.start_time)
+            weeks = []
+            for wk, y in x.groupby("w"):
+                tv = float(y["v"].sum())
+                lt = y[y["late"]]
+                weeks.append({"week": wk.date().isoformat(), "ops": tranche(int(y["n"].sum())),
+                              "in_pct": _pct(float(y.loc[y["sens"].isin(ENTREES), "v"].sum()), tv),
+                              "out_pct": _pct(float(y.loc[y["sens"].isin(SORTIES), "v"].sum()), tv),
+                              "late_pct": _pct(float(lt["v"].sum()), tv) if T_["late"]["calculable"] and int(lt["n"].sum()) >= MIN_GROUP else None})
+            out["weeks"] = weeks
+        return out
 
     def _lecture(self, maps: dict, stats: dict, out: dict, problems: list, links: dict | None, dups: dict | None) -> dict:
         """Transparence : correspondance appliquée, type détecté, valeurs nulles, dates valides et invalides, rattachements."""

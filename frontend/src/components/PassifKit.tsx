@@ -30,7 +30,8 @@ export type Positions = {
   by_teneur?: Share<"teneur">[] | null; by_classification?: Share<"classification">[] | null;
   by_country?: (Share<"pays"> & { iso?: string })[] | null; by_sdg?: Share<"sdg">[] | null; by_fund_type?: Share<"type_fonds">[] | null;
   seniority?: Band[] | null; last_trade?: Band[] | null; concentration?: Concentration | null;
-  top_funds?: { fund: string; name?: string | null; pct: number; positions?: Tranche }[] | null; total?: Tranche; amount_valid_pct?: number | null;
+  top_funds?: { fund: string; name?: string | null; pct: number; positions?: Tranche }[] | null; top_funds_pct?: number | null; funds_count?: Tranche;
+  total?: Tranche; amount_valid_pct?: number | null;
 };
 export type DayGroup = { classe_actif: string; desk: string; sens: string; statut?: string; devise?: string; pct: number; tranche?: Tranche };
 export type Day = {
@@ -65,6 +66,7 @@ export type PassifResp = {
   model?: Partial<Record<"clients" | "comptes" | "positions" | "operations" | "funds_held", Tranche>> | null;
   comptes?: (Comptes & { reason?: string; dissolution_rule?: string }) | null; positions?: Positions | null; transactions?: Transactions | null;
   lecture?: Lecture | null;
+  synthese?: import("./PassifSections").Synthese | null;
   funds?: Record<string, { pct: number; positions?: Tranche }> | null;
 };
 

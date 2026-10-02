@@ -313,7 +313,7 @@ def test_parts_sur_montant_eur(data):
 
 
 ALLOWED_NUM = {"pct", "residual_pct", "late_pct", "period_late_pct", "rank", "top_pct", "amount_pct", "rows_pct", "amount_valid_pct",
-               "n_days", "window_days"}
+               "n_days", "window_days", "encours_pct", "in_pct", "out_pct", "activity", "top_funds_pct"}
 LECTURE_COUNTS = {"rows", "accounts", "usable", "ignored_rows", "n_columns", "expected", "nulls", "filled", "valid", "invalid", "distinct", "n", "linked",
                   "references", "refs_repeated", "exact_duplicates", "refs_multi_lines", "without_reference", "amount_pct", "rows_pct", "pct", "rank"}
 

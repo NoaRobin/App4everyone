@@ -548,3 +548,56 @@
   .pa-acc__facts div + div, .pa-lec__links div + div { padding-left: 0; border-left: 0; }
   .pa-lec__head { grid-template-columns: 1fr 20px; } .pa-lec__head .small, .pa-lec__badge { grid-column: 1; }
 }
+
+/* ==========================================================================
+   Lecture d'analyste : tableaux comparatifs regroupés
+   ========================================================================== */
+.pa-ct { margin-top: 8px; }
+.pa-ct table { width: 100%; }
+.pa-ct th, .pa-ct td { vertical-align: middle; }
+.pa-ct thead th { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+.pa-ct__n { display: flex; align-items: center; gap: 10px; font-weight: 400; min-height: 44px; }
+.pa-ct__l { display: flex; flex-direction: column; gap: 2px; font-size: 15px; color: var(--ink); text-transform: none; letter-spacing: 0; }
+.pa-ct__tr { font-size: 12px; }
+.pa-ct__flag { width: 22px; height: auto; display: inline-block; flex: none; }
+.pa-ct__enc { width: 36%; }
+.pa-ct__ew { display: flex; align-items: center; gap: 12px; }
+.pa-ct__bar { flex: 1; height: 10px; background: rgba(214, 209, 202, .05); }
+.pa-ct__fill { display: block; height: 100%; background: var(--gold); }
+.pa-ct__ew b { min-width: 64px; text-align: right; font-family: var(--serif); font-weight: 400; font-size: 20px; }
+.pa-ct tr.is-other .pa-ct__l { font-style: italic; color: var(--ink-2); }
+.pa-ct__hint { margin-top: 10px; max-width: 100ch; }
+.pa-seg { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(240px, 1fr); gap: 28px; align-items: stretch; margin-bottom: 26px; }
+.pa-seg__stage { height: min(58vh, 520px); min-height: 380px; }
+.pa-seg__legend { display: flex; flex-direction: column; justify-content: center; }
+.pa-seg__legend button { display: grid; grid-template-columns: 14px 1fr auto; gap: 12px; align-items: center; min-height: 52px; padding: 0; background: none; border: 0;
+  border-bottom: 1px solid var(--line); color: var(--ink-2); font-size: 15px; text-align: left; transition: color var(--dur-ui), border-color var(--dur-ui); }
+.pa-seg__legend i { width: 14px; height: 14px; }
+.pa-seg__legend b { font-family: var(--serif); font-weight: 400; font-size: 28px; color: var(--ink); }
+.pa-seg__legend button:hover, .pa-seg__legend button[aria-pressed="true"], .pa-seg__legend button:focus-visible { color: var(--ink); border-bottom-color: var(--gold); }
+.pa-hold1 { margin-top: 32px; }
+/* semaines : entrées au-dessus, sorties au-dessous */
+.pa-wk { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); gap: 6px; }
+.pa-wk li { display: grid; grid-template-rows: 18px 110px 110px 18px 18px 16px; justify-items: center; gap: 2px; }
+.pa-wk__in, .pa-wk__out { position: relative; width: 70%; height: 100%; background: rgba(214, 209, 202, .04); }
+.pa-wk__in i { position: absolute; left: 0; right: 0; bottom: 0; background: #6189d6; transform-origin: bottom; }
+.pa-wk__out i { position: absolute; left: 0; right: 0; top: 0; background: #c98500; transform-origin: top; }
+.pa-wk__in { border-bottom: 1px solid var(--line-2); }
+.pa-wk__v { font-size: 12px; color: var(--ink-2); }
+.pa-wk li.is-out .pa-wk__v:last-of-type { color: var(--gold-ink); font-weight: 600; }
+.pa-wk__d { color: var(--ink-3); }
+.pa-wk__late { color: var(--gold-ink); }
+.pa-acc__facts--c { margin: 10px 0 18px; }
+.pa-lec__acc { margin-top: 18px; }
+@media (max-width: 1100px) { .pa-seg { grid-template-columns: 1fr; } }
+@media (max-width: 760px) {
+  .pa-ct thead { display: none; }
+  .pa-ct tr { display: grid; grid-template-columns: 1fr 1fr; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .pa-ct th, .pa-ct td { border: 0 !important; padding: 2px 0 !important; }
+  .pa-ct th, td.pa-ct__enc { grid-column: 1 / -1; }
+  .pa-ct td.n::before { content: attr(data-l); }
+  .pa-ct__enc { width: auto; }
+  .pa-wk { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .pa-wk li { grid-template-rows: 16px 80px 80px 16px 16px 14px; }
+}
+.pa-ct tbody th { text-transform: none; letter-spacing: 0; font-size: 15px; font-weight: 400; color: var(--ink); position: static; background: none; white-space: normal; }

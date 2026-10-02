@@ -1,8 +1,7 @@
 # Surcharge — Passif
-- Une question par section, le **fait principal en titre** (calculé, jamais écrit à la main) : qui, où, concentration, fidélité,
-  ce qui est détenu, mouvements, comptes, lecture des tables.
-- Uniquement parts (%) et tranches ; jamais de nom, de montant ni de flux net ; groupes de moins de 5 masqués (part résiduelle dite).
-- 3D utile : tours des teneurs empilées par type de compte (hauteur linéaire = part de l'encours) ; matrice desk × classe d'actifs.
-  Bascule « tableau » comme alternative accessible ; rotation bornée, pause au bouton global et en animations réduites.
-- Donnée absente : la raison s'affiche (format de date rejeté, colonne manquante), avec un lien vers la lecture des tables.
-- Mouvements : entrées au-dessus de l'axe, sorties au-dessous, couleurs de sens fixes ; « après cut-off » ou « non calculable ».
+- Jamais de liste de positions : des axes regroupés (segments, 4 teneurs + autres, 6 pays + autres, classes, desks), le fait principal en titre.
+- Un seul composant de lecture, le tableau comparatif : part de l'encours · part des entrées · part des sorties · lecture · activité relative.
+  Jamais un flux net ; l'activité n'est mise en avant que pour un groupe d'au moins 5 % de l'encours.
+- Mouvements par semaine (≈ 12 barres), entrées au-dessus, sorties au-dessous.
+- 3D : tours des teneurs empilées par segment (hauteur linéaire = part de l'encours).
+- Donnée absente : la raison s'affiche, avec un lien vers la lecture des tables (repliée par défaut).

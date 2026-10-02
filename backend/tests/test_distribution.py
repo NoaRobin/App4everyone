@@ -57,6 +57,7 @@ def test_sankey_clients_nommes_avant_les_pools(svc):
     kinds = [n["kind"] for n in nodes]
     assert "nommé" in kinds and "pool" in kinds
     assert kinds == sorted(kinds, key=lambda k: k != "nommé")                  # tous les nommés en tête
-    named = [n for n in nodes if n["kind"] == "nommé"]
+    named = [n for n in nodes if n["kind"] == "nommé" and "autres" not in n["label"]]
+    assert len(named) <= 5                                                       # au-delà, regroupés
     assert [n["value"] for n in named] == sorted((n["value"] for n in named), reverse=True)
     assert all("Tous souscripteurs" != n["label"] for n in named)

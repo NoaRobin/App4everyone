@@ -141,7 +141,8 @@ export class SankeyScene {
     const { nodes, links } = this.data;
     if (!nodes.length) return;
     const fams = this.opts.familyOrder.filter((f) => links.some((l) => l.family === f));
-    const laneZ = (f: string) => (fams.indexOf(f) - (fams.length - 1) / 2) * LANE;
+    // « all » : ruban client → pays, toutes familles confondues, au centre de la profondeur
+    const laneZ = (f: string) => (f === "all" ? 0 : (fams.indexOf(f) - (fams.length - 1) / 2) * LANE);
     const depth = fams.length * LANE + 1.2;
     const famRank = (n: SkNode) => (n.family ? this.opts.familyOrder.indexOf(n.family) : 0);
 
@@ -186,8 +187,8 @@ export class SankeyScene {
       const nrm = geo.attributes.normal.array as Float32Array;
       for (let j = 0; j < nrm.length; j += 3) if (Math.hypot(nrm[j], nrm[j + 1], nrm[j + 2]) < 1e-6) { nrm[j] = 0; nrm[j + 1] = 0; nrm[j + 2] = 1; }
       geo.translate(0, 0, laneZ(l.family) - RIBBON_D / 2);
-      const c = new THREE.Color(this.opts.colors[l.family] ?? "#8d929c");
-      const em = l.family === "ao" || l.family === "fi" ? 0.16 : 0.3;
+      const c = new THREE.Color(l.family === "all" ? "#9a917f" : this.opts.colors[l.family] ?? "#8d929c");
+      const em = l.family === "all" ? 0.08 : l.family === "ao" || l.family === "fi" ? 0.16 : 0.3;
       const mat = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: em, roughness: 0.38, metalness: 0.15,
         transparent: true, opacity: 0.8, clippingPlanes: [this.clip], side: THREE.DoubleSide, depthWrite: true });
       const mesh = new THREE.Mesh(geo, mat);
@@ -286,15 +287,20 @@ export class SankeyScene {
     const { nodes, links } = this.data;
     const n = nodes[ni];
     const out = new Set<number>();
-    if (n.family) { links.forEach((l, i) => { if (l.family === n.family) out.add(i); }); return out; }
+    if (n.family) {
+      const ctys = new Set<number>();
+      links.forEach((l, i) => { if (l.family === n.family) { out.add(i); ctys.add(l.source); } });
+      links.forEach((l, i) => { if (l.family === "all" && ctys.has(l.target)) out.add(i); });
+      return out;
+    }
     if (n.col === 1) { links.forEach((l, i) => { if (l.source === ni || l.target === ni) out.add(i); }); return out; }
     const pairs = new Set<string>();
     if (n.col === 0) {
-      links.forEach((l, i) => { if (l.source === ni) { out.add(i); pairs.add(`${l.family}|${l.target}`); } });
-      links.forEach((l, i) => { if (nodes[l.source].col === 1 && pairs.has(`${l.family}|${l.source}`)) out.add(i); });
+      links.forEach((l, i) => { if (l.source === ni) { out.add(i); pairs.add(String(l.target)); } });
+      links.forEach((l, i) => { if (nodes[l.source].col === 1 && pairs.has(String(l.source))) out.add(i); });
     } else {
-      links.forEach((l, i) => { if (l.target === ni) { out.add(i); pairs.add(`${l.family}|${l.source}`); } });
-      links.forEach((l, i) => { if (nodes[l.source].col === 0 && pairs.has(`${l.family}|${l.target}`)) out.add(i); });
+      links.forEach((l, i) => { if (l.target === ni) { out.add(i); pairs.add(String(l.source)); } });
+      links.forEach((l, i) => { if (nodes[l.source].col === 0 && pairs.has(String(l.target))) out.add(i); });
     }
     return out;
   }

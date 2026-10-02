@@ -97,7 +97,7 @@
 .eq__l { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--on-night-2); }
 .eq__v { font-family: var(--serif); font-size: 30px; letter-spacing: -.01em; }
 .eq__row--end .eq__v { font-size: 40px; color: #fff; }
-.eq__bar { grid-column: 2 / 4; position: relative; height: 6px; margin-top: 10px; background: rgba(239, 231, 214, .06); }
+.eq__bar { grid-column: 2 / 4; position: relative; overflow: hidden; height: 6px; margin-top: 10px; background: rgba(239, 231, 214, .06); }
 .eq__bar span { position: absolute; top: 0; bottom: 0; transform-origin: left; background: rgba(239, 231, 214, .55); }
 .eq__row--flow .eq__bar span { background: var(--gold); box-shadow: 0 0 14px rgba(204, 159, 83, .6); }
 .eq__row--mkt .eq__bar span { background: var(--fam-aid); box-shadow: 0 0 14px rgba(97, 137, 214, .6); }

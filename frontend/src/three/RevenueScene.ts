@@ -470,10 +470,13 @@ export class RevenueScene {
       tw.tall.scale.set(sxz, sy, sxz);
       tw.cap.position.set(px, py + sy + 0.03, pz);
       tw.cap.scale.set(sxz * 0.98, sxz * 0.98, 1);
-      tw.mat.emissiveIntensity = 0.04 + 0.6 * swept + tw.hover * 0.4 + 0.1 * Math.sin(Math.PI * m);
+      // Empilement : chaque bloc s'allume en se posant (éclair bref), puis reste éclairé dans sa pile
+      const landed = Math.max(0, Math.min(1, (m - 0.82) / 0.18));
+      const flash = Math.sin(Math.PI * landed) * (m < 0.999 ? 1 : 0);
+      tw.mat.emissiveIntensity = 0.04 + 0.6 * swept + tw.hover * 0.4 + 0.1 * Math.sin(Math.PI * m) + 0.42 * landed + 0.9 * flash;
       tw.mat.opacity = 0.18 + 0.82 * tw.dim;
-      tw.edge.opacity = Math.min(1, (0.12 + 0.68 * tw.dim) * grown + swept * 0.4 + tw.hover * 0.35 + 0.15 * m);
-      tw.capMat.opacity = Math.min(0.85, grown * (0.08 + 0.4 * (tw.h / H_MAX)) * (0.25 + 0.75 * tw.dim) * (1 - 0.7 * m) + tw.hover * 0.35 + swept * 0.5);
+      tw.edge.opacity = Math.min(1, (0.12 + 0.68 * tw.dim) * grown + swept * 0.4 + tw.hover * 0.35 + 0.35 * landed);
+      tw.capMat.opacity = Math.min(0.85, grown * (0.08 + 0.4 * (tw.h / H_MAX)) * (0.25 + 0.75 * tw.dim) * (1 - 0.7 * m) + tw.hover * 0.35 + swept * 0.5 + 0.5 * landed * tw.dim + 0.4 * flash);
       tw.baseMat.opacity = (0.08 * tw.dim + tw.hover * 0.4) * grown * (1 - m);
     }
     const sk = this.stackK.v;

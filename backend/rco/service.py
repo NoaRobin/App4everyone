@@ -617,7 +617,7 @@ class Service:
         label, _ = self._client_kind()
         return sids.map(label).fillna("Clientèle non renseignée")
 
-    def _sankey(self, act: pd.DataFrame, top: int = 11) -> dict:
+    def _sankey(self, act: pd.DataFrame, top: int = 7, top_named: int = 5) -> dict:
         """
         Parcours d'une autorisation : type de client de la part → pays d'enregistrement → famille de gestion du fonds.
         Unité : un enregistrement actif (une part autorisée dans un pays). Additive d'une colonne à l'autre,
@@ -642,14 +642,18 @@ class Service:
                 nodes.append({"id": key, "label": label, "col": col, **kw})
             return index[key]
 
-        # Colonne 1 : les clients nommés d'abord (les plus présents ; au-delà de 10, regroupés), puis les pools de clientèle
+        # Colonne 1 : les cinq clients nommés les plus présents (les autres regroupés), puis les pools de clientèle
         _, kind = self._client_kind()
         df["kind"] = df["sid"].map(kind).fillna("pool").values
         named = df[df["kind"] == "nommé"].groupby("cli")["sid"].count().sort_values(ascending=False)
-        if len(named) > 10:
-            rest = set(named.index[10:])
+        if len(named) > top_named + 1:
+            rest = set(named.index[top_named:])
             df.loc[df["cli"].isin(rest) & (df["kind"] == "nommé"), "cli"] = f"{len(rest)} autres clients nommés"
-        order = sorted(df.groupby(["kind", "cli"]), key=lambda kv: (kv[0][0] != "nommé", "autres clients nommés" in kv[0][1], -len(kv[1])))
+        pools = df[df["kind"] == "pool"].groupby("cli")["sid"].count().sort_values(ascending=False)
+        if len(pools) > 5:
+            rest = set(pools.index[4:])
+            df.loc[df["cli"].isin(rest) & (df["kind"] == "pool"), "cli"] = f"{len(rest)} autres pools de clientèle"
+        order = sorted(df.groupby(["kind", "cli"]), key=lambda kv: (kv[0][0] != "nommé", " autres " in f" {kv[0][1]}", -len(kv[1])))
         for (k, cname), g in order:
             node(f"k:{cname}", cname, 0, client=cname, kind=k, value=int(len(g)), n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()))
         for cname in [*counts.index[:top], "Autres pays"]:
@@ -663,8 +667,9 @@ class Service:
             if len(g):
                 node(f"f:{k}", self._family_label(k), 2, family=k, value=int(len(g)), n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()))
         links = []
-        for (a, b, f), g in df.groupby(["cli", "dest", "fam"]):
-            links.append({"source": index[f"k:{a}"], "target": index[f"c:{b}"], "value": int(len(g)), "family": f,
+        # Clients → pays : un seul ruban neutre par couple (toutes familles) ; la couleur de famille n'apparaît qu'ensuite
+        for (a, b), g in df.groupby(["cli", "dest"]):
+            links.append({"source": index[f"k:{a}"], "target": index[f"c:{b}"], "value": int(len(g)), "family": "all",
                           "n_funds": int(g["fid"].nunique()), "n_shares": int(g["sid"].nunique())})
         for (a, b), g in df.groupby(["dest", "fam"]):
             links.append({"source": index[f"c:{a}"], "target": index[f"f:{b}"], "value": int(len(g)), "family": b,

@@ -14,12 +14,12 @@ import { ErrorState, Loading, useReveal } from "../components/ui";
 import * as I from "../components/Icon";
 import { arr, dFull, fp, tr, type PassifResp } from "../components/PassifKit";
 import {
-  AccountsSection, ConcentrationSection, CountriesSection, FlowsSection, HoldersSection, HoldingsSection, LectureSection, LoyaltySection,
+  AssetsSection, ConcentrationSection, LectureSection, LoyaltySection, RhythmSection, SegmentsSection, WhereSection,
 } from "../components/PassifSections";
 import "../styles/passif.css";
 
-const CHAPTERS = [["qui", "Qui détient"], ["ou", "Où"], ["conc", "Concentration"], ["loy", "Fidélité"], ["quoi", "Ce qui est détenu"],
-  ["flux", "Mouvements"], ["comptes", "Comptes"], ["lecture", "Lecture des tables"]] as const;
+const CHAPTERS = [["seg", "Segments"], ["ou", "Teneurs et pays"], ["conc", "Concentration"], ["loy", "Fidélité"], ["quoi", "Ce qui est détenu"],
+  ["flux", "Mouvements"], ["lecture", "Lecture des tables"]] as const;
 
 export default function Passif() {
   const { hash } = useLocation();
@@ -46,14 +46,13 @@ export default function Passif() {
     <div className="pa">
       <Hero d={d} />
       <div className="page pa__page">
-        <HoldersSection p={d.positions} />
-        <CountriesSection p={d.positions} t={d.transactions} />
+        <SegmentsSection s={d.synthese} p={d.positions} t={d.transactions} />
+        <WhereSection s={d.synthese} />
         <ConcentrationSection p={d.positions} />
         <LoyaltySection p={d.positions} />
-        <HoldingsSection p={d.positions} />
-        <FlowsSection t={d.transactions} />
-        <AccountsSection c={d.comptes} />
-        <LectureSection l={d.lecture} asOf={d.positions_as_of} t={d.transactions} />
+        <AssetsSection s={d.synthese} p={d.positions} />
+        <RhythmSection s={d.synthese} t={d.transactions} />
+        <LectureSection l={d.lecture} asOf={d.positions_as_of} t={d.transactions} c={d.comptes} />
       </div>
     </div>
   );
@@ -78,12 +77,12 @@ function Unavailable({ reason }: { reason?: string }) {
 function Hero({ d }: { d: PassifResp }) {
   const ref = useRef<HTMLElement>(null);
   const p = d.positions, t = d.transactions;
-  const top = arr(p?.by_teneur)[0];
+  const top = arr(d.synthese?.segments)[0];
   const p10 = arr(p?.concentration?.points).find((x) => x.top_pct === 10);
   const old = arr(p?.seniority).filter((b) => /3 à 5|5 à 10|Plus de 10/.test(b.band)).reduce((s, b) => s + b.pct, 0);
   const sens = new Map(arr(t?.period_sens).map((x) => [x.sens, x.pct]));
   const facts = [
-    top && { v: fp(top.pct), l: <>de l'encours est tenu par <b>{top.teneur}</b>, premier teneur de compte</> },
+    top && { v: fp(top.encours_pct), l: <>de l'encours est détenu par les <b>{(top.label ?? top.key).toLowerCase()}</b>, premier segment</> },
     p10 && { v: fp(p10.pct), l: <>de l'encours est détenu par les <b>10&nbsp;%</b> de comptes les plus importants</> },
     old > 0 && { v: fp(Math.round(old * 10) / 10), l: <>de l'encours est investi depuis <b>plus de trois ans</b></> },
     t?.available && sens.size > 0 && { v: fp(sens.get("Souscription")), l: <>du volume des {t.n_days ?? 60} derniers jours ouvrés sont des <b>souscriptions</b>, {fp(sens.get("Rachat"))} des rachats</> },

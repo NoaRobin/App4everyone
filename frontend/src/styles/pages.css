@@ -16,7 +16,10 @@
 .fig { padding: 22px 24px 30px 0; }
 .fig + .fig { padding-left: 24px; border-left: 1px solid var(--line); }
 .fig__l { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 12px; }
-.fig__v { margin: 0; font-family: var(--serif); font-size: clamp(40px, 4.4vw, 68px); line-height: .95; letter-spacing: -.02em; white-space: nowrap; }
+.fig { min-width: 0; container-type: inline-size; }
+/* Taille plafonnée par la largeur de la colonne : « +12,45 Md€ » tient dans sa case, sans déborder */
+.fig__v { margin: 0; font-family: var(--serif); font-size: clamp(30px, min(4.4vw, 19cqi), 68px); line-height: .95; letter-spacing: -.02em; white-space: nowrap;
+  max-width: 100%; overflow: hidden; text-overflow: clip; }
 .fig__u { font-size: .42em; color: var(--gold); margin-left: .2em; vertical-align: .9em; letter-spacing: 0; }
 .fig__s { margin: 8px 0 0; color: var(--ink-3); }
 @media (max-width: 900px) {
@@ -187,7 +190,7 @@
 .gl__wb { height: 4px; background: var(--paper-3); position: relative; }
 .gl__wb span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0; }
 .gl__v { font-size: 16px; text-align: right; }
-.gl__fm { display: flex; flex-direction: column; gap: 4px; }
+.gl__fm { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow: hidden; }
 .gl__axis { position: relative; height: 5px; background: linear-gradient(90deg, transparent calc(50% - .5px), var(--line-2) calc(50% - .5px), var(--line-2) calc(50% + .5px), transparent calc(50% + .5px)); }
 .gl__half { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
 .gl__half.is-flow { background: var(--gold); }
