@@ -7,6 +7,7 @@
  */
 import * as THREE from "three";
 import gsap from "gsap";
+import { motionPaused } from "../lib/motion";
 import { Quality } from "./quality";
 
 export type PodiumBar = { id: string; name: string; color: string; slot: number; value: number | null; text: string };
@@ -204,7 +205,7 @@ export class ComparePodium {
     if (!this.visible || document.hidden || !this.q.gate(now, busy)) return;
     const t = (now - this.t0) / 1000;
     // Caméra : léger balancement
-    const sway = this.opts.reduced ? 0 : Math.sin(t * 0.22) * 0.09;
+    const sway = this.opts.reduced || motionPaused() ? 0 : Math.sin(t * 0.22) * 0.09;
     const mid = (this.span.lo + this.span.hi) / 2;
     const r = this.dist();
     this.camera.position.set(Math.sin(sway) * r * 0.32, mid + r * 0.3, Math.cos(sway) * r);

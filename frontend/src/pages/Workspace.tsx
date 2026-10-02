@@ -158,7 +158,7 @@ const QUESTIONS: { theme: string; items: { to: string; q: string }[] }[] = [
   { theme: "Revenus & passif", items: [
     { to: "/", q: "Quels fonds rapportent le plus ?" },
     { to: "/passif", q: "Qui détient nos fonds (teneurs, types de comptes) ?" },
-    { to: "/passif#transactions", q: "Souscriptions et rachats des derniers jours" },
+    { to: "/passif#h-transactions", q: "Souscriptions et rachats des derniers jours" },
   ] },
   { theme: "Risques & contrôles", items: [
     { to: "/fonds#risques", q: "Carte risque / rendement des fonds" },

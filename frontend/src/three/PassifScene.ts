@@ -10,6 +10,7 @@
  * Les deux scènes partagent le gouverneur de qualité commun (Quality), se mettent en pause hors écran
  * (IntersectionObserver), suivent la taille de leur conteneur (ResizeObserver) et libèrent tout dans dispose().
  */
+import { motionPaused } from "../lib/motion";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
@@ -104,10 +105,10 @@ abstract class Stage {
     if (!this.visible || document.hidden) return;
     const now = performance.now();
     // Animations réduites : on ne redessine que lorsqu'il se passe quelque chose (survol, redimensionnement)
-    if (this.reduced && !this.dirty) return;
+    if ((this.reduced || motionPaused()) && !this.dirty) return;
     if (!this.q.gate(now, this.dirty)) return;
     const moving = this.frame((now - this.t0) / 1000);
-    this.dirty = moving && !this.reduced;
+    this.dirty = moving && !this.reduced && !motionPaused();
     if (this.q.bloom) this.composer.render(); else this.renderer.render(this.scene, this.camera);
   };
 

@@ -14,6 +14,7 @@ import { Reflector } from "three/examples/jsm/objects/Reflector.js";
 /** Au-delà de ce nombre d'immeubles, pas de sol réfléchissant (il doublerait le coût de rendu). */
 const MIRROR_MAX_BUILDINGS = 350;
 import gsap from "gsap";
+import { motionPaused } from "../lib/motion";
 import { Quality, type Level } from "./quality";
 
 /** Horloge minimale (remplace THREE.Clock, dépréciée). */
@@ -559,7 +560,7 @@ export class CityScene {
     if (!this.visible || document.hidden) return;
     const now = performance.now();
     if (this.introDone && !this.opts.reduced && !this.opts.story && now - this.idleSince > 6000) {
-      this.controls.autoRotate = true;
+      this.controls.autoRotate = !motionPaused();
       this.controls.autoRotateSpeed = 0.28;
     } else this.controls.autoRotate = false;
     this.controls.update();

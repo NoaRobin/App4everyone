@@ -15,6 +15,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import gsap from "gsap";
+import { motionPaused } from "../lib/motion";
 import { Quality } from "./quality";
 
 export type CmpPoint = { t: number; v: number };
@@ -503,7 +504,7 @@ export class CompareScene {
   private loop = () => {
     this.raf = requestAnimationFrame(this.loop);
     const now = performance.now();
-    const sway = !this.touched && !this.isFlat && !this.opts.reduced && !this.tweening;
+    const sway = !this.touched && !this.isFlat && !this.opts.reduced && !this.tweening && !motionPaused();
     if (!sway) this.swayAmp = 0;
     const busy = sway || this.tweening || gsap.isTweening(this.plot.scale) || this.lanes.some((l) => l.draw.v < 1) || this.ptrIn;
     if (!this.visible || document.hidden || !this.q.gate(now, busy)) return;

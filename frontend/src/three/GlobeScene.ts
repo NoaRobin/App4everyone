@@ -17,6 +17,7 @@ import { feature } from "topojson-client";
 import type { Feature, Geometry, MultiPolygon, Polygon } from "geojson";
 import type { Topology } from "topojson-specification";
 import gsap from "gsap";
+import { motionPaused } from "../lib/motion";
 import { Quality } from "./quality";
 import { HUB, NUM, type MapCountry, type MapMetric, type MapRoute } from "./MapScene";
 
@@ -450,6 +451,7 @@ export class GlobeScene {
 
   // ---------------------------------------------------------------- rendu
   private loop = () => {
+    if (motionPaused()) this.controls.autoRotate = false;
     this.raf = requestAnimationFrame(this.loop);
     const now = performance.now();
     const busy = this.controls.autoRotate || gsap.isTweening(this.camera.position) || !!this.hovered;

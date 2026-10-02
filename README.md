@@ -260,6 +260,15 @@ elles ne se dessinent que lorsqu'elles sont à l'écran, passent à 30 images/s 
 baisse d'elle-même d'un cran (résolution 1:1, puis sans halo lumineux, ombres ni reflets), sans que la lisibilité change.
 Aucun flou d'arrière-plan n'est appliqué sur ce qui est collant ou en mouvement.
 
+## Système de design
+
+Établi avec le skill **UI/UX Pro Max** (Next Level Builder, installé dans `.claude/skills/ui-ux-pro-max`, licence MIT) et
+consigné dans `design-system/rothschild-am/MASTER.md` (surcharges par page dans `pages/`) : jetons d'espacement, de
+mouvement et de calques, aucun texte sous 12 px, cibles tactiles de 44 px, bouton de pause des animations dans l'en-tête,
+alternatives clavier et boutons à toute rotation 3D, identité des séries jamais portée par la seule couleur, liens profonds.
+La palette et les polices proposées par le skill sont écartées au profit de la charte Rothschild & Co (aucun appel externe).
+Recherche dans ses bases : `python3 .claude/skills/ui-ux-pro-max/scripts/search.py "<requête>" --domain ux`.
+
 ## Charte graphique
 
 Interface sombre partout, sur la charte Rothschild & Co : Rothschild Blue `#1C355E` (fond et surfaces), blanc `#FFFFFF`,

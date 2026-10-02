@@ -29,7 +29,7 @@ a { color: inherit; text-decoration: none; }
 h1, .h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(40px, 5.2vw, 72px); line-height: .98; letter-spacing: -.015em; margin: 0; }
 h2, .h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(28px, 3vw, 40px); line-height: 1.05; letter-spacing: -.01em; margin: 0; }
 h3, .h3 { font-family: var(--sans); font-weight: 600; font-size: 17px; line-height: 1.3; margin: 0; letter-spacing: -.005em; }
-.eyebrow { font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; font-weight: 600; color: var(--ink-3); }
+.eyebrow { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; font-weight: 600; color: var(--ink-3); }
 .lede { font-size: 17px; color: var(--ink-2); max-width: 62ch; }
 .muted { color: var(--ink-3); }
 .small { font-size: 13px; }
@@ -84,7 +84,7 @@ button.chip[aria-pressed="true"]:hover { color: #0a0f1a; }
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
 .t tbody tr.clickable:hover td:first-child { box-shadow: inset 2px 0 0 var(--gold); }
 table.t { width: 100%; border-collapse: collapse; font-size: 14px; }
-.t th { text-align: left; font-weight: 600; font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); padding: 14px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; background: var(--card); position: sticky; top: 0; }
+.t th { text-align: left; font-weight: 600; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); padding: 14px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; background: var(--card); position: sticky; top: 0; }
 .t th button { all: unset; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
 .t th button:focus-visible { outline: 2px solid var(--gold); }
 .t td { padding: 13px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
@@ -119,3 +119,14 @@ table.t { width: 100%; border-collapse: collapse; font-size: 14px; }
   .reveal { opacity: 1; transform: none; }
 }
 @media (forced-colors: active) { .dot { forced-color-adjust: none; } }
+
+/* Cibles tactiles : au moins 44 × 44 px sur écran tactile (au moins 24 px partout, WCAG 2.2) */
+@media (pointer: coarse) {
+  .chip, .seg__b, .btn, .rv__legend button, .rbn__more, .board__t a, .am__time button, [data-touch] { min-height: 44px; min-width: 44px; }
+  .seg { padding: 4px; }
+}
+/* Retour au clic : léger enfoncement, sans déplacer la mise en page */
+.btn:active, .chip:active, .seg__b:active { transform: scale(.97); transition: transform var(--dur-press) var(--ease); }
+/* Animations en pause (bouton « Mettre en pause les animations ») : même effet que prefers-reduced-motion pour le décor */
+html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after { animation-play-state: paused !important; }
+[id^="h-"], section[id] { scroll-margin-top: calc(var(--header-h) + 24px); }

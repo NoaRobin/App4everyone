@@ -16,6 +16,8 @@
 exports/
 data_exports/
 snapshots/
+# Exception : bases de connaissances du skill de design (styles, palettes, règles UX — aucune donnée métier)
+!.claude/skills/**/*.csv
 
 # Python
 __pycache__/

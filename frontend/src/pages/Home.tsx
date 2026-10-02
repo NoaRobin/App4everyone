@@ -34,6 +34,7 @@ export default function Home() {
     <div className="home rv">
       <Grain />
       <Hero r={r} mock={!!meta?.is_mock} />
+      <Paths />
       {r && <Ranking r={r} />}
       {r && <Drivers r={r} />}
       {r && <Breakdown r={r} />}
@@ -136,7 +137,8 @@ function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
   const parts = total != null ? splitEur(total) : null;
   const fams = r ? FAMILY_ORDER.map((k) => r.families.find((g) => g.key === k)).filter(Boolean) as RevGroup[] : [];
   return (
-    <section className="rv__hero" ref={root} aria-labelledby="h-home">
+    <section className="rv__hero" ref={root} aria-labelledby="h-home"
+      onKeyDown={(e) => { if (e.key === "ArrowLeft") scene.current?.nudge(-20); else if (e.key === "ArrowRight") scene.current?.nudge(20); }}>
       <div className="rv__scene" ref={host} aria-hidden="true" />
       <div className="rv__labels" ref={labels} aria-hidden="true" />
       <div className="rv__vignette" aria-hidden="true" />
@@ -145,7 +147,7 @@ function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
         <div className="eyebrow rv__kicker">Rothschild &amp; Co Asset Management{r ? ` · au ${fdate(r.date)}` : ""}{mock ? " · données fictives" : ""}</div>
         <h1 className="rv__title" id="h-home">
           <span className="sr-only">Revenus de gestion annuels estimés : {total != null ? eur(total) : "chargement"}. </span>
-          <span className="rv__big num" aria-hidden="true"><span ref={big}>{parts?.value ?? "—"}</span><span className="rv__unit">{parts?.unit ?? ""}</span></span>
+          <span className={`rv__big num${parts ? "" : " is-loading"}`} aria-hidden="true"><span ref={big}>{parts?.value ?? "000"}</span><span className="rv__unit">{parts?.unit ?? "M€"}</span></span>
           <span className="rv__what">de revenus de gestion par an, estimés sur les encours d'aujourd'hui.</span>
         </h1>
         {r && (
@@ -182,6 +184,13 @@ function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
           <span className="small muted">Cliquer pour ouvrir la fiche</span>
         </div>
       )}
+      {gl && r && (
+        <div className="rv__ctl" role="group" aria-label="Vue de la cité des revenus">
+          <button type="button" data-touch onClick={() => scene.current?.nudge(-35)} aria-label="Tourner vers la gauche"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7 7a7 7 0 1 1-2 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><path d="M7 2v5h5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></button>
+          <button type="button" data-touch onClick={() => scene.current?.resetView()} aria-label="Revenir au cadrage d'origine"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="currentColor" /><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="2" /></svg></button>
+          <button type="button" data-touch onClick={() => scene.current?.nudge(35)} aria-label="Tourner vers la droite"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M17 7a7 7 0 1 0 2 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><path d="M17 2v5h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></button>
+        </div>
+      )}
       <div className="rv__curtain" aria-hidden="true"><i className="rv__sweep" /></div>
       <div className="home__cue rv__cue" aria-hidden="true"><span>Ce qui rapporte</span><i /></div>
     </section>
@@ -193,6 +202,49 @@ function splitEur(v: number): { value: string; unit: string } {
   if (a >= 1e9) return { value: (v / 1e9).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), unit: "Md€" };
   if (a >= 1e6) return { value: (v / 1e6).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }), unit: "M€" };
   return { value: (v / 1e3).toLocaleString("fr-FR", { maximumFractionDigits: 0 }), unit: "k€" };
+}
+
+// ------------------------------------------------------------------ par où commencer (un chemin par métier)
+const PATHS: { who: string; what: string; links: { to: string; label: string }[] }[] = [
+  { who: "Direction", what: "Ce qui rapporte, ce qui grossit, ce qui décroche.", links: [
+    { to: "#h-rank", label: "Les fonds qui rapportent le plus" }, { to: "/encours", label: "La ville des encours" }, { to: "/comparateur", label: "Comparer des fonds" }] },
+  { who: "Commercial & distribution", what: "Quelle part proposer, où, et à qui.", links: [
+    { to: "/distribution", label: "Pays et autorisations" }, { to: "/passif", label: "Qui détient nos fonds" }, { to: "/comparateur", label: "Comparateur de performance" }] },
+  { who: "Gestion", what: "La fiche, le portefeuille, les performances.", links: [
+    { to: "/fonds", label: "Rechercher un fonds" }, { to: "/portefeuilles", label: "Portefeuilles" }, { to: "/selection", label: "Sélection multicritère" }] },
+  { who: "Risques & contrôle", what: "Ce qui n'est pas en ordre, tout de suite.", links: [
+    { to: "/fonds#risques", label: "Risques des fonds" }, { to: "/fonds?vue=controles#risques", label: "Contrôles et rattachement" }, { to: "/passif#h-lecture", label: "Lecture des tables sources" }] },
+];
+
+function Paths() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || prefersReducedMotion()) return;
+    const cards = el.querySelectorAll<HTMLElement>(".pth__c");
+    gsap.set(cards, { opacity: 0, y: 24 });
+    return onVisible(el, () => gsap.to(cards, { opacity: 1, y: 0, duration: 0.7, stagger: 0.04, ease: "power3.out", clearProps: "opacity,transform" }));
+  }, []);
+  return (
+    <section className="rv__sec pth" aria-labelledby="h-paths">
+      <Rise><div className="eyebrow home__eyebrow">Par où commencer</div></Rise>
+      <Rise><h2 className="home__h2" id="h-paths">Je suis…</h2></Rise>
+      <div className="pth__g" ref={ref}>
+        {PATHS.map((p, i) => (
+          <article key={p.who} className="pth__c">
+            <span className="pth__n num" aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>
+            <h3 className="pth__t">{p.who}</h3>
+            <p className="pth__w">{p.what}</p>
+            <ul>{p.links.map((l) => (
+              <li key={l.label}>{l.to.startsWith("#")
+                ? <a href={l.to.replace("#h-", "#")} onClick={(e) => { e.preventDefault(); document.getElementById(l.to.slice(1))?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" }); }}>{l.label}<I.Arrow size={14} /></a>
+                : <Link to={l.to}>{l.label}<I.Arrow size={14} /></Link>}</li>
+            ))}</ul>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 // ------------------------------------------------------------------ le classement

@@ -62,6 +62,18 @@
   --radius-s: 8px;
   --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 20px 50px -30px rgba(0, 0, 0, 0.9);
   --ease: cubic-bezier(0.2, 0.7, 0.1, 1);
+  /* Mouvement (design-system/rothschild-am/MASTER.md) : durées selon la distance parcourue, sortie ≈ 65 % de l'entrée */
+  --ease-in: cubic-bezier(0.6, 0, 0.8, 0.3);
+  --dur-press: 120ms;    /* retour au clic */
+  --dur-ui: 220ms;       /* survol, état, bascule */
+  --dur-panel: 420ms;    /* panneau, infobulle, onglet */
+  --dur-reveal: 700ms;   /* apparition au défilement */
+  --dur-hero: 1200ms;    /* plan d'ouverture */
+  /* Espacement (pas de 4/8) */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px;
+  --space-6: 32px; --space-7: 48px; --space-8: 64px; --space-9: 96px;
+  /* Calques */
+  --z-base: 0; --z-raised: 10; --z-sticky: 40; --z-overlay: 100; --z-curtain: 1000;
   --header-h: 68px;
   --gutter: clamp(16px, 4vw, 56px);
   --maxw: 1440px;

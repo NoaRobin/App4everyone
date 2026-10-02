@@ -17,6 +17,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import gsap from "gsap";
+import { motionPaused } from "../lib/motion";
 import { Quality } from "./quality";
 
 export type RevFund = { id: string; name: string; family: string; revenue: number; aum: number; rate: number; share: number | null };
@@ -282,6 +283,24 @@ export class RevenueScene {
     t.ringBase = 0.35 * k;
   }
 
+  /** Rotation autour de la place centrale (boutons et flèches du clavier : alternative au glisser). */
+  nudge(deg: number) {
+    this.idleSpin = false;
+    const p = this.camera.position, c = this.controls.target;
+    const a0 = Math.atan2(p.z - c.z, p.x - c.x), r = Math.hypot(p.x - c.x, p.z - c.z);
+    const o = { a: a0 };
+    gsap.to(o, { a: a0 + (deg * Math.PI) / 180, duration: this.o.reduced ? 0 : 0.6, ease: "power2.out",
+      onUpdate: () => { p.x = c.x + Math.cos(o.a) * r; p.z = c.z + Math.sin(o.a) * r; } });
+  }
+
+  /** Revient au cadrage d'origine. */
+  resetView() {
+    this.idleSpin = !this.o.reduced;
+    const d = this.o.reduced ? 0 : 0.9;
+    gsap.to(this.camera.position, { x: 86, y: 52, z: 104, duration: d, ease: "power3.inOut" });
+    gsap.to(this.controls.target, { x: 0, y: 9, z: 0, duration: d, ease: "power3.inOut" });
+  }
+
   /** Met en avant une famille (null : toutes). */
   setFocus(fam: string | null) {
     this.focus = fam;
@@ -344,8 +363,8 @@ export class RevenueScene {
     const busy = this.intro.k < 1 || gsap.isTweening(this.camera.position);
     if (!this.quality.gate(now, busy)) return;
     const t = (now - this.t0) / 1000;
-    if (this.sparkMat) this.sparkMat.uniforms.uTime.value = t;
-    if (this.idleSpin && this.intro.k >= 1) {
+    if (this.sparkMat && !motionPaused()) this.sparkMat.uniforms.uTime.value = t;
+    if (this.idleSpin && this.intro.k >= 1 && !motionPaused()) {
       const p = this.camera.position, c = this.controls.target;
       const a = 0.0009;
       const x = p.x - c.x, z = p.z - c.z;

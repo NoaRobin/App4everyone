@@ -4,6 +4,7 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 import * as I from "./Icon";
 import { useApp } from "../lib/context";
 import { date as fdate } from "../lib/format";
+import { motionPaused, setMotionPaused, useReducedMotion } from "../lib/motion";
 
 const NAV = [
   { to: "/fonds", label: "Fonds" },
@@ -51,6 +52,7 @@ export function Header() {
           </nav>
         )}
         <div className="hdr__tools">
+          <MotionToggle />
           <button ref={searchBtn} type="button" className="hdr__search" onClick={() => openPalette()} aria-label="Rechercher un fonds, une part, un ISIN, un gérant…">
             <I.Search size={17} />
             <span className="hdr__search-t">Rechercher</span>
@@ -76,5 +78,22 @@ export function Header() {
         </div>
       )}
     </header>
+  );
+}
+
+/** Pause des animations décoratives (rotations, particules, défilements) : toujours au même endroit, mémorisée. */
+function MotionToggle() {
+  const reduced = useReducedMotion();
+  const [off, setOff] = useState(motionPaused());
+  const sys = reduced && !off;
+  return (
+    <button type="button" className="hdr__motion" aria-pressed={off || sys} disabled={sys} data-touch
+      onClick={() => { setMotionPaused(!off); setOff(!off); }}
+      title={sys ? "Animations réduites par votre système" : off ? "Reprendre les animations" : "Mettre en pause les animations"}
+      aria-label={off ? "Reprendre les animations" : "Mettre en pause les animations"}>
+      {off || sys
+        ? <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>
+        : <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor" /></svg>}
+    </button>
   );
 }

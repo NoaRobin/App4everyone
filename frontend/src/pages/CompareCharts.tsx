@@ -192,7 +192,7 @@ export function Flat2D({ funds, focus, onFocus, compact }: { funds: CFund[]; foc
           ))}
           <line x1={m.l} x2={m.l + iw} y1={m.t + ih} y2={m.t + ih} className="cmp2d__axis" />
           {live.map((f, i) => (
-            <path key={f.id} d={paths[i]} className="cmp2d__line" stroke={f.color}
+            <path key={f.id} d={paths[i]} className="cmp2d__line" stroke={f.color} strokeDasharray={lineDash(f.letter)}
               style={{ opacity: focus && focus !== f.id ? 0.22 : 1, strokeWidth: focus === f.id ? 2.6 : 2 }} />
           ))}
           {live.map((f) => {
@@ -468,4 +468,9 @@ export function RiskMap({ funds, focus, onFocus, periodLabel }: { funds: CFund[]
 
 export function Badge({ f }: { f: CFund }): ReactNode {
   return <span className="cmp-badge" style={{ background: f.color }} aria-hidden="true">{f.letter}</span>;
+}
+
+/** Style de trait par fonds (A plein, B tirets, C pointillés…) : l'identité ne repose jamais sur la seule couleur. */
+export function lineDash(letter: string | null | undefined): string | undefined {
+  return ({ A: undefined, B: "9 5", C: "2 5", D: "14 4 3 4", E: "6 3", F: "1 3" } as Record<string, string | undefined>)[letter ?? "A"];
 }

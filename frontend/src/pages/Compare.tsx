@@ -18,8 +18,7 @@ import type { CompareScene as SceneT, CmpCursor } from "../three/CompareScene";
 import type { ComparePodium as PodiumT } from "../three/ComparePodium";
 import {
   ALL_ROWS, Flat2D, IndTable, RankBars, Readout, RiskMap, SLOT_COLORS, b100, fmtTime, letterOf, ranked,
-  type CFund, type CursorRead, type Ind, type Share,
-} from "./CompareCharts";
+  type CFund, type CursorRead, type Ind, type Share, lineDash } from "./CompareCharts";
 import "../styles/compare.css";
 
 type FundLite = { id: string; name: string; family: FamilyKey; aum: number | null; perf_1A?: number | null; vol_1A?: number | null; referenced?: boolean; expertise?: string | null };
@@ -366,7 +365,7 @@ function Trajectories({ funds, live, focus, onFocus, start, end, periodLabel, re
               <button type="button" className={`cmp-legend__b${focus === f.id ? " is-on" : ""}${focus && focus !== f.id ? " is-dim" : ""}`}
                 onMouseEnter={() => onFocus(f.id)} onMouseLeave={() => onFocus(null)} onFocus={() => onFocus(f.id)} onBlur={() => onFocus(null)}
                 onClick={() => nav(`/fonds/${f.id}`)} aria-label={`${f.name} : ${b100(lastV)} en base 100, ${lastV != null ? pct(lastV / 100 - 1) : "pas de donnée"}. Ouvrir la fiche`}>
-                <span className="cmp-legend__k" style={{ background: f.color }} aria-hidden="true" />
+                <svg className="cmp-legend__k" width="26" height="10" viewBox="0 0 26 10" aria-hidden="true"><line x1="1" x2="25" y1="5" y2="5" stroke={f.color} strokeWidth="2.4" strokeLinecap="round" strokeDasharray={lineDash(f.letter)} /></svg>
                 <span className="cmp-badge" style={{ background: f.color }} aria-hidden="true">{f.letter}</span>
                 <span className="cmp-legend__n">{f.name}</span>
                 <span className="cmp-legend__v num">{b100(lastV)}</span>

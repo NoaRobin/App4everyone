@@ -1,3 +1,4 @@
+import { useLocation } from "react-router-dom";
 /**
  * Passif — qui détient nos fonds, par quels comptes, et comment l'encours bouge.
  * Comptes (référentiel), positions (photo de l'encours à une date), transactions (60 derniers jours ouvrés).
@@ -7,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "../lib/api";
 import { useApp } from "../lib/context";
 import { gsap, onVisible } from "../lib/gsap";
-import { prefersReducedMotion, useReducedMotion, webglAvailable } from "../lib/motion";
+import { motionPaused, prefersReducedMotion, useReducedMotion, webglAvailable } from "../lib/motion";
 import { ErrorState, Loading, useReveal } from "../components/ui";
 import { Figures, Head } from "../components/Editorial";
 import * as I from "../components/Icon";
@@ -20,6 +21,19 @@ import type { ModelNode, ModelScene as ModelSceneT } from "../three/PassifScene"
 import "../styles/passif.css";
 
 export default function Passif() {
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (!hash) return;
+    let n = 0;
+    const t = window.setInterval(() => {                 // la section apparaît une fois les données chargées
+      const el = document.getElementById(decodeURIComponent(hash.slice(1)));
+      if (el || ++n > 40) {
+        window.clearInterval(t);
+        el?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+      }
+    }, 100);
+    return () => window.clearInterval(t);
+  }, [hash]);
   const { api } = useApp();
   const { data, error } = useApi<PassifResp>(api("/api/passif"));
   useReveal(data ? 1 : null);
@@ -276,7 +290,7 @@ function Orbit({ teneurs, total, current, onHover, onSelect }:
       const now = performance.now();
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      if (!paused.current) { angle += dt * 0.07; mt += dt; }
+      if (!paused.current && !motionPaused()) { angle += dt * 0.07; mt += dt; }
       place();
     };
     // Entrée : les orbites se dessinent, les planètes s'allument une à une

@@ -14,7 +14,7 @@
 
 /* ---------------------------------------------------------------- Accueil : la cité des revenus */
 .up-t { color: var(--up); } .down-t { color: var(--down); }
-.rv__hero { position: relative; height: 100vh; min-height: 680px; overflow: hidden; background: #03060c; }
+.rv__hero { position: relative; height: 100vh; height: 100dvh; min-height: 680px; overflow: hidden; background: #03060c; }
 .rv__scene { position: absolute; inset: 0; z-index: 0; cursor: grab; }
 .rv__scene:active { cursor: grabbing; }
 .rv__labels { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
@@ -23,7 +23,7 @@
   transition: opacity .4s; font-size: 12px; color: var(--on-night); }
 .rev3d__rank { grid-row: span 2; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--gold); color: #0a0f1a; font-weight: 700; font-size: 12px; }
 .rev3d__label b { font-weight: 600; font-size: 12px; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
-.rev3d__label i { font-style: normal; font-size: 11px; color: var(--gold-ink); font-variant-numeric: tabular-nums; }
+.rev3d__label i { font-style: normal; font-size: 12px; color: var(--gold-ink); font-variant-numeric: tabular-nums; }
 .rv__vignette { position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background: radial-gradient(120% 90% at 70% 55%, transparent 40%, rgba(3, 6, 12, .55) 75%, #03060c 100%),
               linear-gradient(90deg, rgba(3, 6, 12, .92) 0%, rgba(3, 6, 12, .55) 34%, rgba(3, 6, 12, 0) 58%); }
@@ -105,7 +105,7 @@
 .rv__method p { max-width: 96ch; line-height: 1.65; font-size: 14px; }
 
 .home__cue { position: absolute; z-index: 3; bottom: calc(7vh + 22px); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 10px;
-  font-size: 11px; letter-spacing: .24em; text-transform: uppercase; color: var(--on-night-2); }
+  font-size: 12px; letter-spacing: .24em; text-transform: uppercase; color: var(--on-night-2); }
 .home__cue i { width: 1px; height: 46px; background: linear-gradient(var(--gold), transparent); animation: cue 2.2s var(--ease) infinite; transform-origin: top; }
 @keyframes cue { 0% { transform: scaleY(0); } 50% { transform: scaleY(1); } 100% { transform: scaleY(1); opacity: 0; } }
 .today__src { margin-top: 5vh; color: var(--on-night-2); opacity: .75; max-width: 80ch; }
@@ -134,3 +134,29 @@
 @media (prefers-reduced-motion: reduce) {
   .grain, .home__cue i, .living__bar span { animation: none; }
 }
+
+/* Contrôles de vue (alternative au glisser) et chargement du chiffre */
+.rv__ctl { position: absolute; z-index: 5; right: var(--gutter); bottom: calc(5.5vh + 18px); display: flex; gap: var(--space-2); }
+.rv__ctl button { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--night-line); background: rgba(6, 11, 21, .6);
+  color: var(--on-night-2); backdrop-filter: blur(6px); transition: color var(--dur-ui), border-color var(--dur-ui); }
+.rv__ctl button:hover { color: var(--on-night); border-color: var(--gold); }
+.rv__big.is-loading span { color: transparent; background: linear-gradient(90deg, rgba(214,209,202,.06), rgba(214,209,202,.16), rgba(214,209,202,.06)); background-size: 200% 100%;
+  -webkit-background-clip: text; background-clip: text; animation: rvShimmer 1.4s linear infinite; text-shadow: none; }
+@keyframes rvShimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .rv__big.is-loading span { animation: none; } }
+
+/* Par où commencer : un chemin par métier */
+.pth__g { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); margin-top: var(--space-6); }
+.pth__c { position: relative; padding: var(--space-5); border-radius: var(--radius); border: 1px solid var(--night-line); background: linear-gradient(180deg, rgba(28, 53, 94, .25), rgba(6, 11, 21, 0));
+  transition: border-color var(--dur-ui) var(--ease), transform var(--dur-panel) var(--ease); }
+.pth__c:hover, .pth__c:focus-within { border-color: rgba(204, 159, 83, .6); transform: translateY(-3px); }
+.pth__n { font-family: var(--serif); font-size: 28px; color: var(--gold-ink); }
+.pth__t { font-family: var(--serif); font-weight: 400; font-size: 28px; line-height: 1.05; margin: var(--space-3) 0 var(--space-2); color: var(--on-night); }
+.pth__w { color: var(--on-night-2); font-size: 14px; line-height: 1.5; min-height: 3em; }
+.pth__c ul { list-style: none; margin: var(--space-4) 0 0; padding: 0; }
+.pth__c a { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); min-height: 44px; border-top: 1px solid var(--night-line); color: var(--on-night); font-size: 14px;
+  transition: color var(--dur-ui), padding var(--dur-panel) var(--ease); }
+.pth__c a:hover, .pth__c a:focus-visible { color: var(--gold-ink); padding-left: 6px; }
+@media (max-width: 1100px) { .pth__g { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .pth__g { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .rv__legend, .rv__cue { display: none; } .rv__ctl { bottom: calc(5.5vh + 12px); } }
