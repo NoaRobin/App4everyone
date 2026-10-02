@@ -1,0 +1,33 @@
+classe_actif,desk,devise,tranche_nombre_positions,part_encours_pct
+Diversified,Valor,EUR,100_ET_PLUS,22.8
+Fixed Income,Conviction,EUR,100_ET_PLUS,17.9
+Diversified,RMM,EUR,100_ET_PLUS,11.4
+Fixed Income,Thematic,EUR,100_ET_PLUS,7.5
+Equities,RMM,EUR,100_ET_PLUS,6.9
+Diversified,OPAL,EUR,100_ET_PLUS,6.5
+Money Market,RMM,EUR,100_ET_PLUS,6.4
+Fixed Income,RMM,EUR,100_ET_PLUS,4.7
+Equities,Conviction,EUR,100_ET_PLUS,3.5
+Diversified,Conviction,EUR,100_ET_PLUS,2.5
+Equities,Thematic,EUR,100_ET_PLUS,2.5
+Equities,OPAL,EUR,100_ET_PLUS,1.9
+Fixed Income,Valor,EUR,100_ET_PLUS,1.5
+Diversified,RMM,USD,DE_5_A_19,1.1
+Equities,RMM,USD,100_ET_PLUS,0.8
+Money Market,RMM,USD,100_ET_PLUS,0.5
+Equities,4Change,EUR,100_ET_PLUS,0.5
+Equities,Valor,EUR,100_ET_PLUS,0.4
+Fixed Income,4Change,EUR,100_ET_PLUS,0.2
+NON_RENSEIGNE,Conviction,EUR,100_ET_PLUS,0.2
+Equities,RMM,CHF,DE_20_A_99,0.1
+Equities,Thematic,USD,DE_20_A_99,0.1
+Diversified,Valor,USD,100_ET_PLUS,0.1
+Fixed Income,Conviction,USD,DE_20_A_99,0.1
+Fixed Income,Conviction,CHF,DE_20_A_99,0.1
+Diversified,4Change,EUR,100_ET_PLUS,0.0
+Fixed Income,Thematic,CHF,DE_20_A_99,0.0
+Equities,Conviction,USD,DE_20_A_99,0.0
+Diversified,Valor,CHF,DE_20_A_99,0.0
+Fixed Income,Valor,CHF,DE_5_A_19,0.0
+Alternative,OPAL,EUR,DE_20_A_99,0.0
+Fixed Income,Valor,USD,DE_5_A_19,0.0
