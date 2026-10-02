@@ -1,9 +1,10 @@
 /** Éléments de récit partagés par l'Accueil et les Encours : montants animés, équation de la variation, tableau à palettes. */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { date as fdate, eur, eurParts, plural } from "../lib/format";
 import { prefersReducedMotion } from "../lib/motion";
-import { gsap, ScrollTrigger } from "../lib/gsap";
+import { gsap, onVisible, ScrollTrigger } from "../lib/gsap";
+import { Flag } from "./Flag";
 import type { Overview } from "../lib/types";
 
 export type BoardRow = { country: string; iso: string; n_shares: number; n_funds: number };
@@ -80,43 +81,64 @@ export function Equation({ v, end }: { v: NonNullable<Overview["var"][string]>; 
 
 const FLAP_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
-/** Tableau à palettes (façon hall de gare) : les pays de commercialisation s'affichent lettre à lettre. */
-export function Board({ rows }: { rows: BoardRow[] }) {
-  const ref = useRef<HTMLTableElement>(null);
-  const W = Math.max(8, ...rows.map((r) => (r.country ?? "").length));
+/** Tableau des départs (façon aéroport) : drapeau qui pivote, palettes qui défilent lettre à lettre, horloge.
+ *  Une ligne = un pays de commercialisation ; « vol » = rang du pays, « porte » = nombre de fonds. */
+export function Board({ rows, title = "Départs", subtitle = "Pays de commercialisation" }: { rows: BoardRow[]; title?: string; subtitle?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => { const t = window.setInterval(() => setNow(new Date()), 15000); return () => window.clearInterval(t); }, []);
+  const W = Math.min(16, Math.max(8, ...rows.map((r) => (r.country ?? "").length)));
   const pad = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "." : s.padEnd(n, " "));
-  const up = (s: string | null | undefined) => (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
+  const up = (s: string | null | undefined) => (s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
   useEffect(() => {
     const el = ref.current;
     if (!el || prefersReducedMotion()) return;
     const cells = Array.from(el.querySelectorAll<HTMLElement>(".flap"));
-    const run = () => cells.forEach((c, k) => {
-      const fin = c.dataset.c ?? " ";
-      if (fin === " ") return;
-      const o = { t: 0 };
-      const n = 6 + ((k * 7) % 9);
-      gsap.to(o, { t: n, duration: 0.05 * n, delay: (k % 40) * 0.012 + Math.floor(k / 40) * 0.08, ease: "none",
-        onUpdate: () => { const i = Math.floor(o.t); c.textContent = i >= n ? fin : FLAP_CHARS[(k * 13 + i * 5) % FLAP_CHARS.length]; },
-        onComplete: () => { c.textContent = fin; gsap.fromTo(c, { scaleY: 0.82 }, { scaleY: 1, duration: 0.25, ease: "back.out(3)" }); } });
-    });
-    const st = ScrollTrigger.create({ trigger: el, start: "top 78%", once: true, onEnter: run });
-    return () => st.kill();
+    const flags = Array.from(el.querySelectorAll<HTMLElement>(".board__flag"));
+    const rowsEl = Array.from(el.querySelectorAll<HTMLElement>(".board__row"));
+    gsap.set(flags, { rotateX: -90, opacity: 0 });
+    const run = () => {
+      gsap.fromTo(rowsEl, { opacity: 0, x: -18 }, { opacity: 1, x: 0, duration: 0.6, stagger: 0.06, ease: "power3.out", clearProps: "opacity,transform" });
+      gsap.to(flags, { rotateX: 0, opacity: 1, duration: 0.9, stagger: 0.09, delay: 0.25, ease: "back.out(2.2)" });
+      cells.forEach((c, k) => {
+        const fin = c.dataset.c ?? " ";
+        if (fin === " ") return;
+        const o = { t: 0 };
+        const n = 6 + ((k * 7) % 9);
+        gsap.to(o, { t: n, duration: 0.05 * n, delay: 0.2 + (k % 40) * 0.012 + Math.floor(k / 40) * 0.08, ease: "none",
+          onUpdate: () => { const i = Math.floor(o.t); c.textContent = i >= n ? fin : FLAP_CHARS[(k * 13 + i * 5) % FLAP_CHARS.length]; },
+          onComplete: () => { c.textContent = fin; gsap.fromTo(c, { scaleY: 0.82 }, { scaleY: 1, duration: 0.25, ease: "back.out(3)" }); } });
+      });
+    };
+    return onVisible(el, run, "0px 0px -15% 0px");
   }, [rows]);
   const cells = (s: string) => s.split("").map((ch, i) => <span key={i} className="flap" data-c={ch}>{ch}</span>);
+  const time = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   return (
-    <table className="board" ref={ref} data-a="">
-      <caption className="sr-only">Pays de commercialisation, classés par nombre de parts enregistrées</caption>
-      <thead><tr><th scope="col">Pays</th><th scope="col">Code</th><th scope="col" className="n">Fonds</th><th scope="col" className="n">Parts</th></tr></thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr key={r.iso}>
-            <th scope="row"><Link to={`/distribution/${encodeURIComponent(r.country)}`} aria-label={r.country}><span aria-hidden="true">{cells(pad(up(r.country), W))}</span></Link></th>
-            <td><span aria-hidden="true">{cells(pad(r.iso, 2))}</span><span className="sr-only">{r.iso}</span></td>
-            <td className="n"><span aria-hidden="true">{cells(String(r.n_funds).padStart(2, " "))}</span><span className="sr-only">{plural(r.n_funds, "fonds", "fonds")}</span></td>
-            <td className="n"><span aria-hidden="true">{cells(String(r.n_shares).padStart(3, " "))}</span><span className="sr-only">{plural(r.n_shares, "part")}</span></td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="board" ref={ref}>
+      <div className="board__top" aria-hidden="true">
+        <span className="board__plane"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z" fill="currentColor" /></svg></span>
+        <b>{title}</b><span className="board__en">Departures</span><span className="board__sub">{subtitle}</span>
+        <span className="board__clock num">{time}</span>
+      </div>
+      <table className="board__t">
+        <caption className="sr-only">{subtitle}, classés par nombre de parts enregistrées</caption>
+        <thead><tr><th scope="col">Vol</th><th scope="col"><span className="sr-only">Drapeau</span></th><th scope="col">Destination</th><th scope="col">Code</th>
+          <th scope="col" className="n">Fonds</th><th scope="col" className="n">Parts</th><th scope="col">Statut</th></tr></thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={r.iso} className="board__row">
+              <td className="board__vol num">RC {String(101 + i)}</td>
+              <td><span className="board__flag"><Flag iso={r.iso} title={`Drapeau : ${r.country}`} /></span></td>
+              <th scope="row"><Link to={`/distribution/${encodeURIComponent(r.country)}`} aria-label={r.country}><span aria-hidden="true">{cells(pad(up(r.country), W))}</span></Link></th>
+              <td><span aria-hidden="true">{cells(pad(r.iso, 2))}</span><span className="sr-only">{r.iso}</span></td>
+              <td className="n"><span aria-hidden="true">{cells(String(r.n_funds).padStart(2, " "))}</span><span className="sr-only">{plural(r.n_funds, "fonds", "fonds")}</span></td>
+              <td className="n"><span aria-hidden="true">{cells(String(r.n_shares).padStart(3, " "))}</span><span className="sr-only">{plural(r.n_shares, "part")}</span></td>
+              <td><span className="board__st"><i />Commercialisé</span></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

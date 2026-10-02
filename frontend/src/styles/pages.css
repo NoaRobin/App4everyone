@@ -405,3 +405,35 @@
 .ring__legend button:hover, .ring__legend button.is-on, .ring__legend button:focus-visible { background: var(--gold-soft); color: var(--ink); transform: translateX(3px); }
 .ring__ln { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ring__lv { color: var(--ink); }
+
+.lnk__diag { display: grid; grid-template-columns: auto 1fr auto; gap: 8px 22px; align-items: center; margin-bottom: 16px; padding: 18px 22px;
+  border-radius: var(--radius); border: 1px solid var(--line); background: var(--card); border-left: 3px solid var(--gold); }
+.lnk__diag.is-echec { border-left-color: var(--fam-ae); }
+.lnk__diag p { margin: 0; color: var(--ink-2); line-height: 1.55; max-width: 90ch; }
+.lnk__cov { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.lnk__cov b { font-family: var(--serif); font-weight: 400; font-size: 34px; color: var(--ink); }
+.lnk__cov span { color: var(--ink-2); font-size: 13px; white-space: normal; max-width: 22ch; }
+@media (max-width: 900px) { .lnk__diag { grid-template-columns: 1fr; } }
+
+/* Fiche fonds : ce que rapporte le fonds, sa place au passif */
+.fund__eco { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; align-items: stretch; }
+.fund__eco-i { display: flex; flex-direction: column; gap: 3px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line); background: color-mix(in srgb, var(--fc) 8%, var(--card));
+  transition: border-color .25s, transform .3s var(--ease); min-width: 150px; }
+.fund__eco-i:hover { border-color: var(--gold); transform: translateY(-2px); }
+.fund__eco-i b { font-family: var(--serif); font-weight: 400; font-size: 26px; line-height: 1; color: var(--ink); }
+.fund__eco-i b small { font-family: var(--sans); font-size: 12px; color: var(--ink-3); }
+.fund__eco-cmp { align-self: center; }
+
+/* Distribution : teneurs de compte (passif) */
+.ten { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.ten__c { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); padding: 18px 20px; display: grid; gap: 8px; }
+.ten__h { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.ten__h b { font-family: var(--serif); font-weight: 400; font-size: 28px; }
+.ten__h span { color: var(--gold-ink); font-size: 13px; }
+.ten ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
+.ten li { display: grid; grid-template-columns: 1fr auto 76px; gap: 10px; align-items: center; font-size: 13px; color: var(--ink-2); }
+.ten li.is-off { opacity: .5; }
+.ten__r { display: inline-flex; gap: 3px; }
+.ten__r i { width: 10px; height: 6px; border-radius: 2px; background: var(--paper-3); }
+.ten__r i.on { background: var(--gold); }
+.ten li .num { text-align: right; color: var(--ink-3); }

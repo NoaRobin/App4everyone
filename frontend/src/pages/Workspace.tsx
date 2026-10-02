@@ -142,7 +142,7 @@ function Bureau() {
 const QUESTIONS: { theme: string; items: { to: string; q: string }[] }[] = [
   { theme: "Caractéristiques", items: [
     { to: "/fonds", q: "Retrouver la fiche d'un fonds ou d'une part" },
-    { to: "/selection?vue=mosaique", q: "Comparer les fonds d'une même famille" },
+    { to: "/comparateur", q: "Comparer les performances de plusieurs fonds" },
     { to: "/selection?sfdr=Article%209", q: "Quels fonds sont classés article 9 ?" },
   ] },
   { theme: "Encours & collecte", items: [
@@ -154,6 +154,11 @@ const QUESTIONS: { theme: string; items: { to: string; q: string }[] }[] = [
     { to: "/distribution", q: "Où un fonds est-il commercialisé ?" },
     { to: "/distribution", q: "Quelles parts sont autorisées dans un pays ?" },
     { to: "/portefeuilles", q: "Quels fonds détiennent cette ligne ?" },
+  ] },
+  { theme: "Revenus & passif", items: [
+    { to: "/", q: "Quels fonds rapportent le plus ?" },
+    { to: "/passif", q: "Qui détient nos fonds (teneurs, types de comptes) ?" },
+    { to: "/passif#transactions", q: "Souscriptions et rachats des derniers jours" },
   ] },
   { theme: "Risques & contrôles", items: [
     { to: "/fonds#risques", q: "Carte risque / rendement des fonds" },

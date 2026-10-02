@@ -52,6 +52,8 @@ type Links = {
   aum?: { date: string; linked: number; unlinked: number };
   family_nc?: { referenced: number; jump_only: number };
   unlinked_funds?: { fund_id: string; parts: number; has_aum: boolean; reasons: string[] }[];
+  coverage?: { products_active: number; products_with_jump: number; products_without_jump: number; by_portfolio_code?: number };
+  diagnosis?: { kind: "complet" | "perimetre" | "echec"; text: string };
   watch?: { fund_id: string; name: string | null; referenced: boolean; parts: number; has_aum: boolean;
     fund_links: Record<string, number>; reasons: string[]; fields: Record<string, boolean> }[];
 };
@@ -76,6 +78,15 @@ function LinksSummary({ links }: { links: Links }) {
     <section className="section reveal lnk" aria-labelledby="h-lnk">
       <Head id="lnk" eyebrow="Qualité des données" title="Rattachement JUMP ↔ Product Info"
         lede="Chaque part JUMP est rattachée à sa part du référentiel par son identifiant (pi_shareid), à défaut par son ISIN lorsqu'il est unique ; chaque fonds par le ProductID de ses parts, à défaut par l'ID_PI_FONDS de JUMP, puis par les autres parts du même fonds JUMP. Jamais sur le nom." />
+      {links.diagnosis && (
+        <div className={`lnk__diag is-${links.diagnosis.kind}`} role="status">
+          <span className="eyebrow">Lecture</span>
+          <p>{links.diagnosis.text}</p>
+          {links.coverage && <div className="lnk__cov num" aria-label="Couverture du référentiel">
+            <b>{links.coverage.products_with_jump}</b><span>/ {links.coverage.products_active} fonds du référentiel reçoivent leurs parts JUMP</span>
+          </div>}
+        </div>
+      )}
       <div className="lnk__grid">
         <div className="lnk__card">
           <div className="eyebrow">Parts JUMP · {p.total}</div>

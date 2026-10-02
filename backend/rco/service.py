@@ -15,7 +15,7 @@ from .domain import fields as F
 from .domain import holdings as H
 from .domain import labels as L
 from .domain import linking as LK
-from .domain.numeric import fmt_meur, numeric_series, safe_divide, safe_float
+from .domain.numeric import finite_or_none, fmt_meur, numeric_series, safe_divide, safe_float
 from .domain.model import PERIODS, Model, _clean, find_duplicate_funds, memo, rows_of
 
 FUND_DIMS = {
@@ -98,6 +98,79 @@ class Service:
                 {"key": "nc", "label": "Non classé", "short": "Non classé"}],
             "periods": PERIODS, "dims": {k: v[0] for k, v in {**FUND_DIMS, **SHARE_DIMS}.items()},
         }
+
+    # ------------------------------------------------------------------ comparateur de performance
+    def compare(self, ids: tuple[str, ...], period: str, d: str | None) -> dict:
+        """Jusqu'à 6 fonds sur une même base 100 (part principale, dividendes réinvestis, OST corrigées) et leurs
+        indicateurs : performances, volatilité, perte maximale, ratio rendement / risque, mois positifs, encours,
+        collecte, frais courants, SRI, revenus estimés."""
+        m, end = self.m, self.end(d)
+        years = {"1A": 1, "3A": 3, "5A": 5}.get(period)
+        rev = {f["id"]: f for f in self.revenue(d)["funds"]}
+        table = {r["id"]: r for r in _records(self._fund_table(d))}
+        out, starts = [], []
+        for fid in ids[:6]:
+            if fid not in m.funds.index:
+                continue
+            jp = A.main_part(m, fid, end)
+            p = A.share_performance(m, jp, end) if jp else None
+            if not p:
+                out.append({"id": fid, "name": str(m.funds.at[fid, "name"]), "family": m.funds.at[fid, "family"], "series": [], "ind": {}})
+                continue
+            idx = p["_index"].dropna()
+            if years:
+                idx = idx[idx.index >= end - pd.DateOffset(years=years)]
+            starts.append(idx.index[0] if len(idx) else end)
+            out.append({"id": fid, "jp": jp, "_idx": idx, "p": p})
+        common = max(starts) if starts else end
+        res = []
+        for o in out:
+            if "_idx" not in o:
+                res.append(o)
+                continue
+            fid, p, idx = o["id"], o["p"], o["_idx"][o["_idx"].index >= common]
+            base = float(idx.iloc[0]) if len(idx) else None
+            wk = idx.resample("W-FRI").last().dropna() if len(idx) > 260 else idx
+            if len(idx) and wk.index[-1] != idx.index[-1]:
+                wk = pd.concat([wk, idx.iloc[-1:]])
+            series = [{"d": t.date().isoformat(), "v": round(float(v) / base * 100, 4)} for t, v in wk.items()] if base else []
+            mon = idx.resample("ME").last().pct_change().dropna()
+            r_tot = float(idx.iloc[-1] / idx.iloc[0] - 1) if len(idx) > 1 else None
+            yrs = max((idx.index[-1] - idx.index[0]).days / 365.25, 1e-9) if len(idx) > 1 else None
+            ann = (1 + r_tot) ** (1 / yrs) - 1 if r_tot is not None and yrs and yrs >= 1 and 1 + r_tot > 0 else r_tot
+            rets = idx.pct_change().dropna()
+            ppy = 252 if len(rets) and (idx.index[-1] - idx.index[0]).days / max(len(rets), 1) < 3 else 52
+            vol = float(rets.std(ddof=1) * math.sqrt(ppy)) if len(rets) > 20 else None
+            mdd = float((idx / idx.cummax() - 1).min()) if len(idx) else None
+            downside = rets[rets < 0]
+            dvol = float(downside.std(ddof=1) * math.sqrt(ppy)) if len(downside) > 10 else None
+            t = table.get(fid, {})
+            res.append({"id": fid, "name": str(m.funds.at[fid, "name"]), "family": m.funds.at[fid, "family"], "series": series,
+                        "share": {"id": o["jp"], "nav": p["nav"], "nav_date": p["nav_date"], "ccy": p["nav_ccy"], "bench": p["bench_name"]},
+                        "ind": {"perf_period": finite_or_none(r_tot), "perf_ann": finite_or_none(ann), "vol": finite_or_none(vol),
+                                "mdd": finite_or_none(mdd), "ratio": finite_or_none(ann / vol) if ann is not None and vol else None,
+                                "sortino": finite_or_none(ann / dvol) if ann is not None and dvol else None,
+                                "calmar": finite_or_none(ann / abs(mdd)) if ann is not None and mdd else None,
+                                "pos_months": finite_or_none(float((mon > 0).mean())) if len(mon) else None,
+                                "best_month": finite_or_none(float(mon.max())) if len(mon) else None,
+                                "worst_month": finite_or_none(float(mon.min())) if len(mon) else None,
+                                **{f"perf_{k}": p["fund"].get(k) for k in ("1M", "YTD", "1A", "3A")},
+                                "te": p["risk"].get("te"), "aum": t.get("aum"), "flows_1A": t.get("flows_1A"),
+                                "ongoing": None, "sri": t.get("sri"),
+                                "revenue": rev.get(fid, {}).get("revenue"), "fee_rate": rev.get(fid, {}).get("rate")}})
+        for r in res:
+            if r.get("share"):
+                sh = self._share_brief(r["share"]["id"], end)
+                r["ind"]["ongoing"] = sh.get("ongoing") if isinstance(sh, dict) else None
+        return {"date": end.date().isoformat(), "period": period, "start": common.date().isoformat() if starts else None, "funds": res}
+
+    # ------------------------------------------------------------------ revenus estimés
+    @lru_cache(maxsize=8)
+    def revenue(self, d: str | None) -> dict:
+        from .domain.revenue import revenue_view
+        end = self.end(d)
+        labels = {k: self._family_label(k) for k in ("aid", "ae", "fi", "ao", "nc")}
+        return revenue_view(self.m, end, labels)
 
     # ------------------------------------------------------------------ vue maison
     @lru_cache(maxsize=16)
@@ -852,8 +925,28 @@ class Service:
             [{"fund_id": f, "parts": int(n_parts.get(f, 0)), "has_aum": bool((_num(aum.get(f)) or 0) > 0),
               "reasons": reasons.get(f, [])} for f in jump_only], key=lambda x: (not x["has_aum"], -x["parts"], x["fund_id"]))
         rep["watch"] = self._link_watch(aum)
+        rep["diagnosis"] = self._link_diagnosis(rep)
         rep.pop("_unlinked_jf", None)
         return rep
+
+    @staticmethod
+    def _link_diagnosis(rep: dict) -> dict:
+        """Lecture des compteurs : les fonds « JUMP seuls » sont-ils des échecs de rattachement ou des portefeuilles
+        hors du référentiel des fonds ouverts ? La couverture du référentiel tranche."""
+        cov = rep.get("coverage") or {}
+        f = rep.get("funds") or {}
+        n_ref, missing = cov.get("products_active", 0), cov.get("products_without_jump", 0)
+        unl = f.get("unlinked", 0)
+        if not unl:
+            return {"kind": "complet", "text": "Toutes les parts JUMP sont rattachées à un fonds du référentiel."}
+        if n_ref and missing / n_ref <= 0.1:
+            return {"kind": "perimetre", "text": (
+                f"{n_ref - missing} des {n_ref} fonds actifs du référentiel reçoivent leurs parts JUMP : le rattachement "
+                f"fonctionne. Les {unl} fonds JUMP restants n'ont pas de fiche dans le référentiel des fonds ouverts "
+                "(mandats, fonds dédiés, fonds liquidés ou en création) : ils sont affichés « hors référentiel ».")}
+        return {"kind": "echec", "text": (
+            f"{missing} des {n_ref} fonds actifs du référentiel ne reçoivent aucune part JUMP alors que {unl} fonds JUMP "
+            "restent seuls : les identifiants ne se rejoignent pas. Voir les formes d'identifiants et les sondes ci-dessous.")}
 
     def _link_watch(self, aum: pd.Series) -> list[dict]:
         """Fonds suivis (motif APP_LINK_WATCH, par défaut Valor et 4Change) : état du rattachement et champs renseignés.

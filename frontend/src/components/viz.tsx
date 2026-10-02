@@ -1,11 +1,10 @@
 /**
- * Visualisations « signature » : pont des encours, mosaïque, carte risque/rendement, années civiles.
+ * Visualisations « signature » : pont des encours, ruban et classement, carte risque/rendement, années civiles.
  * Toutes sont directement étiquetées, cliquables et pilotables au clavier.
  */
 import { useMemo, useState, type ReactNode } from "react";
 import { scaleBand, scaleLinear, scaleSqrt } from "d3-scale";
 import { date as fdate, eur, pct } from "../lib/format";
-import { squarify } from "../lib/treemap";
 import type { Variation } from "../lib/types";
 import { useWidth } from "./charts";
 
@@ -72,41 +71,54 @@ export function Bridge({ v, end, height = 260, label = "Encours", compact = fals
   );
 }
 
-// ------------------------------------------------------------------ mosaïque
+// ------------------------------------------------------------------ ruban et classement (remplace la mosaïque)
 export type MosaicItem = { key: string; label: string; value: number; color: string; sub?: string; badge?: ReactNode; ariaExtra?: string };
 
-/** Mosaïque (treemap) : surface ∝ valeur. Étiquettes directes quand la place le permet, infobulle sinon. */
+/**
+ * Ruban et classement : en tête, un ruban 100 % où chaque élément occupe sa part ; dessous, le classement en barres
+ * (longueur ∝ valeur, valeurs lues directement). Le survol d'une ligne éclaire son segment du ruban et inversement.
+ * Les plus petits éléments sont regroupés en « Autres » jusqu'au déploiement de la liste complète.
+ */
 export function Mosaic({ items, height = 460, onSelect, format = eur, legend, share = true }: { items: MosaicItem[]; height?: number; onSelect?: (i: MosaicItem) => void; format?: (v: number) => string; legend?: ReactNode; share?: boolean }) {
-  const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<string | null>(null);
-  const tiles = useMemo(() => squarify(items, (i) => i.value, { x: 0, y: 0, w: Math.max(width, 1), h: height }), [items, width, height]);
-  const total = items.reduce((s, i) => s + Math.max(0, i.value), 0);
-  const hov = tiles.find((t) => t.item.key === hover);
+  const [all, setAll] = useState(false);
+  const sorted = useMemo(() => [...items].filter((i) => i.value > 0).sort((a, b) => b.value - a.value), [items]);
+  const total = sorted.reduce((s, i) => s + i.value, 0) || 1;
+  const n = Math.max(6, Math.min(14, Math.round(height / 40)));
+  const shown = all ? sorted : sorted.slice(0, n);
+  const rest = sorted.slice(n);
+  const restV = rest.reduce((s, i) => s + i.value, 0);
+  const max = sorted[0]?.value || 1;
+  const ribbon = all || !rest.length ? sorted : [...sorted.slice(0, n), { key: "__autres", label: `Autres (${rest.length})`, value: restV, color: "var(--ink-3)" } as MosaicItem];
   return (
-    <div className="mosaic-wrap">
-      <div ref={ref} className="mosaic" style={{ height }} role="list" aria-label="Mosaïque : la surface de chaque case est proportionnelle à la valeur">
-        {tiles.map((t) => {
-          const big = t.w > 96 && t.h > 64, mid = t.w > 64 && t.h > 34;
-          return (
-            <button key={t.item.key} type="button" role="listitem" className={`mosaic__t${hover === t.item.key ? " is-hover" : ""}`}
-              style={{ left: t.x, top: t.y, width: t.w, height: t.h, ["--tc" as string]: t.item.color }}
-              onMouseEnter={() => setHover(t.item.key)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(t.item.key)} onBlur={() => setHover(null)}
-              onClick={() => onSelect?.(t.item)} aria-label={`${t.item.label} : ${format(t.item.value)}${t.item.ariaExtra ? ", " + t.item.ariaExtra : ""}`}>
-              {mid && <span className="mosaic__n" style={{ fontSize: big ? Math.min(22, 11 + Math.sqrt(t.w * t.h) / 26) : 12 }}>{t.item.label}</span>}
-              {big && <span className="mosaic__v num">{format(t.item.value)}</span>}
-              {t.w > 130 && t.h > 120 && t.item.badge && <span className="mosaic__b">{t.item.badge}</span>}
-            </button>
-          );
-        })}
-        {hov && (
-          <div className="mosaic__tip" role="status" style={{ left: Math.min(hov.x + hov.w / 2, (width || 0) - 110), top: Math.max(hov.y + 8, 8) }}>
-            <b>{hov.item.label}</b>
-            <span className="num">{format(hov.item.value)}{share ? ` · ${pct(hov.item.value / total, { signed: false, digits: 1 })}` : ""}</span>
-            {hov.item.sub && <span className="small">{hov.item.sub}</span>}
-            {hov.item.badge && <span className="small">{hov.item.badge}</span>}
-          </div>
-        )}
+    <div className="rbn">
+      <div className="rbn__ribbon" role="img" aria-label={`Répartition : ${ribbon.slice(0, 6).map((i) => `${i.label} ${pct(i.value / total, { signed: false })}`).join(", ")}`}>
+        {ribbon.map((i) => (
+          <span key={i.key} className={`rbn__seg${hover === i.key ? " is-on" : ""}${hover && hover !== i.key ? " is-dim" : ""}`}
+            style={{ flexGrow: i.value / total, ["--tc" as string]: i.color }} onMouseEnter={() => setHover(i.key)} onMouseLeave={() => setHover(null)}
+            title={`${i.label} · ${format(i.value)}`} />
+        ))}
       </div>
+      <ol className="rbn__list" aria-label="Classement par valeur décroissante">
+        {shown.map((i, k) => (
+          <li key={i.key}>
+            <button type="button" className={`rbn__row${hover === i.key ? " is-on" : ""}${hover && hover !== i.key ? " is-dim" : ""}`} style={{ ["--tc" as string]: i.color }}
+              onMouseEnter={() => setHover(i.key)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(i.key)} onBlur={() => setHover(null)}
+              onClick={() => onSelect?.(i)} disabled={!onSelect} aria-label={`${i.label} : ${format(i.value)}${share ? `, ${pct(i.value / total, { signed: false })}` : ""}${i.ariaExtra ? ", " + i.ariaExtra : ""}`}>
+              <span className="rbn__k num">{String(k + 1).padStart(2, "0")}</span>
+              <span className="rbn__n"><span className="rbn__dot" />{i.label}{i.sub && <span className="rbn__sub">{i.sub}</span>}</span>
+              <span className="rbn__bar" aria-hidden="true" style={{ ["--w" as string]: `${(i.value / max) * 100}%` }}><i /></span>
+              <span className="rbn__v num">{format(i.value)}{share && <em>{pct(i.value / total, { signed: false, digits: 1 })}</em>}</span>
+              {i.badge && <span className="rbn__b">{i.badge}</span>}
+            </button>
+          </li>
+        ))}
+      </ol>
+      {rest.length > 0 && (
+        <button type="button" className="rbn__more" onClick={() => setAll(!all)}>
+          {all ? "Réduire au classement principal" : `Afficher les ${rest.length} autres (${share ? pct(restV / total, { signed: false }) : format(restV)})`}
+        </button>
+      )}
       {legend}
     </div>
   );

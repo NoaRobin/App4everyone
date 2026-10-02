@@ -245,3 +245,54 @@ def test_structure_severe_aucun_fonds_jump_seul_avec_encours():
     assert rep["methods"].get("pi_fonds_inventaires", 0) > 0           # le fonds sans ISIN : rattaché par ses inventaires
     ids = [f["id"] for f in svc.funds(None, {})["funds"]]
     assert len(ids) == len(set(ids)) == len(svc.m.products) + rep["funds"]["unlinked"]
+
+
+# ---------------------------------------------------------------- « 265 fonds, 80 % non rattachés » : deux causes possibles
+def _many(n_jump=265, n_ref=53, ids="pi"):
+    rows, prods, shares = [], [], []
+    for i in range(n_jump):
+        jf, jp = f"{1000 + i}", f"{50000 + i}"
+        in_ref = i < n_ref
+        pid, sid = f"PR{i}", f"S{i}"
+        r = aum_row(jf, jp, D, 10, 100)
+        if in_ref and ids == "pi":
+            r.update(ID_PI_PART=sid, ID_PI_FONDS=pid)
+        rows.append(r)
+        if in_ref:
+            prods.append(product(pid, f"Fonds {i}", Fund_Administrator_Portfolio_Code=jf if ids == "code" else None))
+            shares.append(share(sid, pid, f"FR{i:010d}", f"Fonds {i} C", BOne_Share_ID=int(jp) if ids == "code" else None))
+    return build(rows, prods, shares)
+
+
+def test_perimetre_portefeuilles_hors_referentiel():
+    """212 portefeuilles JUMP sans fiche dans le référentiel des fonds ouverts : ce n'est pas un échec de rattachement,
+    le diagnostic le dit (couverture du référentiel complète)."""
+    m = _many()
+    cov = m.link_report["coverage"]
+    assert cov["products_active"] == 53 and cov["products_with_jump"] == 53 and cov["products_without_jump"] == 0
+    assert m.link_report["funds"]["unlinked"] == 212
+    d = Service(m).links()["diagnosis"]
+    assert d["kind"] == "perimetre"
+
+
+def test_identifiants_jump_portes_par_les_codes_du_referentiel():
+    """JUMP ne renseigne ni ID_PI_PART ni ID_PI_FONDS, mais ses propres identifiants figurent dans le référentiel
+    (code portefeuille de l'administrateur, code part du teneur de registre) : tout est rattaché."""
+    m = _many(ids="code")
+    assert m.link_report["coverage"]["products_without_jump"] == 0
+    assert m.link_report["funds"]["unlinked"] == 212                   # les 212 hors référentiel restent seuls
+    linked = m.link[m.link["fund_linked"]]
+    assert len(linked) == 53 and set(linked["link"]) == {"id"}
+
+
+def test_echec_reel_signale():
+    """Les fonds du référentiel ne reçoivent aucune part : le diagnostic désigne un échec de rattachement."""
+    m = _many(ids="none")
+    assert m.link_report["coverage"]["products_without_jump"] == 53
+    assert Service(m).links()["diagnosis"]["kind"] == "echec"
+
+
+def test_code_jump_contredit_par_l_isin_ecarte():
+    rows = [aum_row("F1", "777", D, 10, 100, isin="FR0000000002")]
+    m = build(rows, [product("PR1", "Un")], [share("S1", "PR1", "FR0000000001", "Un C", BOne_Share_ID=777)])
+    assert m.link.at["777", "link"] != "id"

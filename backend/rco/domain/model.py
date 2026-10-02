@@ -113,41 +113,138 @@ def _matrix(values: np.ndarray, rows: np.ndarray, cols: np.ndarray, index: pd.Da
     return pd.DataFrame(out, index=index, columns=columns)
 
 
-def asof_matrix(pivot: pd.DataFrame, stale_days: int) -> pd.DataFrame:
-    """Reporte la dernière valeur connue de chaque colonne tant qu'elle a moins de `stale_days` jours."""
+def _ffill(a: np.ndarray) -> np.ndarray:
+    """Report vers le bas de la dernière valeur non NaN, colonne par colonne (numpy, sans copie pandas)."""
+    n = a.shape[0]
+    idx = np.where(np.isnan(a), 0, np.arange(n)[:, None])
+    np.maximum.accumulate(idx, axis=0, out=idx)
+    return a[idx, np.arange(a.shape[1])]                   # avant la première valeur : a[0] (NaN)
+
+
+def _shift(a: np.ndarray) -> np.ndarray:
+    out = np.empty_like(a)
+    out[0] = np.nan
+    out[1:] = a[:-1]
+    return out
+
+
+def observation_gap_days(pivot: pd.DataFrame) -> np.ndarray:
+    """Écart moyen (jours) entre deux observations de chaque colonne : ~1,4 pour une VL quotidienne (jours ouvrés),
+    ~7 hebdomadaire, ~30 mensuelle. Colonne observée une seule fois : 1. Vectorisé (aucune boucle par part)."""
+    days = pivot.index.to_numpy().astype("datetime64[D]").astype(np.int64).astype(float)
+    ok = pivot.notna().to_numpy()
+    n = ok.sum(axis=0)
+    first = np.where(n > 0, days[ok.argmax(axis=0)], 0.0)
+    last = np.where(n > 0, days[len(days) - 1 - ok[::-1].argmax(axis=0)], 0.0)
+    return np.where(n > 1, (last - first) / np.maximum(n - 1, 1), 1.0)
+
+
+def stale_limits(pivot: pd.DataFrame, stale_days: int) -> np.ndarray:
+    """Délai de péremption par part : `stale_days`, allongé pour les VL hebdomadaires ou mensuelles (3 × l'écart
+    habituel entre deux VL, 100 jours au plus). Sans cela, une part mensuelle « disparaît » entre deux VL."""
+    return np.maximum(float(stale_days), np.minimum(3.0 * observation_gap_days(pivot), 100.0))
+
+
+def asof_matrix(pivot: pd.DataFrame, stale_days: int, limits: np.ndarray | None = None) -> pd.DataFrame:
+    """Reporte la dernière valeur connue de chaque colonne tant qu'elle n'est pas périmée (voir stale_limits)."""
     idx = pivot.index
+    lim = stale_limits(pivot, stale_days) if limits is None else limits
     obs_date = pd.DataFrame(np.where(pivot.notna().to_numpy(), idx.to_numpy()[:, None], np.datetime64("NaT")),
                             index=idx, columns=pivot.columns).ffill()
     filled = pivot.ffill()
-    age = (idx.to_numpy()[:, None] - obs_date.to_numpy().astype("datetime64[ns]"))
-    too_old = age > np.timedelta64(stale_days, "D")
+    age = (idx.to_numpy()[:, None] - obs_date.to_numpy().astype("datetime64[ns]")) / np.timedelta64(1, "D")
+    too_old = age > lim[None, :]
     return filled.mask(too_old)
 
 
-def flow_matrix(an_eur: pd.DataFrame, parts: pd.DataFrame, coef: pd.DataFrame, aum_asof: pd.DataFrame) -> pd.DataFrame:
+def ost_factor(coef: np.ndarray, vl: np.ndarray, prev_vl: np.ndarray, parts: np.ndarray, prev_parts: np.ndarray) -> np.ndarray:
+    """Facteur d'opération sur titres k du jour (parts de la veille × k = parts équivalentes du jour).
+
+    JUMP transporte COEFFICIENT_OST sous des conventions variables selon les sources : 1 ou vide hors événement,
+    parfois 0 ; coefficient du jour ou cumulé (répété chaque jour après l'événement) ; division ou multiplication.
+    Seule la continuité de la VL tranche sans ambiguïté : après une division par k, VL_t × k ≈ VL_{t−1}.
+    - coefficient vide, nul ou négatif : aucun événement ;
+    - coefficient ≠ 1 : parmi {c, 1/c, 1}, celui qui rend la VL continue (1 si le coefficient est cumulé et répété) ;
+    - coefficient 1 mais VL et nombre de parts qui sautent en sens inverse du même facteur (≥ 1,6) : division non
+      déclarée, k = VL_{t−1} / VL_t.
+    """
+    k = np.ones(coef.shape, dtype=float)
+    # Jours avec un coefficient renseigné ≠ 1 (rares) : le candidat qui rend la VL continue
+    ev = np.flatnonzero(np.isfinite(coef.ravel()) & (coef.ravel() > 0) & (coef.ravel() != 1.0))
+    if len(ev):
+        c = coef.ravel()[ev]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            base = vl.ravel()[ev] / prev_vl.ravel()[ev]
+        known = np.isfinite(base) & (base > 0)
+        cands = np.stack([c, 1.0 / c, np.ones_like(c)])
+        err = np.abs(np.log(np.where(known, base, 1.0)[None] * cands))
+        best = cands[err.argmin(axis=0), np.arange(len(c))]
+        k.ravel()[ev] = np.where(known, best, c)
+    # Division non déclarée : VL et nombre de parts sautent en sens inverse du même facteur
+    with np.errstate(divide="ignore", invalid="ignore"):
+        r = prev_vl / vl
+    jump = np.flatnonzero(((r > 1.6) | (r < 0.625)).ravel())
+    if len(jump):
+        flat_k = k.ravel()
+        jump = jump[flat_k[jump] == 1.0]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            q = parts.ravel()[jump] / prev_parts.ravel()[jump]
+        rr = r.ravel()[jump]
+        ok = np.isfinite(q) & (q > 0) & (np.abs(np.log(np.where(q > 0, q, 1.0) / rr)) < 0.1)
+        flat_k[jump[ok]] = rr[ok]
+    return k
+
+
+def flow_matrix(an_eur: pd.DataFrame, parts: pd.DataFrame, coef: pd.DataFrame, aum_asof: pd.DataFrame,
+                limits: np.ndarray | None = None) -> pd.DataFrame:
     """Collecte nette estimée par part et par date d'observation, en euros.
 
-    flux_t = (parts_t − parts_{t−1} × coef_OST_t) × VL_EUR_t, avec VL_EUR_t = actif net EUR / parts.
-    Lancement d'une part (après le début de l'historique) : souscription initiale = encours.
-    Disparition d'une part (VL non reportée au-delà du délai) : rachat de l'encours restant.
+    flux_t = (parts_t − parts_{t−1} × k_t) × VL_EUR_t, VL_EUR_t = actif net EUR / parts, k_t : facteur d'OST
+    (ost_factor). Règles de robustesse (chacune évitait une collecte de signe faux sur données réelles) :
+    - un trou de VL n'est jamais un rachat : seule la disparition définitive d'une part (après sa dernière VL) solde
+      son encours ; un retour après un trou ne compte que la variation du nombre de parts ;
+    - nombre de parts nul avec un actif net positif : valeur erronée, ignorée ; nombre de parts réellement nul
+      (rachat total) : rachat des parts de la veille à la dernière VL connue ;
+    - lancement (première VL bien après le début de l'historique) : souscription initiale = encours.
     """
-    parts_prev = parts.ffill().shift(1)
-    vl_eur = an_eur / parts.replace(0, np.nan)
-    flows = (parts - parts_prev * coef.fillna(1.0)) * vl_eur
-    flows = flows.where(parts.notna())
-    first_date = an_eur.index[0]
-    for col in an_eur.columns:
-        s = an_eur[col]
-        fv = s.first_valid_index()
-        if fv is not None and fv > first_date + pd.Timedelta(days=7):
-            flows.at[fv, col] = s.at[fv]
-    # Sorties : la valeur reportée devient NaN alors qu'elle existait la veille
-    present = aum_asof.notna()
-    exited = present.shift(1, fill_value=False) & ~present
-    prev_val = aum_asof.shift(1)
-    flows = flows.fillna(0.0)
-    flows = flows.where(~exited, flows - prev_val.where(exited, 0.0))
-    return flows.fillna(0.0)
+    idx, cols = an_eur.index, an_eur.columns
+    A = an_eur.to_numpy(dtype=float)
+    P = parts.to_numpy(dtype=float).copy()
+    C = coef.to_numpy(dtype=float)
+    P[(P <= 0) & (A > 0)] = np.nan                       # zéro ou négatif avec un actif net : saisie erronée
+    P[P < 0] = np.nan
+    zero = P == 0
+    with np.errstate(divide="ignore", invalid="ignore"):
+        vl = np.where(P > 0, A / P, np.nan)
+    vl_ff = _ffill(vl)
+    p_ff = _ffill(P)
+    prev_p, prev_vl = _shift(p_ff), _shift(vl_ff)
+    k = ost_factor(C, vl, prev_vl, P, prev_p)
+    vl_use = np.where(zero, prev_vl, vl)
+    flows = (P - prev_p * k) * vl_use
+    flows[np.isnan(P)] = np.nan
+    lim = stale_limits(an_eur, 0) if limits is None else limits
+    first_date = idx[0]
+    obs = ~np.isnan(A) | ~np.isnan(P)
+    present = aum_asof.notna().to_numpy()
+    prev_val = _shift(aum_asof.to_numpy(dtype=float))
+    has = obs.any(axis=0)
+    fv = obs.argmax(axis=0)
+    lv = len(idx) - 1 - obs[::-1].argmax(axis=0)
+    days = (idx - first_date) / pd.Timedelta(days=1)
+    j = np.flatnonzero(has)
+    # Lancement : première VL nettement après le début de l'historique → souscription initiale = encours
+    launch = j[(np.asarray(days)[fv[j]] > np.maximum(7.0, lim[j])) & np.isfinite(A[fv[j], j])]
+    flows[fv[launch], launch] = A[fv[launch], launch]
+    # Disparition définitive : premier jour sans valeur reportée après la dernière observation (sauf rachat total déjà compté)
+    after = ~present & (np.arange(len(idx))[:, None] > lv[None, :])
+    gone = j[after[:, j].any(axis=0) & ~zero[lv[j], j]]
+    t = after[:, gone].argmax(axis=0)
+    pv = prev_val[t, gone]
+    okp = np.isfinite(pv)
+    t, gone, pv = t[okp], gone[okp], pv[okp]
+    flows[t, gone] = np.nan_to_num(flows[t, gone], nan=0.0) - pv
+    return pd.DataFrame(np.nan_to_num(flows, nan=0.0), index=idx, columns=cols)
 
 
 @dataclass
@@ -373,8 +470,9 @@ def assemble(ref: date, products: pd.DataFrame, shares: pd.DataFrame, countries:
     an_eur = pivot("ACTIF_NET_PART_EURO")
     parts = pivot("NOMBRE_PARTS")
     coef = pivot("COEFFICIENT_OST")
-    share_aum = asof_matrix(an_eur, stale_days)
-    flows = flow_matrix(an_eur, parts, coef, share_aum)
+    limits = stale_limits(an_eur, stale_days)
+    share_aum = asof_matrix(an_eur, stale_days, limits)
+    flows = flow_matrix(an_eur, parts, coef, share_aum, limits)
     del parts, coef
     share_flow_cum = flows.cumsum()
     del flows, an_eur

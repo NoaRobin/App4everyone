@@ -9,7 +9,7 @@ import { useRmm } from "../lib/rmm";
 import type { FamilyKey } from "../lib/types";
 import { ErrorState, Loading, useReveal } from "../components/ui";
 import { BarList } from "../components/charts";
-import { CountryTiles } from "../components/CountryTiles";
+import { Board } from "../components/Story";
 import { Head, PageHero } from "../components/Editorial";
 import * as I from "../components/Icon";
 import { GlobeSection, Timeline, type ClientMap, type TimelineData } from "../components/DistViz";
@@ -57,14 +57,11 @@ export default function Distribution() {
       <Timeline t={d.timeline} />
       <div className="page dist__page">
         <section className="section reveal" aria-labelledby="h-pays">
-          <Head id="pays" eyebrow="Pays par pays" title="La carte des autorisations"
-            lede="Intensité et classement : nombre de fonds enregistrés dans le pays. Encours des parts autorisées (une même part pouvant l'être dans plusieurs pays, ces montants ne s'additionnent pas)." />
-          <div className="dist__map">
-            <CountryTiles values={Object.fromEntries(d.countries.map((c) => [c.iso, c.n_funds]))} labels={Object.fromEntries(d.countries.map((c) => [c.iso, c.country]))}
-              linkFor={(iso) => { const c = d.countries.find((x) => x.iso === iso); return c ? withRmm(`/distribution/${encodeURIComponent(c.country)}`) : null; }} unit="fonds" color="var(--gold-ink)" />
-            <CountryRank rows={d.countries} withRmm={withRmm} />
-          </div>
+          <Head id="pays" eyebrow="Pays par pays" title="Le tableau des départs"
+            lede="Chaque pays de commercialisation, comme un vol au départ : nombre de fonds et de parts autorisés. Cliquez sur une destination pour sa fiche pays." />
+          <Board rows={[...d.countries].sort((a, b) => b.n_shares - a.n_shares)} subtitle={`${d.countries.length} pays de commercialisation`} />
         </section>
+        <TeneursSection />
         <section className="section reveal" aria-labelledby="h-plat">
           <Head id="plat" eyebrow="Plateformes" title="Référencement sur les plateformes" lede="Nombre de parts référencées et encours correspondant." />
           <BarList items={d.platforms} value={(p) => p.n_shares} label={(p) => p.label} right={(p) => <span>{p.n_shares} parts <span className="muted">· {eur(p.aum)}</span></span>} color={() => "var(--gold)"} />
@@ -255,22 +252,30 @@ function FlowTable({ d, withRmm }: { d: Resp; withRmm: (u: string) => string }) 
   );
 }
 
-function CountryRank({ rows, withRmm }: { rows: Resp["countries"]; withRmm: (u: string) => string }) {
-  const sorted = [...rows].sort((a, b) => b.n_funds - a.n_funds || b.n_shares - a.n_shares);
-  const max = sorted[0]?.n_funds || 1;
+type Teneurs = { available: boolean; source?: string; comptes?: { available: boolean; teneurs: { teneur: string; tranche: { label: string; rank: number } | null;
+  clients: { label: string } | null; classifications: { classification: string; label: string; tranche: { label: string; rank: number } | null; active: boolean }[] }[] } };
+
+/** Le passif vu de la distribution : qui tient les comptes (teneurs) et quels types de comptes, en tranches. */
+function TeneursSection() {
+  const { api } = useApp();
+  const { data } = useApi<Teneurs>(api("/api/passif"));
+  const t = data?.comptes?.available ? data.comptes.teneurs : [];
+  if (!t.length) return null;
   return (
-    <ol className="rank">
-      {sorted.map((c, i) => (
-        <li key={c.iso}>
-          <Link to={withRmm(`/distribution/${encodeURIComponent(c.country)}`)} className="rank__a">
-            <span className="rank__i num">{String(i + 1).padStart(2, "0")}</span>
-            <span className="rank__n">{c.country}<span className="rank__iso">{c.iso}</span></span>
-            <span className="rank__bar" aria-hidden="true"><span style={{ width: `${(c.n_funds / max) * 100}%` }} /></span>
-            <span className="rank__v num">{c.n_funds}<span className="rank__u"> fonds</span></span>
-            <span className="rank__s small num">{c.n_shares} parts · {eur(c.aum_registered)}</span>
-          </Link>
-        </li>
-      ))}
-    </ol>
+    <section className="section reveal" aria-labelledby="h-ten">
+      <Head id="ten" eyebrow="Au passif" title="Qui tient les comptes"
+        lede={<>Teneurs de compte et types de comptes porteurs de nos fonds, en tranches (jamais de nombre exact ni de montant). {data?.source === "synthétique" ? "Données synthétiques. " : ""}<Link className="link" to="/passif">Tout le passif</Link></>} />
+      <div className="ten">
+        {t.map((x) => (
+          <div key={x.teneur} className="ten__c">
+            <div className="ten__h"><b>{x.teneur}</b><span className="num">{x.tranche?.label ?? "—"} comptes</span></div>
+            {x.clients && <div className="small muted">{x.clients.label} clients</div>}
+            <ul>{x.classifications.map((c) => (
+              <li key={c.classification} className={c.active ? "" : "is-off"}><span>{c.label}</span><span className="ten__r" aria-hidden="true">{Array.from({ length: 5 }, (_, i) => <i key={i} className={i < (c.tranche?.rank ?? 0) ? "on" : ""} />)}</span><span className="num small">{c.tranche?.label}</span></li>
+            ))}</ul>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

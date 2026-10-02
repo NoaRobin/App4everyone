@@ -90,7 +90,7 @@ export default function Encours() {
             </section>
           )}
           <section className="section reveal" aria-labelledby="h-mos">
-            <Head id="mos" eyebrow={`Par ${ax?.label.toLowerCase() ?? ""}`} title="La mosaïque des encours"
+            <Head id="mos" eyebrow={`Par ${ax?.label.toLowerCase() ?? ""}`} title="Le classement des encours"
               lede={axis === "family" ? "Surface : encours. Couleur : la famille de gestion." : "Surface : encours. Couleur : variation depuis le 1er janvier, du rouge (baisse) au bleu (hausse)."}
               right={axis !== "family" ? <DivLegend span={0.25} label="Variation YTD" /> : undefined} />
             <Mosaic height={440} onSelect={(g) => open(g.key)}

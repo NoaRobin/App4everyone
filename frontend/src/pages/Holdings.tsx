@@ -120,7 +120,7 @@ export default function Holdings() {
             items={mosaicLines.map((x) => ({ key: x.key, label: x.name, value: x.amount_eur as number, color: classColor(x.asset_class),
               sub: `${x.asset_class ?? "—"} · ${plural(x.n_funds, "fonds", "fonds")}`, ariaExtra: `${x.asset_class ?? ""}, détenue par ${plural(x.n_funds, "fonds", "fonds")}` }))}
             legend={<><div className="legend" style={{ marginTop: 12 }}>{classes.map((c) => <span key={c.label} className="legend__i"><span className="dot" style={{ background: c.label.startsWith("Autres") ? OTHER : classColor(c.label) }} />{c.label}</span>)}</div>
-              {noAmount > 0 && <p className="small muted" style={{ marginTop: 8 }}>{plural(noAmount, "ligne", "lignes")} sans montant en euros calculable (taux de change ou montant indisponible) : absentes de la mosaïque, présentes dans la recherche.</p>}</>} />
+              {noAmount > 0 && <p className="small muted" style={{ marginTop: 8 }}>{plural(noAmount, "ligne", "lignes")} sans montant en euros calculable (taux de change ou montant indisponible) : absentes du classement, présentes dans la recherche.</p>}</>} />
         </section>
 
         <section className="section reveal" aria-labelledby="h-shared">

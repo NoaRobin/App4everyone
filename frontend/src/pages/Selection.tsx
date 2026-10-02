@@ -101,7 +101,7 @@ export default function Selection() {
             <div className="spread" style={{ marginBottom: 16 }}>
               <h2 className="h3">{live.length} fonds</h2>
               <div className="seg" role="radiogroup" aria-label="Vue">
-                {[["tableau", "Tableau"], ["mosaique", "Mosaïque"], ["risque", "Risque / rendement"]].map(([k, l]) => (
+                {[["tableau", "Tableau"], ["mosaique", "Classement"], ["risque", "Risque / rendement"]].map(([k, l]) => (
                   <button key={k} type="button" role="radio" aria-checked={view === k} className="seg__b" onClick={() => set("vue", k === "tableau" ? null : k)}>{l}</button>
                 ))}
               </div>

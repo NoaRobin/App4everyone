@@ -113,6 +113,7 @@ function FundView({ f }: { f: FundDetail }) {
                 </div>
               )}
               <div className="small muted">{plural(f.shares.length, "part")} · {f.distribution.countries.length} pays de commercialisation</div>
+              <FundEconomics id={f.id} />
             </div>
           </div>
           {h.objective && <p className="fund__obj">{h.objective}</p>}
@@ -335,7 +336,7 @@ function HoldingsSection({ f }: { f: FundDetail }) {
       </div>
       <div className="card card--flat" style={{ marginBottom: 24 }}>
         <div className="spread" style={{ marginBottom: 12 }}>
-          <h3 className="h3">La carte du portefeuille</h3>
+          <h3 className="h3">Les lignes du portefeuille</h3>
           <div className="row" style={{ gap: 14 }}>
             {paint === "moves" && c.previous_date
               ? <div className="legend"><span className="legend__i"><span className="dot" style={{ background: "var(--gold)" }} />Nouvelle ligne</span><DivLegend span={0.1} label="Poids vs inventaire précédent" /></div>
@@ -526,5 +527,36 @@ function ControlsSection({ f }: { f: FundDetail }) {
         </div>
       ) : <div className="empty small">Tous les contrôles automatiques sont au vert pour ce fonds au {longDate(f.date)}.</div>}
     </section>
+  );
+}
+
+/** Ce que rapporte le fonds (revenus de gestion estimés, rang) et sa place au passif (part de l'encours suivi, tranche
+ *  de positions) ; lien vers le comparateur. Rien ne s'affiche tant que les données manquent. */
+function FundEconomics({ id }: { id: string }) {
+  const { api } = useApp();
+  const rev = useApi<{ funds: { id: string; revenue: number; rate: number }[]; total: number }>(api("/api/revenue"));
+  const pas = useApi<{ available: boolean; source?: string; fund: { pct: number | null; positions: { label: string } | null } | null }>(api(`/api/passif/fonds/${encodeURIComponent(id)}`));
+  const list = rev.data?.funds ?? [];
+  const k = list.findIndex((x) => x.id === id);
+  const me = k >= 0 ? list[k] : null;
+  const p = pas.data?.fund;
+  return (
+    <div className="fund__eco">
+      {me && (
+        <Link to="/" className="fund__eco-i" title="Revenus de gestion annuels estimés : encours × frais de gestion financière">
+          <span className="eyebrow">Rapporte</span>
+          <b className="num">{eur(me.revenue)}<small> / an</small></b>
+          <span className="small muted">{k + 1}<sup>e</sup> sur {list.length} · taux {pctRaw(me.rate)}</span>
+        </Link>
+      )}
+      {p && (
+        <Link to="/passif" className="fund__eco-i" title="Part de l'encours suivi au passif (positions des comptes), en tranche de positions">
+          <span className="eyebrow">Au passif</span>
+          <b className="num">{p.pct != null ? pctRaw(p.pct, 1) : "—"}</b>
+          <span className="small muted">{p.positions ? `${p.positions.label} positions` : "positions < 5"}{pas.data?.source === "synthétique" ? " · synthétique" : ""}</span>
+        </Link>
+      )}
+      <Link to={`/comparateur?ids=${encodeURIComponent(id)}`} className="fund__eco-cmp btn btn--ghost">Comparer ce fonds</Link>
+    </div>
   );
 }

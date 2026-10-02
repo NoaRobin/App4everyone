@@ -31,14 +31,19 @@ from . import labels as L
 
 _INACTIVE = {"inactive", "inactif", "desactive", "deactivated", "closed", "ferme", "fermee",
              "liquidee", "liquidated", "liquide", "supprime", "deleted"}
-SHARE_KEYS = ("pi_shareid", "Id", "Share_ID_Global")
+SHARE_KEYS = ("pi_shareid", "Id", "Share_ID_Global", "BOne_Share_ID")
+# Codes techniques de la part que JUMP peut porter dans ID_JUMP_PART (code du teneur de registre, identifiant global)
+JUMP_PART_KEYS = ("BOne_Share_ID", "FIC_Code", "Share_ID_Global")
+# Codes de portefeuille du fonds que JUMP peut porter dans ID_JUMP_FONDS (administrateur de fonds, AIM)
+PORTFOLIO_KEYS = ("Fund_Administrator_Portfolio_Code", "AIM_Portfolio_Code")
 PRODUCT_KEYS = ("pi_productid", "Id", "Product_Global_ID")
 LINK_COLS = ["ID_JUMP_PART", "ID_JUMP_FONDS", "NOM_PART", "CODE_ISIN_PART", "pi_shareid", "link", "fund_id",
              "fund_link", "fund_linked", "part_reason", "fund_reason"]
 # Méthodes de rattachement au fonds : (compteur, rang). Rang : meilleure méthode d'un fonds JUMP parmi ses parts.
 METHODS = {"product_id": ("by_product_id", 0), "product_id_isin": ("by_product_id", 0),
            "pi_fonds": ("by_id_pi_fonds", 1), "pi_fonds_inventaires": ("by_id_pi_fonds", 1),
-           "code_aim_inventaires": ("by_id_pi_fonds", 1), "propagation": ("by_propagation", 2), "none": ("unlinked", 3)}
+           "code_aim_inventaires": ("by_id_pi_fonds", 1), "code_portefeuille": ("by_id_pi_fonds", 1),
+           "propagation": ("by_propagation", 2), "none": ("unlinked", 3)}
 
 
 def is_active(df: pd.DataFrame) -> pd.Series:
@@ -154,6 +159,17 @@ def link(last: pd.DataFrame, shares: pd.DataFrame, products: pd.DataFrame,
     # ------------------------------------------------ 1. part par identifiant
     pi_part_c = IDS.ids(raw["ID_PI_PART"])
     by_id, by_id_key = sidx.resolve(raw["ID_PI_PART"])
+    # 1 bis. ID_JUMP_PART égal à un code technique de la part (code teneur de registre…), s'il est unique
+    jidx = KeyIndex(shares, JUMP_PART_KEYS, primary="pi_shareid")
+    by_jp, by_jp_key = jidx.resolve(raw["ID_JUMP_PART"])
+    # Jamais contre une preuve contraire : ISIN de JUMP différent de celui de la part trouvée
+    isin_of = dict(zip(sh["sid"], sh["isin"]))
+    j_isin0 = IDS.isins(raw["CODE_ISIN_PART"])
+    contra = by_jp.map(lambda x: isin_of.get(x) if x is not None else None)
+    by_jp = by_jp.where(~(j_isin0.notna() & contra.notna() & (contra != j_isin0)))
+    hit = by_id.isna() & by_jp.notna()
+    by_id[hit] = by_jp[hit]
+    by_id_key[hit] = "ID_JUMP_PART→" + by_jp_key[hit].astype(str)
     # ------------------------------------------------ 2. part par ISIN (seulement pour les parts encore non rattachées)
     j_isin = IDS.isins(raw["CODE_ISIN_PART"])
     cand: dict[str, list[tuple[Any, Any, bool]]] = defaultdict(list)
@@ -217,9 +233,13 @@ def link(last: pd.DataFrame, shares: pd.DataFrame, products: pd.DataFrame,
             aim = KeyIndex(products, ("AIM_Portfolio_Code",), primary="pi_productid")
             single_aim, _ = _unique_per(hjf, aim.resolve(holdings["CODE_AIM_FONDS"])[0])
             via_aim = jf.map(single_aim)
+    # ID_JUMP_FONDS égal au code portefeuille du fonds dans le référentiel (administrateur de fonds, AIM), s'il est unique
+    via_code = KeyIndex(products, PORTFOLIO_KEYS, primary="pi_productid").resolve(raw["ID_JUMP_FONDS"])[0] \
+        if any(k in products for k in PORTFOLIO_KEYS) else none()
+    via_code = via_code.where(~(via_jump.notna() & via_code.notna() & (via_jump != via_code)))   # contredit par ID_PI_FONDS
     fund, method = none(), pd.Series("none", index=out.index, dtype=object)
     for name, s in (("product_id", via_share), ("product_id_isin", isin_product), ("pi_fonds", via_jump),
-                    ("pi_fonds_inventaires", via_hold), ("code_aim_inventaires", via_aim)):
+                    ("pi_fonds_inventaires", via_hold), ("code_aim_inventaires", via_aim), ("code_portefeuille", via_code)):
         hit = fund.isna() & s.notna() & s.isin(product_set)
         fund[hit] = s[hit]
         method[hit] = name
@@ -269,6 +289,13 @@ def _report(out, raw, sh, shares, products, pidx, pi_part_c, pi_fund_c, j_isin, 
              "split_across_products": int(len(conflict)),
              "by_alternate_product_key": int((via_jump_key.notna() & (via_jump_key != "pi_productid") & (method == "pi_fonds")).sum())}
     methods = {k: int(v) for k, v in method.value_counts().items()}
+    # Couverture du référentiel : fonds actifs du référentiel qui reçoivent au moins une part JUMP. Si elle est
+    # complète alors que beaucoup de fonds JUMP restent seuls, ce ne sont pas des échecs de rattachement mais des
+    # portefeuilles hors du référentiel des fonds ouverts (mandats, fonds dédiés, fonds liquidés…).
+    linked_products = set(out.loc[out["fund_linked"], "fund_id"])
+    coverage = {"products_active": int(len(pidx.primary)), "products_with_jump": int(len(linked_products & pidx.primary)),
+                "products_without_jump": int(len(pidx.primary - linked_products)),
+                "by_portfolio_code": int((best.index.isin(jf[method == "code_portefeuille"].unique())).sum())}
     part_reasons = {k: int(v) for k, v in out["part_reason"].dropna().value_counts().items()}
     fund_reasons = {k: int(v) for k, v in out.loc[~out["fund_linked"], "fund_reason"].dropna().value_counts().items()}
 
@@ -300,11 +327,16 @@ def _report(out, raw, sh, shares, products, pidx, pi_part_c, pi_fund_c, j_isin, 
                "PI_OUT_Share.ProductID": shares.get("ProductID"), "PI_OUT_Share.ISIN_Code": shares.get("ISIN_Code"),
                "pi_out_product_active.pi_productid": products.get("pi_productid"), "pi_out_product_active.Id": products.get("Id"),
                "pi_out_product_active.Product_Global_ID": products.get("Product_Global_ID"),
-               "pi_out_product_active.AIM_Portfolio_Code": products.get("AIM_Portfolio_Code")}
+               "pi_out_product_active.AIM_Portfolio_Code": products.get("AIM_Portfolio_Code"),
+               "pi_out_product_active.Fund_Administrator_Portfolio_Code": products.get("Fund_Administrator_Portfolio_Code"),
+               "pi_out_product_active.National_identification_code": products.get("National_identification_code"),
+               "PI_OUT_Share.FIC_Code": shares.get("FIC_Code")}
     target_sets = {t: set(IDS.ids(col).dropna()) for t, col in targets.items() if col is not None}
     probes = {}
     for name, src in (("ID_PI_PART des parts non rattachées", pi_part_c[out["link"] == "none"]),
-                      ("ID_PI_FONDS des parts sans fonds", pi_fund_c[~out["fund_linked"]])):
+                      ("ID_PI_FONDS des parts sans fonds", pi_fund_c[~out["fund_linked"]]),
+                      ("ID_JUMP_FONDS des fonds non rattachés", IDS.ids(raw["ID_JUMP_FONDS"])[~out["fund_linked"]].drop_duplicates()),
+                      ("ID_JUMP_PART des parts non rattachées", IDS.ids(raw["ID_JUMP_PART"])[out["link"] == "none"])):
         src = src.dropna()
         if len(src):
             probes[name] = {"renseignés": int(len(src)), **{t: int(src.isin(s).sum()) for t, s in target_sets.items()}}
@@ -319,7 +351,7 @@ def _report(out, raw, sh, shares, products, pidx, pi_part_c, pi_fund_c, j_isin, 
                                              "forme_ID_PI_FONDS": IDS.shape(raw["ID_PI_FONDS"].at[ix]),
                                              "ISIN": r["CODE_ISIN_PART"] if isinstance(r["CODE_ISIN_PART"], str) else None,
                                              "raison_part": r["part_reason"]} for ix, r in rows.head(5).iterrows()]})
-    return {"parts": parts, "funds": funds, "methods": methods, "part_reasons": part_reasons, "fund_reasons": fund_reasons,
+    return {"parts": parts, "funds": funds, "methods": methods, "coverage": coverage, "part_reasons": part_reasons, "fund_reasons": fund_reasons,
             "ambiguous_isins": sorted(ambiguous), "ambiguous_isin_causes": dict(Counter(ambiguous.values())),
             "ambiguous_isins_in_referential": int((pd.Series(sh["isin"]).dropna().value_counts() > 1).sum()),
             "parts_without_product": int(pd.Series(sh["pid_raw"]).isna().sum()),

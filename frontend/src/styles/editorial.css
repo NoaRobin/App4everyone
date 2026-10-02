@@ -50,7 +50,6 @@ button.chip[aria-pressed="true"]:hover { color: var(--gold-ink); }
 .brand__name { letter-spacing: .02em; }
 
 /* Mosaïques et cartes de parts, plus nettes */
-.mosaic { border-radius: 2px; }
 .sharecard { border-radius: var(--radius); }
 .strip { border-radius: 2px; }
 .famcard { border-radius: var(--radius); background: transparent; }

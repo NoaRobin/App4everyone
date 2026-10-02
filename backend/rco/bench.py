@@ -104,6 +104,12 @@ def print_links(rep: dict) -> None:
          f"{f['by_propagation']} par propagation · {f['unlinked']} non rattachés")
     line("Fonds non rattachés", f"{f.get('unlinked_with_aum', 0)} avec encours · {f['unlinked_multi_parts']} avec plusieurs parts · "
          f"{f['split_across_products']} fonds JUMP répartis sur plusieurs produits")
+    cov = rep.get("coverage") or {}
+    if cov:
+        line("Couverture du référentiel", f"{cov['products_with_jump']} des {cov['products_active']} fonds actifs reçoivent des parts JUMP · "
+             f"{cov['products_without_jump']} sans aucune part · {cov.get('by_portfolio_code', 0)} rattachés par code portefeuille")
+    if rep.get("diagnosis"):
+        print("  Lecture : " + rep["diagnosis"]["text"])
     causes = rep.get("ambiguous_isin_causes") or {}
     line("ISIN ambigus", f"{len(rep['ambiguous_isins'])}" + (" (" + ", ".join(f"{k} : {v}" for k, v in causes.items()) + ")" if causes else ""))
     line("Doublons après consolidation", f"{rep.get('exact_duplicates', 0)} exacts (même identifiant) · {len(rep['duplicates'])} de même nom")

@@ -28,10 +28,10 @@ export function Cursor() {
     const move = (e: PointerEvent) => {
       if (!seen) { seen = true; gsap.set([d, r], { x: e.clientX, y: e.clientY }); gsap.to([d, r], { opacity: 1, duration: 0.3 }); }
       dx(e.clientX); dy(e.clientY); rx(e.clientX); ry(e.clientY);
-      const t = (e.target as Element)?.closest?.("a, button, [role=option], tr.clickable, .mosaic__t, .sharecard, canvas, [data-cursor]");
+      const t = (e.target as Element)?.closest?.("a, button, [role=option], tr.clickable, .rbn__row, .sharecard, canvas, [data-cursor]");
       if (t !== hot) {
         hot = t;
-        const txt = t?.getAttribute("data-cursor") ?? (t?.matches("tr.clickable, .sharecard, .mosaic__t, [role=option]") ? "Ouvrir" : t?.tagName === "CANVAS" ? "Explorer" : "");
+        const txt = t?.getAttribute("data-cursor") ?? (t?.matches("tr.clickable, .sharecard, .rbn__row, [role=option]") ? "Ouvrir" : t?.tagName === "CANVAS" ? "Explorer" : "");
         label.current!.textContent = txt;
         gsap.to(r, { scale: t ? (txt ? 2.3 : 1.6) : 1, backgroundColor: t ? "rgba(204,159,83,.12)" : "rgba(204,159,83,0)", duration: 0.35, ease: "power3.out" });
         gsap.to(d, { scale: t ? 0 : 1, duration: 0.2 });
@@ -63,7 +63,7 @@ export function Cursor() {
 
 const ROUTE_NAMES: [RegExp, string][] = [
   [/^\/$/, "Accueil"], [/^\/metiers/, "Espace métiers"], [/^\/fonds$/, "Fonds"], [/^\/encours/, "Encours"], [/^\/selection/, "Sélection"], [/^\/portefeuilles/, "Portefeuilles"],
-  [/^\/distribution/, "Distribution"],
+  [/^\/distribution/, "Distribution"], [/^\/passif/, "Passif"], [/^\/comparateur/, "Comparateur"],
 ];
 
 /**
@@ -79,8 +79,8 @@ export function Curtain() {
   const clicked = useRef<string>("");
   useEffect(() => {
     const on = (e: MouseEvent) => {
-      const t = (e.target as Element)?.closest?.("a, [role=option], tr.clickable, .mosaic__t, .sharecard, button.barlist__item");
-      const txt = (t?.querySelector?.(".sres__label, .strong, .mosaic__n, .sharecard__n, .barlist__label, .rowlink, .rowlink-inline") ?? t)?.textContent ?? "";
+      const t = (e.target as Element)?.closest?.("a, [role=option], tr.clickable, .rbn__row, .sharecard, button.barlist__item");
+      const txt = (t?.querySelector?.(".sres__label, .strong, .rbn__n, .sharecard__n, .barlist__label, .rowlink, .rowlink-inline") ?? t)?.textContent ?? "";
       clicked.current = txt.trim().split("\n")[0].slice(0, 42);
     };
     document.addEventListener("click", on, true);

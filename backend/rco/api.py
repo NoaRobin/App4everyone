@@ -60,6 +60,7 @@ class _State:
         self.failed_at: float | None = None
         self.builds = 0              # nombre de constructions effectivement lancées (tests)
         self.step: str | None = None  # étape en cours du chargement (affichée par le bandeau d'état)
+        self.passif = None           # partie Passif (agrégats comptes / positions / transactions), calculée à part
 
 
 _S = _State()
@@ -130,7 +131,7 @@ def _set_step(label: str) -> None:
 
 # Vues précalculées pendant le chargement (date par défaut) : une fois le modèle prêt, les pages principales répondent
 # immédiatement au lieu de calculer à la première visite (plusieurs secondes chacune avec les volumes réels).
-_VIEWS = (("liste des fonds", "_fund_table"), ("vue d'ensemble", "overview"), ("panorama", "city"), ("recherche", "search_index"),
+_VIEWS = (("liste des fonds", "_fund_table"), ("vue d'ensemble", "overview"), ("revenus", "revenue"), ("panorama", "city"), ("recherche", "search_index"),
           ("risques", "risk"), ("contrôles", "controls"), ("portefeuilles", "holdings"), ("distribution", "distribution"))
 
 
@@ -153,7 +154,59 @@ def _warm_up():
             service()
         except Exception:
             return  # l'erreur est conservée dans l'état et renvoyée par /api/health et les routes
+        try:
+            passif_obj().get()      # le passif se prépare ensuite, sans retarder l'ouverture de l'application
+        except Exception as e:
+            log.warning("Passif non préparé (%s)", type(e).__name__)
     threading.Thread(target=run, daemon=True, name="rco-warmup").start()
+
+
+def passif_obj():
+    """Partie Passif : agrégats calculés dans la source (Fabric) ou sur des données synthétiques, cache de quelques
+    heures (les tables sont mises à jour chaque jour)."""
+    if _S.passif is not None:
+        return _S.passif
+    from .domain import passif as P
+    svc = service()
+    s = load_settings()
+    src = _source(s)
+    m = svc.m
+    isin_to_fund: dict[str, str] = {}
+    if "ISIN_Code" in m.shares and "ProductID" in m.shares:
+        for isin, pid in zip(m.shares["ISIN_Code"], m.shares["ProductID"]):
+            if isinstance(isin, str) and pid in m.funds.index:
+                isin_to_fund.setdefault(isin.strip().upper(), pid)
+    for isin, fid in zip(m.link["CODE_ISIN_PART"], m.link["fund_id"]):
+        if isinstance(isin, str):
+            isin_to_fund.setdefault(isin.strip().upper(), fid)
+    if s.data_source == "fabric":
+        reader = P.SqlReader(src, P.table_names())
+    else:
+        from .data.passif_mock import PassifMock
+        by_class: dict[str, list[str]] = {}
+        if "ISIN_Code" in m.shares and "Asset_Class" in m.funds:
+            for isin, pid in zip(m.shares["ISIN_Code"], m.shares["ProductID"]):
+                if isinstance(isin, str) and pid in m.funds.index:
+                    by_class.setdefault(str(m.funds.at[pid, "Asset_Class"]), []).append(isin)
+        mock = PassifMock(src.reference_date, by_class, scale=s.mock_scale)
+        reader = P.PandasReader(mock.table)
+    ttl = float(__import__("os").environ.get("APP_PASSIF_TTL_HOURS") or 6)
+    _S.passif = P.Passif(reader, isin_to_fund, ttl_hours=ttl)
+    return _S.passif
+
+
+@app.get("/api/passif")
+def passif_view():
+    _api_service()
+    return _ok(passif_obj().get())
+
+
+@app.get("/api/passif/fonds/{fid}")
+def passif_fund(fid: str):
+    _api_service()
+    d = passif_obj().get()
+    return _ok({"available": bool(d.get("available")), "as_of": d.get("positions_as_of"), "source": d.get("source"),
+                "fund": (d.get("funds") or {}).get(fid)})
 
 
 # ---------------------------------------------------------------- erreurs JSON
@@ -256,6 +309,19 @@ def _ok(payload):
 @app.get("/api/meta")
 def meta():
     return _ok(_api_service().meta())
+
+
+@app.get("/api/compare")
+def compare(ids: str = "", period: str = "3A", date: str | None = None):
+    keys = tuple(x for x in (i.strip() for i in ids.split(",")) if x)[:6]
+    if period not in ("1A", "3A", "5A", "origine"):
+        raise HTTPException(400, "Période inconnue")
+    return _ok(_api_service().compare(keys, period, date))
+
+
+@app.get("/api/revenue")
+def revenue(date: str | None = None):
+    return _ok(_api_service().revenue(date))
 
 
 @app.get("/api/overview")

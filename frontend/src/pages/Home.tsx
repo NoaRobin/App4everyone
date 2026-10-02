@@ -1,76 +1,58 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useApi } from "../lib/api";
 import { useApp } from "../lib/context";
-import { date as fdate, eur } from "../lib/format";
-import { FAMILY_LABEL, FAMILY_ORDER, famVar } from "../lib/families";
-import { prefersReducedMotion, useReducedMotion } from "../lib/motion";
-import { gsap, ScrollTrigger } from "../lib/gsap";
-import type { Overview } from "../lib/types";
+import { date as fdate, eur, pct, pctRaw } from "../lib/format";
+import { FAMILY_LABEL, FAMILY_ORDER, famHex, famVar } from "../lib/families";
+import { prefersReducedMotion, useReducedMotion, webglAvailable } from "../lib/motion";
+import { gsap, onVisible } from "../lib/gsap";
+import type { FamilyKey, Overview } from "../lib/types";
 import { Board, Money, type BoardRow } from "../components/Story";
-import type { FlowScene, Formation } from "../three/FlowScene";
+import { TimeChart } from "../components/charts";
+import type { RevenueScene, RevFund } from "../three/RevenueScene";
 import * as I from "../components/Icon";
 
-/** Histoire de Rothschild & Co Asset Management (public/histoire/am.json : faits publics sourcés). */
-type Stat = { value: string; unit: string; label: string };
-type Chapter = { year: string; kicker: string; title: string; text: string; stat: Stat | null; source?: string };
-type Figure = Stat & { source?: string };
-type AmHistory = { chapters: Chapter[]; figures: Figure[]; principles: string[] };
+/** Revenus de gestion estimés (GET /api/revenue) : encours × taux de frais de gestion financière. */
+type RevRow = { id: string; name: string; family: FamilyKey; range: string | null; asset_class: string | null; aum: number; rate: number;
+  revenue: number; revenue_net: number; revenue_12m: number | null; d_revenue_1y: number | null; flow_effect_1y: number | null; share: number | null };
+type RevGroup = { key: string; label: string; revenue: number; aum: number; n: number; rate: number | null; share: number | null };
+type Revenue = {
+  date: string; total: number; total_net: number; total_12m: number | null; rate: number | null; coverage: number | null; aum_without_rate: number;
+  rate_sources: Record<string, number>; concentration: { top10_share: number | null; n_for_80pct: number | null; n_funds: number };
+  change_1y: { total: number | null; flows: number | null; market: number | null };
+  funds: RevRow[]; families: RevGroup[]; ranges: RevGroup[]; asset_classes: RevGroup[]; trend: { d: string; v: number }[];
+};
 type Dist = { countries: BoardRow[]; n_shares_registered: number };
-
-const Y0 = 1982, Y1 = 2026;
-
-/** Figure de la nuée pour un chapitre : le chiffre du chapitre, sinon une forme liée à son sujet. */
-function formationOf(c: Chapter): Formation {
-  const t = `${c.kicker} ${c.title}`;
-  if (/quatre marques/i.test(t)) return { kind: "four" };
-  if (/record|collecte/i.test(t) && /2023/.test(c.year)) return { kind: "bars" };
-  if (c.stat) return { kind: "text", text: `${c.stat.value}${c.stat.unit ? ` ${c.stat.unit}` : ""}` };
-  if (/datés|échéance/i.test(t)) return { kind: "rings" };
-  if (/rapprochement|naissance de/i.test(t)) return { kind: "union" };
-  if (/scission|dédiée|témoin/i.test(t)) return { kind: "split" };
-  if (/4change|durable|net zero|climat|expansion/i.test(t)) return { kind: "globe" };
-  if (/chantiers|eltif/i.test(t)) return { kind: "constellation" };
-  if (/phare|valor/i.test(t)) return { kind: "ribbon" };
-  return { kind: "core" };
-}
 
 export default function Home() {
   const { api, meta } = useApp();
-  const [h, setH] = useState<AmHistory | null>(null);
+  const rev = useApi<Revenue>(api("/api/revenue"));
   const ov = useApi<Overview>(api("/api/overview"));
   const dist = useApi<Dist>(api("/api/distribution"));
-  const scene = useRef<FlowScene | null>(null);
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    fetch("/histoire/am.json", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).then((j) => alive && setH(j)).catch(() => alive && setH(null));
-    return () => { alive = false; };
-  }, []);
-  const o = ov.data;
+  const r = rev.data;
   return (
-    <div className="home">
+    <div className="home rv">
       <Grain />
-      <div className="am__stage">
-        <Flow onReady={(s) => { scene.current = s; setReady(true); }} />
-        <Overture scene={ready ? scene.current : null} />
-        {h && h.chapters.length > 0 && <Film chapters={h.chapters} scene={ready ? scene.current : null} />}
-      </div>
-      {h && <Credits figures={h.figures} principles={h.principles} />}
-      {o && <Living o={o} mock={!!meta?.is_mock} />}
+      <Hero r={r} mock={!!meta?.is_mock} />
+      {r && <Ranking r={r} />}
+      {r && <Drivers r={r} />}
+      {r && <Breakdown r={r} />}
+      {r && r.trend.length > 2 && <Trend r={r} />}
+      {r && <Method r={r} />}
+      {ov.data && <Living o={ov.data} mock={!!meta?.is_mock} />}
       {dist.data && (
         <section className="home__world" aria-labelledby="h-world">
           <Rise><div className="eyebrow home__eyebrow">Départs · distribution</div></Rise>
           <Rise><h2 className="home__h2" id="h-world">Commercialisés dans {dist.data.countries.length}&nbsp;pays.</h2></Rise>
-          <Board rows={[...dist.data.countries].sort((a, b) => b.n_shares - a.n_shares).slice(0, 9)} />
-          <Rise><p className="home__lede">{dist.data.n_shares_registered} parts disposent d'au moins un enregistrement actif. <Link className="link" to="/distribution">Voir le globe des autorisations</Link></p></Rise>
+          <Board rows={[...dist.data.countries].sort((a, b) => b.n_shares - a.n_shares).slice(0, 10)} />
+          <Rise><p className="home__lede">{dist.data.n_shares_registered} parts disposent d'au moins un enregistrement actif. <Link className="link" to="/distribution">Tout le tableau des départs et le globe</Link></p></Rise>
         </section>
       )}
       <section className="home__close" aria-labelledby="h-close">
         <div className="home__close-in">
           <Rise><div className="eyebrow home__eyebrow">Espace métiers</div></Rise>
           <Rise><h2 className="home__h1" id="h-close">Chaque fonds, dans le détail.</h2></Rise>
-          <Rise><p className="home__lede">Fiches, parts, performances, portefeuilles, pays d'enregistrement, risques et contrôles&nbsp;: tout est à une recherche.</p></Rise>
+          <Rise><p className="home__lede">Fiches, parts, performances, comparateur, portefeuilles, passif, pays d'enregistrement, risques et contrôles&nbsp;: tout est à une recherche.</p></Rise>
           <Rise>
             <div className="home__cta">
               <Link to="/metiers" className="btn btn--gold btn--lg">Entrer dans l'espace métiers <I.Arrow size={18} /></Link>
@@ -83,313 +65,290 @@ export default function Home() {
   );
 }
 
-// ------------------------------------------------------------------ nuée de particules (fond de l'ouverture et du film)
-function Flow({ onReady }: { onReady: (s: FlowScene) => void }) {
-  const ref = useRef<HTMLCanvasElement>(null);
+// ------------------------------------------------------------------ ouverture : la cité des revenus
+function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
+  const host = useRef<HTMLDivElement>(null);
+  const labels = useRef<HTMLDivElement>(null);
+  const root = useRef<HTMLElement>(null);
+  const big = useRef<HTMLSpanElement>(null);
+  const scene = useRef<RevenueScene | null>(null);
+  const nav = useNavigate();
   const reduced = useReducedMotion();
+  const [tip, setTip] = useState<{ f: RevFund; x: number; y: number } | null>(null);
+  const [focus, setFocus] = useState<string | null>(null);
+  const [gl] = useState(() => webglAvailable());
+  const total = r?.total ?? null;
+
+  // Rideau d'ouverture : barres de cinéma, filet d'or qui balaie l'écran, puis le chiffre
+  useLayoutEffect(() => {
+    const el = root.current;
+    if (!el || prefersReducedMotion()) return;
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({ defaults: { ease: "power3.inOut" } });
+      tl.set(".rv__curtain", { autoAlpha: 1 })
+        .fromTo(".rv__sweep", { scaleX: 0 }, { scaleX: 1, duration: 0.55, ease: "power4.inOut" }, 0.05)
+        .to(".rv__sweep", { scaleY: 120, opacity: 0, duration: 0.6, ease: "power2.in" }, 0.6)
+        .to(".rv__curtain", { autoAlpha: 0, duration: 0.5 }, 0.75)
+        .fromTo(".rv__bars i", { scaleY: 1.6 }, { scaleY: 1, duration: 1.2 }, 0.6)
+        .fromTo(".rv__kicker", { opacity: 0, letterSpacing: "0.6em" }, { opacity: 1, letterSpacing: "0.24em", duration: 1.4, ease: "power2.out" }, 0.9)
+        .fromTo(".rv__big", { opacity: 0, yPercent: 30, filter: "blur(18px)" }, { opacity: 1, yPercent: 0, filter: "blur(0px)", duration: 1.3, ease: "expo.out" }, 1.0)
+        .fromTo(".rv__unit, .rv__what", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.9, stagger: 0.1 }, 1.6)
+        .fromTo(".rv__facts > *", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.8, stagger: 0.08, ease: "power3.out", clearProps: "transform" }, 2.1)
+        .fromTo(".rv__legend > *", { opacity: 0, x: -12 }, { opacity: 1, x: 0, duration: 0.6, stagger: 0.06, clearProps: "transform" }, 2.3)
+        .fromTo(".rv__cue", { opacity: 0 }, { opacity: 1, duration: 0.8 }, 2.8);
+    }, el);
+    return () => ctx.revert();
+  }, []);
+
+  // Compteur : 0 → total pendant que les tours sortent de terre
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    let s: FlowScene | null = null, alive = true;
-    // WebGL indisponible : l'accueil reste lisible sans la nuée
-    import("../three/FlowScene").then(({ FlowScene }) => {
+    const el = big.current;
+    if (!el || total == null) return;
+    const { value } = splitEur(total);
+    if (prefersReducedMotion()) { el.textContent = value; return; }
+    const target = parseFloat(value.replace(/\s/g, "").replace(",", "."));
+    const dec = value.includes(",") ? value.split(",")[1].length : 0;
+    const o = { v: 0 };
+    const tw = gsap.to(o, { v: target, duration: 2.4, delay: 1.0, ease: "expo.out",
+      onUpdate: () => { el.textContent = o.v.toLocaleString("fr-FR", { minimumFractionDigits: dec, maximumFractionDigits: dec }); } });
+    return () => { tw.kill(); el.textContent = value; };
+  }, [total]);
+
+  // Scène 3D (chargée à la demande ; sans WebGL, le chiffre et le classement suffisent)
+  useEffect(() => {
+    const el = host.current, lab = labels.current;
+    if (!el || !lab || !r || !gl) return;
+    let alive = true, s: RevenueScene | null = null;
+    import("../three/RevenueScene").then(({ RevenueScene }) => {
       if (!alive) return;
-      try {
-        s = new FlowScene(el, { reduced });
-        onReady(s);
-      } catch { el.style.display = "none"; }
-    });
-    const io = new IntersectionObserver(([e]) => s?.setVisible(e.isIntersecting));
-    io.observe(el);
-    return () => { alive = false; io.disconnect(); s?.dispose(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reduced]);
-  return <div className="am__flow" aria-hidden="true"><canvas ref={ref} /></div>;
-}
-
-// ------------------------------------------------------------------ ouverture
-function Overture({ scene }: { scene: FlowScene | null }) {
-  const ref = useRef<HTMLElement>(null);
-  useEffect(() => {
-    scene?.set({ kind: "nebula" }, 3.4, 0);
-    scene?.setZoom(34);
-  }, [scene]);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el || prefersReducedMotion()) return;
-    const ctx = gsap.context(() => {
-      const chars = gsap.utils.toArray<HTMLElement>(".am__title .ch");
-      const tl = gsap.timeline({ defaults: { ease: "rco" } });
-      tl.from(".am__bars i", { scaleY: 0, duration: 1.2, ease: "power3.inOut" })
-        .from(chars, { rotateX: -100, yPercent: 60, opacity: 0, z: -200, duration: 1.4, stagger: { each: 0.035, from: "center" } }, 0.35)
-        .from(".am__span i", { scaleX: 0, duration: 1.4, ease: "power3.inOut" }, 0.9)
-        .from(".am__span b", { opacity: 0, y: 10, duration: 0.8, stagger: 0.15 }, 1.2)
-        .from(".am__ov .home__eyebrow, .am__sub, .home__cue", { opacity: 0, y: 14, filter: "blur(8px)", duration: 1, stagger: 0.12 }, 1.3);
-      // Au défilement : les lettres se dispersent dans la profondeur, la nuée vient à nous
-      const st = { trigger: el, start: "top top", end: "bottom top", scrub: 0.6 };
-      gsap.to(chars, {
-        x: () => gsap.utils.random(-700, 700), y: () => gsap.utils.random(-420, 420), z: () => gsap.utils.random(-600, 500),
-        rotateX: () => gsap.utils.random(-180, 180), rotateY: () => gsap.utils.random(-180, 180), opacity: 0, ease: "power1.in",
-        stagger: { each: 0.01, from: "random" }, scrollTrigger: st,
+      const colors = Object.fromEntries([...FAMILY_ORDER, "nc"].map((k) => [k, famHex(k as FamilyKey, true)]));
+      s = new RevenueScene(el, {
+        funds: r.funds.map((f) => ({ id: f.id, name: f.name, family: f.family, revenue: f.revenue, aum: f.aum, rate: f.rate, share: f.share })),
+        colors, reduced, labelLayer: lab, formatEur: (v) => eur(v),
+        onHover: (f, x, y) => setTip(f ? { f, x, y } : null), onSelect: (f) => nav(`/fonds/${encodeURIComponent(f.id)}`),
       });
-      gsap.to(".am__ov .home__eyebrow, .am__sub, .am__span, .home__cue", { opacity: 0, y: -40, filter: "blur(10px)", ease: "none", scrollTrigger: st });
-    }, el);
-    return () => ctx.revert();
-  }, []);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || !scene || prefersReducedMotion()) return;
-    const st = ScrollTrigger.create({ trigger: el, start: "top top", end: "bottom top", onUpdate: (s) => scene.setZoom(34 - s.progress * 16) });
-    return () => st.kill();
-  }, [scene]);
-  const split = (s: string) => s.split("").map((c, i) => <span key={i} className="ch">{c === " " ? " " : c}</span>);
-  return (
-    <section className="am__ov" ref={ref} aria-labelledby="h-home">
-      <div className="am__bars" aria-hidden="true"><i /><i /></div>
-      <div className="am__ov-in">
-        <div className="eyebrow home__eyebrow">Paris · 29 avenue de Messine · depuis {Y0}</div>
-        <h1 className="am__title" id="h-home">
-          <span className="am__l1">{split("Rothschild & Co")}</span>
-          <span className="am__l2">{split("Asset Management")}</span>
-        </h1>
-        <div className="am__span num" aria-label={`De ${Y0} à ${Y1}`}><b>{Y0}</b><i /><b>{Y1}</b></div>
-        <p className="am__sub">De Rothschild &amp; Cie Gestion à 50&nbsp;milliards d'euros d'encours&nbsp;: quarante ans de gestion de conviction, racontés en dix-huit plans.</p>
-      </div>
-      <div className="home__cue" aria-hidden="true"><span>Faire défiler</span><i /></div>
-    </section>
-  );
-}
-
-// ------------------------------------------------------------------ le film : un chapitre par plan
-function Film({ chapters, scene }: { chapters: Chapter[]; scene: FlowScene | null }) {
-  const pin = useRef<HTMLElement>(null);
-  const stRef = useRef<ScrollTrigger | null>(null);
-  const [cur, setCur] = useState(0);
-  const [dir, setDir] = useState(1);
-  const [active, setActive] = useState(false);
-  const sceneRef = useRef(scene);
-  sceneRef.current = scene;
-  const reduced = useReducedMotion();
-  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 900);
-  useEffect(() => {
-    const on = () => setNarrow(window.innerWidth < 900);
-    window.addEventListener("resize", on);
-    return () => window.removeEventListener("resize", on);
-  }, []);
-  const linear = reduced || narrow;
-  const N = chapters.length;
-
-  // Plans épinglés : le défilement fait avancer le film, chapitre par chapitre
-  useEffect(() => {
-    const el = pin.current;
-    if (!el || linear) return;
-    const st = ScrollTrigger.create({
-      trigger: el, start: "top top", end: () => `+=${N * window.innerHeight * 0.75}`, pin: true, anticipatePin: 1,
-      // Le film ne pilote la nuée que pendant ses plans ; en remontant, l'ouverture retrouve sa galaxie
-      onToggle: (s) => setActive(s.isActive || s.progress >= 1),
-      onLeaveBack: () => { sceneRef.current?.set({ kind: "nebula" }, 2.4, 0); },
-      onUpdate: (s) => {
-        const i = Math.min(N - 1, Math.floor(s.progress * N));
-        setCur((p) => { if (p !== i) setDir(i > p ? 1 : -1); return i; });
-      },
+      scene.current = s;
     });
-    stRef.current = st;
-    return () => { st.kill(); stRef.current = null; };
-  }, [N, linear]);
+    return () => { alive = false; s?.dispose(); scene.current = null; };
+  }, [r, gl, reduced, nav]);
+  useEffect(() => { scene.current?.setFocus(focus); }, [focus]);
 
-  // Mode linéaire (mobile, animations réduites) : chaque chapitre donne sa figure en entrant à l'écran
-  useEffect(() => {
-    const el = pin.current;
-    if (!el || !linear) return;
-    const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) setCur(Number((e.target as HTMLElement).dataset.i)); }), { rootMargin: "-45% 0px -45% 0px" });
-    el.querySelectorAll(".am__lin").forEach((x) => io.observe(x));
-    return () => io.disconnect();
-  }, [linear, N]);
-
-  useEffect(() => { if (linear) setActive(true); }, [linear]);
-  useEffect(() => {
-    if (!scene || !chapters[cur] || !active) return;
-    scene.set(formationOf(chapters[cur]), 2.1, linear ? 0 : 7.5);
-    scene.setZoom(linear ? 40 : 31);
-  }, [cur, scene, chapters, linear, active]);
-
-  const jump = (i: number) => {
-    const st = stRef.current;
-    if (!st) return;
-    window.scrollTo({ top: st.start + ((i + 0.5) / N) * (st.end - st.start), behavior: "smooth" });
-  };
-  const c = chapters[cur];
-  if (linear) {
-    return (
-      <section className="am__film am__film--linear" ref={pin} aria-labelledby="h-film">
-        <div className="eyebrow home__eyebrow">L'histoire · {Y0} – {Y1}</div>
-        <h2 className="home__h2" id="h-film">Une société de gestion de conviction.</h2>
-        <ol className="am__list">
-          {chapters.map((x, i) => (
-            <li key={i} className="am__lin" data-i={i}>
-              <div className="am__lin-y num">{x.year}</div>
-              <div className="eyebrow home__eyebrow">{x.kicker}</div>
-              <h3 className="am__t">{x.title}</h3>
-              <p className="am__p">{x.text}</p>
-              {x.stat && <div className="am__stat"><b className="num">{x.stat.value}</b><span>{x.stat.unit}</span><em>{x.stat.label}</em></div>}
-              {x.source && <a className="am__src small" href={x.source} target="_blank" rel="noreferrer noopener">Source <I.Arrow size={12} /></a>}
-            </li>
-          ))}
-        </ol>
-      </section>
-    );
-  }
+  const parts = total != null ? splitEur(total) : null;
+  const fams = r ? FAMILY_ORDER.map((k) => r.families.find((g) => g.key === k)).filter(Boolean) as RevGroup[] : [];
   return (
-    <section className="am__film" ref={pin} aria-labelledby="h-film" aria-roledescription="récit">
-      <h2 className="sr-only" id="h-film">L'histoire de Rothschild &amp; Co Asset Management, de {Y0} à {Y1}</h2>
-      <Marquee text={c.kicker} />
-      <div className="am__leak" key={`leak-${cur}`} aria-hidden="true" />
-      <div className="am__reel" aria-hidden="true">
-        <span className="num">{String(cur + 1).padStart(2, "0")}</span><i /><span className="num">{String(N).padStart(2, "0")}</span>
+    <section className="rv__hero" ref={root} aria-labelledby="h-home">
+      <div className="rv__scene" ref={host} aria-hidden="true" />
+      <div className="rv__labels" ref={labels} aria-hidden="true" />
+      <div className="rv__vignette" aria-hidden="true" />
+      <div className="rv__bars" aria-hidden="true"><i /><i /></div>
+      <div className="rv__copy">
+        <div className="eyebrow rv__kicker">Rothschild &amp; Co Asset Management{r ? ` · au ${fdate(r.date)}` : ""}{mock ? " · données fictives" : ""}</div>
+        <h1 className="rv__title" id="h-home">
+          <span className="sr-only">Revenus de gestion annuels estimés : {total != null ? eur(total) : "chargement"}. </span>
+          <span className="rv__big num" aria-hidden="true"><span ref={big}>{parts?.value ?? "—"}</span><span className="rv__unit">{parts?.unit ?? ""}</span></span>
+          <span className="rv__what">de revenus de gestion par an, estimés sur les encours d'aujourd'hui.</span>
+        </h1>
+        {r && (
+          <div className="rv__facts">
+            <div><b className="num">{r.rate != null ? pctRaw(r.rate) : "—"}</b><span>taux moyen de frais de gestion</span></div>
+            <div><b className="num">{r.concentration.n_for_80pct ?? "—"}</b><span>fonds font 80&nbsp;% des revenus, sur {r.concentration.n_funds}</span></div>
+            <div><b className={`num ${(r.change_1y.total ?? 0) >= 0 ? "up-t" : "down-t"}`}>{eur(r.change_1y.total, { signed: true })}</b><span>en un an, dont {eur(r.change_1y.flows, { signed: true })} par la collecte</span></div>
+          </div>
+        )}
+        {fams.length > 0 && (
+          <ul className="rv__legend" aria-label="Familles de gestion (survolez pour isoler)">
+            {fams.map((g) => (
+              <li key={g.key}>
+                <button type="button" aria-pressed={focus === g.key} onMouseEnter={() => setFocus(g.key)} onMouseLeave={() => setFocus(null)}
+                  onFocus={() => setFocus(g.key)} onBlur={() => setFocus(null)}>
+                  <span className="dot" style={{ background: famVar(g.key, true) }} />{FAMILY_LABEL[g.key as FamilyKey] ?? g.label}
+                  <span className="num">{pct(g.share, { signed: false, digits: 0 })}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-      <div className="am__year num" aria-hidden="true"><Odometer value={c.year} /></div>
-      <Scene key={cur} c={c} dir={dir} />
-      <ol className="am__time" aria-label="Chapitres">
-        {chapters.map((x, i) => {
-          const dup = chapters.slice(0, i).filter((y) => y.year === x.year).length;
-          const left = ((parseInt(x.year, 10) - Y0) / (Y1 - Y0)) * 100 + dup * 0.9;
-          return (
-            <li key={i} style={{ left: `${Math.min(100, left)}%` }} className={i === cur ? "is-on" : i < cur ? "is-past" : ""}>
-              <button type="button" onClick={() => jump(i)} aria-label={`${x.year} — ${x.title}`} aria-current={i === cur ? "step" : undefined} />
-            </li>
-          );
-        })}
-        <span className="am__time-l" style={{ left: 0 }}>{Y0}</span>
-        <span className="am__time-l" style={{ left: `${((2017 - Y0) / (Y1 - Y0)) * 100}%` }}>2017</span>
-        <span className="am__time-l" style={{ right: 0 }}>{Y1}</span>
-        <i className="am__head" style={{ left: `${((parseInt(c.year, 10) - Y0) / (Y1 - Y0)) * 100}%` }} />
-      </ol>
+      {tip && (
+        <div className="rv__tip" style={{ left: tip.x, top: tip.y }} role="status">
+          <span className="dot" style={{ background: famVar(tip.f.family, true) }} />
+          <b>{tip.f.name}</b>
+          <dl>
+            <div><dt>Revenus / an</dt><dd className="num">{eur(tip.f.revenue)}</dd></div>
+            <div><dt>Encours</dt><dd className="num">{eur(tip.f.aum)}</dd></div>
+            <div><dt>Taux</dt><dd className="num">{pctRaw(tip.f.rate)}</dd></div>
+            <div><dt>Part des revenus</dt><dd className="num">{pct(tip.f.share, { signed: false })}</dd></div>
+          </dl>
+          <span className="small muted">Cliquer pour ouvrir la fiche</span>
+        </div>
+      )}
+      <div className="rv__curtain" aria-hidden="true"><i className="rv__sweep" /></div>
+      <div className="home__cue rv__cue" aria-hidden="true"><span>Ce qui rapporte</span><i /></div>
     </section>
   );
 }
 
-/** Le plan d'un chapitre : titre qui monte derrière un masque, texte qui sort du flou, chiffre qui défile. */
-function Scene({ c, dir }: { c: Chapter; dir: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
+function splitEur(v: number): { value: string; unit: string } {
+  const a = Math.abs(v);
+  if (a >= 1e9) return { value: (v / 1e9).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), unit: "Md€" };
+  if (a >= 1e6) return { value: (v / 1e6).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }), unit: "M€" };
+  return { value: (v / 1e3).toLocaleString("fr-FR", { maximumFractionDigits: 0 }), unit: "k€" };
+}
+
+// ------------------------------------------------------------------ le classement
+function Ranking({ r }: { r: Revenue }) {
+  const ref = useRef<HTMLOListElement>(null);
+  const [n, setN] = useState(12);
+  const top = r.funds.slice(0, n);
+  const max = top[0]?.revenue || 1;
+  useEffect(() => {
     const el = ref.current;
     if (!el || prefersReducedMotion()) return;
-    const ctx = gsap.context(() => {
-      const tl = gsap.timeline({ defaults: { ease: "rco" } });
-      tl.from(".am__k", { opacity: 0, x: -30 * dir, duration: 0.7 })
-        .from(".am__t .w", { yPercent: 110 * dir, rotate: 4 * dir, duration: 1, stagger: 0.04 }, 0.05)
-        .from(".am__p", { opacity: 0, filter: "blur(14px)", y: 16 * dir, duration: 1.1 }, 0.3)
-        .from(".am__stat", { opacity: 0, scale: 0.9, duration: 0.9 }, 0.45)
-        .from(".am__src", { opacity: 0, duration: 0.6 }, 0.8);
-      const num = el.querySelector<HTMLElement>(".am__stat b");
-      if (num && c.stat) {
-        const target = parseFloat(c.stat.value.replace(",", "."));
-        const dec = c.stat.value.includes(",") ? 1 : 0;
-        const o = { v: 0 };
-        tl.to(o, { v: target, duration: 1.6, ease: "expo.out", onUpdate: () => { num.textContent = o.v.toFixed(dec).replace(".", ","); } }, 0.45);
-      }
-    }, el);
-    return () => ctx.revert();
-  }, [c, dir]);
+    const bars = el.querySelectorAll<HTMLElement>(".rk__bar i");
+    const rows = el.querySelectorAll<HTMLElement>(".rk__row");
+    gsap.set(bars, { scaleX: 0 });
+    gsap.set(rows, { opacity: 0, y: 12 });
+    return onVisible(el, () => {
+      gsap.to(rows, { opacity: 1, y: 0, duration: 0.6, stagger: 0.05, ease: "power3.out", clearProps: "transform" });
+      gsap.to(bars, { scaleX: 1, duration: 1.3, stagger: 0.05, ease: "expo.out", delay: 0.15 });
+    });
+  }, [n, r]);
   return (
-    <div className="am__scene" ref={ref}>
-      <div className="eyebrow home__eyebrow am__k">{c.kicker}</div>
-      <h3 className="am__t">{c.title.split(" ").map((w, i) => <Fragment key={i}><span className="am__wm"><span className="w">{w}</span></span>{" "}</Fragment>)}</h3>
-      <p className="am__p">{c.text}</p>
-      {c.stat && <div className="am__stat"><b className="num">{c.stat.value}</b><span>{c.stat.unit}</span><em>{c.stat.label}</em></div>}
-      {c.source && <a className="am__src small" href={c.source} target="_blank" rel="noreferrer noopener">Source <I.Arrow size={12} /></a>}
+    <section className="rv__sec" aria-labelledby="h-rank">
+      <Rise><div className="eyebrow home__eyebrow">Le classement</div></Rise>
+      <Rise><h2 className="home__h2" id="h-rank">Les fonds qui rapportent le plus.</h2></Rise>
+      <Rise><p className="home__lede">{r.concentration.top10_share != null ? <>Les dix premiers fonds apportent <b>{pct(r.concentration.top10_share, { signed: false, digits: 0 })}</b> des revenus de gestion. </> : null}
+        Longueur de la barre&nbsp;: revenus annuels estimés&nbsp;; à droite, l'encours et le taux de frais qui les produisent.</p></Rise>
+      <ol className="rk" ref={ref}>
+        {top.map((f, i) => (
+          <li key={f.id} className="rk__row">
+            <Link to={`/fonds/${encodeURIComponent(f.id)}`} className="rk__a">
+              <span className="rk__i num">{String(i + 1).padStart(2, "0")}</span>
+              <span className="rk__n"><span className="dot" style={{ background: famVar(f.family, true) }} />{f.name}<span className="rk__sub">{f.range ?? FAMILY_LABEL[f.family] ?? ""}</span></span>
+              <span className="rk__bar" aria-hidden="true"><i style={{ width: `${(f.revenue / max) * 100}%`, background: famVar(f.family, true) }} /></span>
+              <b className="rk__v num">{eur(f.revenue)}</b>
+              <span className="rk__m num">{eur(f.aum)} · {pctRaw(f.rate)}</span>
+            </Link>
+          </li>
+        ))}
+      </ol>
+      {r.funds.length > n && <button type="button" className="btn btn--ghost rk__more" onClick={() => setN(r.funds.length)}>Voir les {r.funds.length} fonds</button>}
+    </section>
+  );
+}
+
+// ------------------------------------------------------------------ ce qui fait bouger les revenus
+function Drivers({ r }: { r: Revenue }) {
+  const c = r.change_1y;
+  const moves = r.funds.filter((f) => f.d_revenue_1y != null);
+  const up = [...moves].sort((a, b) => (b.d_revenue_1y ?? 0) - (a.d_revenue_1y ?? 0)).slice(0, 5);
+  const down = [...moves].sort((a, b) => (a.d_revenue_1y ?? 0) - (b.d_revenue_1y ?? 0)).filter((f) => (f.d_revenue_1y ?? 0) < 0).slice(0, 5);
+  const m = Math.max(Math.abs(c.flows ?? 0), Math.abs(c.market ?? 0), 1);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || prefersReducedMotion()) return;
+    const bars = el.querySelectorAll<HTMLElement>(".dv__bar i");
+    gsap.set(bars, { scaleX: 0 });
+    return onVisible(el, () => gsap.to(bars, { scaleX: 1, duration: 1.4, stagger: 0.15, ease: "expo.out" }));
+  }, [r]);
+  const row = (label: string, v: number | null, cls: string, note: string) => (
+    <div className={`dv__row ${cls}`}>
+      <span className="dv__l">{label}<em>{note}</em></span>
+      <span className="dv__bar" aria-hidden="true"><i className={(v ?? 0) < 0 ? "is-neg" : ""} style={{ width: `${(Math.abs(v ?? 0) / m) * 100}%` }} /></span>
+      <b className={`num ${(v ?? 0) >= 0 ? "up-t" : "down-t"}`}>{eur(v, { signed: true })}</b>
     </div>
   );
-}
-
-/** Année en compteur mécanique : chaque chiffre roule jusqu'au suivant, avec flou de mouvement. */
-function Odometer({ value }: { value: string }) {
-  const [rolling, setRolling] = useState(false);
-  useEffect(() => {
-    setRolling(true);
-    const t = window.setTimeout(() => setRolling(false), 1000);
-    return () => window.clearTimeout(t);
-  }, [value]);
+  const list = (title: string, rows: RevRow[]) => (
+    <div className="dv__list">
+      <div className="eyebrow">{title}</div>
+      <ol>{rows.map((f) => (
+        <li key={f.id}><Link to={`/fonds/${encodeURIComponent(f.id)}`}><span className="dot" style={{ background: famVar(f.family, true) }} />{f.name}
+          <b className={`num ${(f.d_revenue_1y ?? 0) >= 0 ? "up-t" : "down-t"}`}>{eur(f.d_revenue_1y, { signed: true })}</b></Link></li>
+      ))}</ol>
+    </div>
+  );
   return (
-    <span className={`odo${rolling ? " is-rolling" : ""}`}>
-      {value.split("").map((d, i) => (/\d/.test(d) ? (
-        <span key={i} className="odo__col">
-          <span className="odo__w">{d}</span>
-          <span className="odo__strip" style={{ transform: `translateY(${-Number(d) * 10}%)`, transitionDelay: `${i * 80}ms` }}>
-            {Array.from({ length: 10 }, (_, k) => <span key={k}>{k}</span>)}
-          </span>
-        </span>
-      ) : <span key={i}>{d}</span>))}
-    </span>
+    <section className="rv__sec" aria-labelledby="h-drv">
+      <Rise><div className="eyebrow home__eyebrow">Sur un an</div></Rise>
+      <Rise><h2 className="home__h2" id="h-drv">Ce qui fait bouger les revenus.</h2></Rise>
+      <Rise><p className="home__lede">Variation des revenus annualisés en un an, séparée entre ce qu'apporte la collecte nette (au taux de chaque part) et ce qu'apportent les marchés.</p></Rise>
+      <div className="dv" ref={ref}>
+        <div className="dv__eq">
+          {row("Collecte nette", c.flows, "is-flow", "argent confié ou retiré")}
+          {row("Effet marché", c.market, "is-mkt", "valorisation des encours")}
+          {row("Variation des revenus", c.total, "is-tot", "revenus annualisés, un an")}
+        </div>
+        <div className="dv__lists">
+          {list("Plus forte hausse", up)}
+          {down.length > 0 && list("Plus forte baisse", down)}
+        </div>
+      </div>
+    </section>
   );
 }
 
-/** Mot du chapitre en très grand, au trait, qui glisse lentement derrière le plan. */
-function Marquee({ text }: { text: string }) {
-  const [shown, setShown] = useState(text);
-  const [out, setOut] = useState(false);
+// ------------------------------------------------------------------ par famille, gamme, classe d'actifs
+function Breakdown({ r }: { r: Revenue }) {
+  const [dim, setDim] = useState<"families" | "ranges" | "asset_classes">("families");
+  const rows = r[dim];
+  const ref = useRef<HTMLDivElement>(null);
+  const colorOf = (g: RevGroup, i: number) => dim === "families" ? famVar(g.key, true) : `color-mix(in srgb, var(--gold) ${Math.max(28, 100 - i * 9)}%, #1c355e)`;
   useEffect(() => {
-    if (text === shown) return;
-    setOut(true);
-    const t = window.setTimeout(() => { setShown(text); setOut(false); }, 380);
-    return () => window.clearTimeout(t);
-  }, [text, shown]);
-  const line = `${shown} · `.repeat(4);
-  return <div className={`am__mq${out ? " is-out" : ""}`} aria-hidden="true"><div className="am__mq-in"><span>{line}</span><span>{line}</span></div></div>;
-}
-
-// ------------------------------------------------------------------ générique : chiffres et principes
-function Credits({ figures, principles }: { figures: Figure[]; principles: string[] }) {
-  const ref = useRef<HTMLElement>(null);
-  useLayoutEffect(() => {
     const el = ref.current;
     if (!el || prefersReducedMotion()) return;
-    const ctx = gsap.context(() => {
-      // Principes : les mots s'allument au fil du défilement
-      gsap.utils.toArray<HTMLElement>(".am__pr").forEach((p) => {
-        gsap.fromTo(p.querySelectorAll(".w"), { opacity: 0.12 }, { opacity: 1, stagger: 0.05, ease: "none",
-          scrollTrigger: { trigger: p, start: "top 85%", end: "bottom 45%", scrub: true } });
-      });
-      gsap.from(".am__fig", { yPercent: 30, opacity: 0, stagger: 0.12, duration: 1.2, scrollTrigger: { trigger: ".am__figs", start: "top 80%", once: true } });
-    }, el);
-    return () => ctx.revert();
-  }, [figures.length, principles.length]);
+    const segs = el.querySelectorAll<HTMLElement>(".bd__strip span");
+    gsap.fromTo(segs, { scaleY: 0 }, { scaleY: 1, duration: 0.8, stagger: 0.04, ease: "back.out(1.6)", transformOrigin: "50% 100%" });
+  }, [dim]);
   return (
-    <section className="am__credits" ref={ref} aria-labelledby="h-credits">
-      <Rise><div className="eyebrow home__eyebrow">Rothschild &amp; Co Asset Management aujourd'hui</div></Rise>
-      <Rise><h2 className="home__h2" id="h-credits">Une maison de convictions, à l'échelle européenne.</h2></Rise>
-      <div className="am__figs">
-        {figures.map((f) => <Counter key={f.label} f={f} />)}
-      </div>
-      <div className="am__prs">
-        {principles.map((p, i) => (
-          <p key={i} className="am__pr"><span className="am__pr-n num">{String(i + 1).padStart(2, "0")}</span>{p.split(" ").map((w, k) => <span key={k} className="w">{w} </span>)}</p>
+    <section className="rv__sec" aria-labelledby="h-bd">
+      <Rise><div className="eyebrow home__eyebrow">Répartition</div></Rise>
+      <Rise><h2 className="home__h2" id="h-bd">D'où viennent les revenus.</h2></Rise>
+      <div className="seg rv__seg" role="radiogroup" aria-label="Regrouper par">
+        {([["families", "Familles"], ["ranges", "Gammes"], ["asset_classes", "Classes d'actifs"]] as const).map(([k, l]) => (
+          <button key={k} type="button" role="radio" aria-checked={dim === k} className="seg__b" onClick={() => setDim(k)}>{l}</button>
         ))}
       </div>
-      <p className="today__src small">Faits et chiffres publics communiqués par Rothschild &amp; Co Asset Management et la presse spécialisée (sources citées à chaque chapitre). Les chiffres de l'application, ci-dessous, sont calculés sur ses propres données.</p>
+      <div className="bd" ref={ref}>
+        <div className="bd__strip" role="img" aria-label={rows.map((g) => `${g.label} ${pct(g.share, { signed: false })}`).join(", ")}>
+          {rows.map((g, i) => <span key={g.key} style={{ flexGrow: g.share ?? 0, background: colorOf(g, i) }} title={`${g.label} · ${eur(g.revenue)}`} />)}
+        </div>
+        <table className="t bd__t">
+          <thead><tr><th>{dim === "families" ? "Famille" : dim === "ranges" ? "Gamme" : "Classe d'actifs"}</th><th className="n">Revenus / an</th><th className="n">Part</th><th className="n">Encours</th><th className="n">Taux moyen</th><th className="n">Fonds</th></tr></thead>
+          <tbody>{rows.map((g, i) => (
+            <tr key={g.key}><td><span className="dot" style={{ background: colorOf(g, i) }} /> {g.label}</td><td className="n">{eur(g.revenue)}</td><td className="n">{pct(g.share, { signed: false })}</td>
+              <td className="n">{eur(g.aum)}</td><td className="n">{g.rate != null ? pctRaw(g.rate) : "—"}</td><td className="n">{g.n}</td></tr>
+          ))}</tbody>
+        </table>
+      </div>
     </section>
   );
 }
 
-function Counter({ f }: { f: Figure }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const target = parseFloat(f.value.replace(",", "."));
-  const dec = f.value.includes(",") ? 1 : 0;
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || prefersReducedMotion() || !Number.isFinite(target)) return;
-    const o = { x: 0 };
-    el.textContent = "0";
-    const tw = gsap.to(o, { x: target, duration: 2.2, ease: "expo.out", paused: true, onUpdate: () => { el.textContent = o.x.toFixed(dec).replace(".", ","); } });
-    const st = ScrollTrigger.create({ trigger: el, start: "top 85%", once: true, onEnter: () => tw.play() });
-    return () => { st.kill(); tw.kill(); el.textContent = f.value; };
-  }, [target, dec, f.value]);
+// ------------------------------------------------------------------ trajectoire
+function Trend({ r }: { r: Revenue }) {
+  const series = useMemo(() => [{ key: "rev", label: "Revenus annualisés", color: "var(--gold)", points: r.trend, fill: true }], [r.trend]);
   return (
-    <div className="am__fig">
-      <div className="am__fig-v num"><span ref={ref}>{f.value}</span><span className="am__fig-u">{f.unit}</span></div>
-      <div className="am__fig-l">{f.label}</div>
-      {f.source && <a className="am__src small" href={f.source} target="_blank" rel="noreferrer noopener">Source <I.Arrow size={12} /></a>}
-    </div>
+    <section className="rv__sec" aria-labelledby="h-tr">
+      <Rise><div className="eyebrow home__eyebrow">Trajectoire</div></Rise>
+      <Rise><h2 className="home__h2" id="h-tr">Le rythme annuel des revenus, mois après mois.</h2></Rise>
+      <Rise><p className="home__lede">Encours de fin de mois multiplié par le taux de frais actuel de chaque part&nbsp;: la courbe isole l'effet des encours.</p></Rise>
+      <div className="rv__chart"><TimeChart series={series} height={300} ariaLabel="Revenus de gestion annualisés, fin de mois" /></div>
+    </section>
+  );
+}
+
+// ------------------------------------------------------------------ méthode
+function Method({ r }: { r: Revenue }) {
+  return (
+    <section className="rv__sec rv__method" aria-labelledby="h-me">
+      <h2 className="eyebrow home__eyebrow" id="h-me">Comment ces chiffres sont estimés</h2>
+      <p>Revenu annuel d'une part = encours en euros × taux de frais de gestion financière (frais réels de la part, à défaut maximum de la part, puis du fonds ; aucun taux inventé).
+        Montants bruts, avant rétrocessions aux distributeurs, commissions de surperformance et frais administratifs.
+        {r.total_net ? <> Net des rétrocessions standard renseignées&nbsp;: <b>{eur(r.total_net)}</b> par an.</> : null}
+        {r.total_12m != null ? <> Revenus courus sur les douze derniers mois&nbsp;: <b>{eur(r.total_12m)}</b>.</> : null}
+        {" "}Couverture&nbsp;: {pct(r.coverage, { signed: false, digits: 0 })} des encours ont un taux{r.aum_without_rate > 0 ? <> ({eur(r.aum_without_rate)} sans taux, non valorisés)</> : null}.</p>
+    </section>
   );
 }
 
@@ -399,8 +358,8 @@ function Living({ o, mock }: { o: Overview; mock: boolean }) {
   const fams = FAMILY_ORDER.map((k) => o.families.find((f) => f.key === k)).filter(Boolean) as Overview["families"];
   return (
     <section className="living" aria-labelledby="h-living">
-      <Rise><div className="eyebrow home__eyebrow">Dans cette application · au {fdate(o.date)}{mock ? " · données fictives" : ""}</div></Rise>
-      <Rise><h2 className="home__h2" id="h-living">La maison, en un regard.</h2></Rise>
+      <Rise><div className="eyebrow home__eyebrow">Les encours · au {fdate(o.date)}{mock ? " · données fictives" : ""}</div></Rise>
+      <Rise><h2 className="home__h2" id="h-living">La matière première des revenus.</h2></Rise>
       <div className="living__mega num"><Money v={o.aum} big /></div>
       <Rise>
         <div className="living__facts">
@@ -429,14 +388,13 @@ function Rise({ children }: { children: ReactNode }) {
   useEffect(() => {
     const el = ref.current;
     if (!el || prefersReducedMotion()) return;
-    const tw = gsap.fromTo(el, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 1, ease: "rco", paused: true });
-    const st = ScrollTrigger.create({ trigger: el, start: "top 88%", once: true, onEnter: () => tw.play() });
-    return () => { st.kill(); tw.revert(); };
+    const tw = gsap.fromTo(el, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 1, ease: "rco", paused: true, clearProps: "transform" });
+    const off = onVisible(el, () => tw.play());
+    return () => { off(); tw.revert(); };
   }, []);
   return <div ref={ref} className="rise">{children}</div>;
 }
 
-/** Grain de pellicule, très discret (cinéma), désactivé si l'utilisateur réduit les animations. */
 function Grain() {
   return <div className="grain" aria-hidden="true" />;
 }

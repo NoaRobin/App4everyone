@@ -17,11 +17,13 @@ const Holdings = lazy(() => import("./pages/Holdings"));
 const Instrument = lazy(() => import("./pages/Instrument"));
 const Distribution = lazy(() => import("./pages/Distribution"));
 const Country = lazy(() => import("./pages/Country"));
+const Passif = lazy(() => import("./pages/Passif"));
+const Compare = lazy(() => import("./pages/Compare"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const TITLES: [RegExp, string][] = [
   [/^\/$/, "Accueil"], [/^\/metiers/, "Espace métiers"], [/^\/fonds$/, "Rechercher un fonds"], [/^\/encours/, "Encours"], [/^\/selection/, "Sélection de fonds"],
-  [/^\/portefeuilles/, "Portefeuilles"], [/^\/distribution/, "Distribution"],
+  [/^\/portefeuilles/, "Portefeuilles"], [/^\/distribution/, "Distribution"], [/^\/passif/, "Passif"], [/^\/comparateur/, "Comparateur"],
 ];
 
 export function App() {
@@ -53,6 +55,8 @@ export function App() {
             <Route path="/portefeuilles/ligne" element={<Instrument />} />
             <Route path="/distribution" element={<Distribution />} />
             <Route path="/distribution/:pays" element={<Country />} />
+            <Route path="/passif" element={<Passif />} />
+            <Route path="/comparateur" element={<Compare />} />
             <Route path="/risques" element={<Navigate to="/fonds#risques" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
