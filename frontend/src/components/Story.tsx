@@ -70,8 +70,9 @@ export function Equation({ v, end }: { v: NonNullable<Overview["var"][string]>; 
           <div key={i} className={`eq__row eq__row--${r.kind}`}>
             <span className="eq__op" aria-hidden="true">{i === 0 ? "" : i === 3 ? "=" : x >= 0 ? "+" : "−"}</span>
             <span className="eq__l">{r.l}</span>
-            <span className="eq__v num">{r.kind === "base" || r.kind === "end" ? eur(x) : eur(x, { signed: true })}</span>
-            <span className="eq__bar" aria-hidden="true"><span className={x < 0 ? "is-neg" : ""} style={{ left: `${left * 100}%`, width: `${Math.max(width * 100, 0.6)}%` }} /></span>
+            {/* Le signe est porté par l'opérateur (+ ou −) : le montant est donc affiché sans signe, jamais « − −1,4 Md€ » */}
+            <span className="eq__v num" aria-label={r.kind === "base" || r.kind === "end" ? eur(x) : eur(x, { signed: true })}>{eur(r.kind === "base" || r.kind === "end" ? x : Math.abs(x))}</span>
+            <span className="eq__bar" aria-hidden="true"><span className={x < 0 ? "is-neg" : ""} style={{ left: `${left * 100}%`, width: `${Math.max(width * 100, 0.6)}%`, transformOrigin: x < 0 ? "right center" : "left center" }} /></span>
           </div>
         );
       })}

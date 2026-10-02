@@ -19,31 +19,63 @@ export type Comptes = {
   dissolved?: Tranche; open?: Tranche; currencies?: { devise: string; tranche: Tranche }[] | null; clients?: Tranche;
 };
 export type Group = { classe_actif: string; desk: string; devise: string; pct: number; tranche?: Tranche };
+export type Band = { band: string; pct: number; tranche?: Tranche };
+export type Concentration = { available?: boolean; accounts?: Tranche; points?: { top_pct: number; pct: number }[] | null; accounts_for_half?: Tranche; accounts_for_80?: Tranche };
 export type Positions = {
-  available?: boolean; measure?: string; groups?: Group[] | null; residual_pct?: number | null;
+  available?: boolean; reason?: string; measure?: string; groups?: Group[] | null; residual_pct?: number | null;
   by_desk?: Share<"desk">[] | null; by_class?: Share<"classe_actif">[] | null; by_currency?: Share<"devise">[] | null;
   matrix?: { desk: string; classe_actif: string; pct: number }[] | null;
+  by_holder?: { teneur: string; classification: string; pct: number; tranche?: Tranche }[] | null;
   by_client?: { teneur: string; classification: string; pct: number; tranche?: Tranche }[] | null;
-  by_teneur?: Share<"teneur">[] | null; total?: Tranche;
+  by_teneur?: Share<"teneur">[] | null; by_classification?: Share<"classification">[] | null;
+  by_country?: (Share<"pays"> & { iso?: string })[] | null; by_sdg?: Share<"sdg">[] | null; by_fund_type?: Share<"type_fonds">[] | null;
+  seniority?: Band[] | null; last_trade?: Band[] | null; concentration?: Concentration | null;
+  top_funds?: { fund: string; name?: string | null; pct: number; positions?: Tranche }[] | null; total?: Tranche; amount_valid_pct?: number | null;
 };
 export type DayGroup = { classe_actif: string; desk: string; sens: string; statut?: string; devise?: string; pct: number; tranche?: Tranche };
 export type Day = {
   date: string; ops?: Tranche; sens?: Share<"sens">[] | null; desks?: Share<"desk">[] | null; late_pct?: number | null; groups?: DayGroup[] | null;
 };
+export type Statut = { statut: string; included: boolean; tranche?: Tranche; pct?: number | null };
 export type Transactions = {
-  available?: boolean; measure?: string; first?: string | null; last?: string | null; days?: Day[] | null;
-  period_sens?: Share<"sens">[] | null; period_desks?: Share<"desk">[] | null; period_classes?: Share<"classe_actif">[] | null;
-  period_late_pct?: number | null; ops?: Tranche;
+  available?: boolean; reason?: string; measure?: string; first?: string | null; last?: string | null; n_days?: number; window_days?: number;
+  days?: Day[] | null; period_sens?: Share<"sens">[] | null; period_desks?: Share<"desk">[] | null; period_classes?: Share<"classe_actif">[] | null;
+  period_countries?: (Share<"pays"> & { iso?: string })[] | null; period_desk_sens?: (Share<"desk"> & { sens: string })[] | null;
+  late?: { calculable: boolean; pct: number | null; rule: string } | null; period_late_pct?: number | null; ops?: Tranche;
+  statuts?: Statut[] | null; allowed?: string[] | null; amount_valid_pct?: number | null;
 };
-export type MapField = { col: string; confidence?: number | null; how?: string; note?: string };
-export type MapTable = { fields?: Record<string, MapField> | null; rows?: Tranche; unmapped?: string[] | null };
+export type LectureCol = {
+  field: string; name: string; kind: string; col: string | null; how: string; detected: string; status: string; nulls?: number | null; filled?: number | null;
+  valid?: number | null; invalid?: number | null; rejected?: { shape: string; n: number }[] | null; min?: string | null; max?: string | null;
+  distinct?: number | null; used: boolean;
+};
+export type LectureTable = {
+  mode: "noms" | "_cN"; rows: number; usable: number; ignored_rows: number; n_columns: number; expected: number; missing: string[]; extra: string[];
+  overrides_ignored: { field: string; col: string; why: string }[]; columns: LectureCol[]; to_confirm: string[]; configured: string[];
+};
+export type Lecture = {
+  tables: Record<"compte" | "position" | "transaction", LectureTable>;
+  links?: { accounts?: { rows_pct: number | null; amount_pct: number | null; linked: number; distinct: number }; isin?: { distinct: number; linked: number; amount_pct: number | null; rows_pct: number | null } } | null;
+  problems: { table: string; field: string; level: string; text: string }[];
+  duplicates?: { references: number; refs_repeated: number; exact_duplicates: number; refs_multi_lines: number; without_reference: number } | null;
+  statuts?: Statut[] | null; allowed_statuts?: string[]; env: Record<string, string>;
+};
 export type PassifResp = {
   available: boolean; reason?: string; source?: string; refreshed_at?: string | null; positions_as_of?: string | null;
   model?: Partial<Record<"clients" | "comptes" | "positions" | "operations" | "funds_held", Tranche>> | null;
-  comptes?: Comptes | null; positions?: Positions | null; transactions?: Transactions | null;
-  mapping?: { position?: MapTable | null; transaction?: MapTable | null } | null;
+  comptes?: (Comptes & { reason?: string; dissolution_rule?: string }) | null; positions?: Positions | null; transactions?: Transactions | null;
+  lecture?: Lecture | null;
   funds?: Record<string, { pct: number; positions?: Tranche }> | null;
 };
+
+/** Nature d'une classification d'après son libellé (« TA/Client Actif », « RMM/OPC », « TA/Omnibus »…). */
+export function natureOfLabel(c: string): Nature {
+  if (/inactif/i.test(c)) return "inactif";
+  if (/omnibus/i.test(c)) return "omnibus";
+  if (/\bopc\b/i.test(c)) return "opc";
+  if (/client\s*actif/i.test(c)) return "actif";
+  return "autre";
+}
 
 export const arr = <T,>(x: T[] | null | undefined): T[] => (Array.isArray(x) ? x : []);
 

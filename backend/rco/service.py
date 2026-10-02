@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import math
+import os
+import re
 from datetime import timedelta
 from functools import lru_cache
 from typing import Any
@@ -595,11 +597,25 @@ class Service:
                         "value": int(len(g)), "n_funds": int(g["fid"].nunique())})
         return sorted(out, key=lambda r: -r["value"])
 
-    def _clients(self, sids: pd.Series) -> pd.Series:
-        """Type de client de chaque part (Investor_Type du référentiel), libellé lisible ; vide → « Non renseigné »."""
+    NAMED_COL = os.environ.get("APP_NAMED_CLIENT_COLUMN", "Investor_Type_free_field")
+    _GENERIC = re.compile(r"^(n/?a|nan|none|null|-|tous|all|tous souscripteurs|all investors|sans objet)$", re.I)
+
+    def _client_kind(self) -> tuple[pd.Series, pd.Series]:
+        """Client de chaque part du référentiel : d'abord le client nommé (champ libre du type d'investisseur, part dédiée),
+        à défaut le pool de clientèle (Investor_Type). Renvoie (libellé, nature « nommé » / « pool »)."""
         m = self.m
-        inv = m.shares["Investor_Type"].map(_str) if "Investor_Type" in m.shares else pd.Series(dtype=object)
-        return sids.map(inv).fillna("Clientèle non renseignée")
+        idx = m.shares.index
+        named = m.shares[self.NAMED_COL].map(_str) if self.NAMED_COL in m.shares else pd.Series(None, index=idx, dtype=object)
+        named = named.where(named.map(lambda v: isinstance(v, str) and bool(v.strip()) and not self._GENERIC.match(v.strip())))
+        pool = m.shares["Investor_Type"].map(_str) if "Investor_Type" in m.shares else pd.Series(None, index=idx, dtype=object)
+        label = named.fillna(pool).fillna("Clientèle non renseignée")
+        kind = pd.Series("pool", index=idx).where(named.isna(), "nommé")
+        return label, kind
+
+    def _clients(self, sids: pd.Series) -> pd.Series:
+        """Client de chaque part : client nommé s'il est renseigné, sinon pool de clientèle ; vide → « Clientèle non renseignée »."""
+        label, _ = self._client_kind()
+        return sids.map(label).fillna("Clientèle non renseignée")
 
     def _sankey(self, act: pd.DataFrame, top: int = 11) -> dict:
         """
@@ -626,8 +642,16 @@ class Service:
                 nodes.append({"id": key, "label": label, "col": col, **kw})
             return index[key]
 
-        for cname, g in sorted(df.groupby("cli"), key=lambda kv: -len(kv[1])):
-            node(f"k:{cname}", cname, 0, client=cname, value=int(len(g)), n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()))
+        # Colonne 1 : les clients nommés d'abord (les plus présents ; au-delà de 10, regroupés), puis les pools de clientèle
+        _, kind = self._client_kind()
+        df["kind"] = df["sid"].map(kind).fillna("pool").values
+        named = df[df["kind"] == "nommé"].groupby("cli")["sid"].count().sort_values(ascending=False)
+        if len(named) > 10:
+            rest = set(named.index[10:])
+            df.loc[df["cli"].isin(rest) & (df["kind"] == "nommé"), "cli"] = f"{len(rest)} autres clients nommés"
+        order = sorted(df.groupby(["kind", "cli"]), key=lambda kv: (kv[0][0] != "nommé", "autres clients nommés" in kv[0][1], -len(kv[1])))
+        for (k, cname), g in order:
+            node(f"k:{cname}", cname, 0, client=cname, kind=k, value=int(len(g)), n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()))
         for cname in [*counts.index[:top], "Autres pays"]:
             g = df[df["dest"] == cname]
             if len(g):
@@ -645,7 +669,8 @@ class Service:
         for (a, b), g in df.groupby(["dest", "fam"]):
             links.append({"source": index[f"c:{a}"], "target": index[f"f:{b}"], "value": int(len(g)), "family": b,
                           "n_funds": int(g["fid"].nunique()), "n_shares": int(g["sid"].nunique())})
-        return {"unit": "enregistrements", "nodes": nodes, "links": links, "order": ["clients", "pays", "familles"]}
+        return {"unit": "enregistrements", "nodes": nodes, "links": links, "order": ["clients", "pays", "familles"],
+                "named_column": self.NAMED_COL, "n_named": int(len(named))}
 
     def _client_map(self, act: pd.DataFrame) -> list[dict]:
         """Par type de client : pays où ses parts sont autorisées (pour la carte), du plus large au plus étroit."""

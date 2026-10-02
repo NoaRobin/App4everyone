@@ -1,9 +1,8 @@
 /**
  * Scènes 3D de la page « Passif » — Three.js.
  *
- * 1. ModelScene : la carte du modèle. Cinq nœuds (Clients → Comptes → Positions / Transactions → Fonds détenus) dont la
- *    taille suit le rang ordinal de leur tranche (jamais un nombre exact) ; des particules circulent le long des liens,
- *    lentement vers le stock (positions), vite vers le flux (transactions).
+ * 1. HolderScene : qui détient l'encours. Une tour par teneur de compte (hauteur = part de l'encours, échelle linéaire),
+ *    empilée par classification de compte (client actif, OPC, omnibus…), couleur = nature du compte.
  * 2. MatrixScene : la photo de l'encours en colonnes — desk × classe d'actifs, hauteur proportionnelle à la part de
  *    l'encours (en %, déjà calculée par l'API). Survol = infobulle ; la ligne et la colonne survolées restent seules vives.
  *
@@ -148,308 +147,216 @@ abstract class Stage {
   }
 }
 
-/** Petite tache lumineuse pour les particules (générée localement, aucun fichier externe). */
-function dotTexture(): THREE.CanvasTexture {
-  const c = document.createElement("canvas");
-  c.width = c.height = 64;
-  const g = c.getContext("2d")!;
-  const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-  grd.addColorStop(0, "rgba(255,255,255,1)");
-  grd.addColorStop(0.25, "rgba(255,255,255,.85)");
-  grd.addColorStop(0.6, "rgba(255,255,255,.18)");
-  grd.addColorStop(1, "rgba(255,255,255,0)");
-  g.fillStyle = grd;
-  g.fillRect(0, 0, 64, 64);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-
-const FRESNEL_VS = /* glsl */`
-  varying vec3 vN; varying vec3 vV;
-  void main() {
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    vN = normalize(normalMatrix * normal);
-    vV = normalize(-mv.xyz);
-    gl_Position = projectionMatrix * mv;
-  }`;
-const FRESNEL_FS = /* glsl */`
-  uniform vec3 uColor; uniform float uGlow; uniform float uCore; uniform float uDim;
-  varying vec3 vN; varying vec3 vV;
-  void main() {
-    float f = pow(1.0 - max(dot(vN, vV), 0.0), 2.4);
-    vec3 col = uColor * (uCore + f * uGlow);
-    float a = clamp(0.32 + f * 0.9, 0.0, 1.0);
-    gl_FragColor = vec4(col * uDim, a * mix(0.35, 1.0, uDim));
-  }`;
-
-// ===================================================================== 1. carte du modèle
-export type ModelKey = "clients" | "comptes" | "positions" | "operations" | "funds_held";
-export type ModelNode = { key: ModelKey; title: string; unit: string; note: string; kind: "ref" | "stock" | "flux" | "fund"; tranche: PTranche };
-export type ModelOptions = {
+// ===================================================================== 1. les teneurs de compte, en volume
+export type HolderBlock = { teneur: string; classification: string; label: string; pct: number; nature: string; tranche?: PTranche };
+export type HolderOptions = {
   reduced: boolean;
   labelLayer: HTMLElement;
-  onHover: (n: ModelNode | null, x: number, y: number) => void;
+  teneurs: { teneur: string; pct: number }[];
+  colors: Record<string, string>;
+  natureOrder: string[];
+  fmt: (pct: number) => string;
+  onHover: (b: HolderBlock | null, x: number, y: number) => void;
 };
 
-const KIND_COLOR: Record<ModelNode["kind"], string> = { ref: "#e9e3d8", stock: "#cc9f53", flux: "#7fa3ea", fund: "#e8c9ba" };
-const LINKS: [ModelKey, ModelKey, "ref" | "stock" | "flux"][] = [
-  ["clients", "comptes", "ref"], ["comptes", "positions", "stock"], ["comptes", "operations", "flux"],
-  ["positions", "funds_held", "stock"], ["operations", "funds_held", "flux"],
-];
+const T_W = 5.2;          // emprise d'une tour (carrée)
+const T_GAP = 3.6;        // allée entre deux tours
+const T_H = 30;           // hauteur de la tour la plus haute
+const SEAM = 0.22;        // joint entre deux blocs empilés
 
-type MNode = {
-  n: ModelNode; group: THREE.Group; core: THREE.Mesh; coreMat: THREE.ShaderMaterial; shell: THREE.LineSegments; shellMat: THREE.LineBasicMaterial;
-  rings: THREE.Mesh[]; hit: THREE.Mesh; r: number; label: HTMLDivElement; grow: number; hot: number; phase: number;
-};
-type MLink = { a: ModelKey; b: ModelKey; kind: "ref" | "stock" | "flux"; curve: THREE.QuadraticBezierCurve3; tube: THREE.Mesh; tubeMat: THREE.MeshBasicMaterial;
-  pts: THREE.Points; ptsMat: THREE.PointsMaterial; offs: Float32Array; speed: number; dim: number };
+type TBlock = { b: HolderBlock; mesh: THREE.Mesh; mat: THREE.MeshStandardMaterial; edge: THREE.LineSegments; edgeMat: THREE.LineBasicMaterial;
+  y0: number; h: number; cur: number; ti: number; order: number; alpha: number };
 
-export class ModelScene extends Stage {
-  private nodes: MNode[] = [];
-  private links: MLink[] = [];
+/**
+ * Une tour par teneur de compte, sa hauteur = sa part de l'encours (linéaire) ; chaque bloc empilé = une classification
+ * de compte (client actif, OPC, omnibus…), coloré par sa nature. Ouverture : les blocs se posent un à un, du bas vers le
+ * haut, tour après tour. Survol = infobulle, la nature survolée reste seule vive ; rotation lente bornée au repos.
+ */
+export class HolderScene extends Stage {
   private world = new THREE.Group();
-  private dust!: THREE.Points;
-  private tex = dotTexture();
-  private hovered: ModelKey | null = null;
-  private vertical = false;
-  private par = { x: 0, y: 0 };
-  private intro = { v: 0 };
+  private blocks: TBlock[] = [];
+  private controls: OrbitControls;
+  private labels: { el: HTMLDivElement; pos: THREE.Vector3 }[] = [];
+  private hovered: TBlock | null = null;
+  private focusNature: string | null = null;
   private played = false;
+  private idle = 0;
+  private span = 30;
 
-  constructor(host: HTMLElement, private data: ModelNode[], private opts: ModelOptions) {
-    super(host, opts.reduced, [0.85, 0.7, 0.18], 32);
-    this.disposables.push(this.tex);
+  constructor(host: HTMLElement, private data: HolderBlock[], private opts: HolderOptions) {
+    super(host, opts.reduced, [0.42, 0.55, 0.8], 32);
     this.scene.add(this.world);
-    this.scene.add(new THREE.AmbientLight("#9fb0d0", 0.6));
-    this.buildDust();
-    this.buildNodes();
+    this.scene.add(new THREE.AmbientLight(0x6f84b0, 0.6));
+    const key = new THREE.DirectionalLight(0xffe6bd, 1.9);
+    key.position.set(30, 60, 40);
+    const rim = new THREE.DirectionalLight(0x5b7fd0, 1.2);
+    rim.position.set(-40, 20, -30);
+    this.scene.add(key, rim);
+    this.build();
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableZoom = false;
+    this.controls.enablePan = false;
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.08;
+    this.controls.rotateSpeed = 0.5;
+    this.controls.minPolarAngle = 0.6;
+    this.controls.maxPolarAngle = 1.38;
+    this.controls.minAzimuthAngle = -0.9;
+    this.controls.maxAzimuthAngle = 0.9;
+    this.controls.addEventListener("change", () => { this.dirty = true; });
+    this.controls.addEventListener("start", () => { this.idle = -1; });
+    this.controls.addEventListener("end", () => { this.idle = performance.now(); });
     this.start();
-    if (opts.reduced) { this.intro.v = 1; this.nodes.forEach((m) => { m.grow = 1; }); this.played = true; }
+    if (opts.reduced) { this.blocks.forEach((b) => { b.cur = 1; }); this.played = true; }
   }
 
-  /** Révélation à l'arrivée à l'écran (appelée par la page). */
+  private build() {
+    const ten = this.opts.teneurs;
+    const max = Math.max(0.1, ...ten.map((t) => this.data.filter((b) => b.teneur === t.teneur).reduce((s, b) => s + b.pct, 0)));
+    const k = T_H / max;
+    const n = ten.length;
+    const x0 = -((n - 1) * (T_W + T_GAP)) / 2;
+    const geo = new THREE.BoxGeometry(T_W, 1, T_W);
+    geo.translate(0, 0.5, 0);
+    const edges = new THREE.EdgesGeometry(geo);
+    this.disposables.push(geo, edges);
+    // Sol : dalle sombre, trame fine et filet d'or sous l'alignement des tours
+    const W = n * (T_W + T_GAP) + 12;
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(W * 3, W * 3), new THREE.MeshStandardMaterial({ color: 0x050a14, roughness: 0.95, metalness: 0.1 }));
+    ground.rotation.x = -Math.PI / 2;
+    const grid = new THREE.GridHelper(W * 2, Math.round(W * 2 / 2.2), 0x1c355e, 0x111f38);
+    (grid.material as THREE.LineBasicMaterial).transparent = true;
+    (grid.material as THREE.LineBasicMaterial).opacity = 0.35;
+    grid.position.y = 0.01;
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-W / 2, 0.03, T_W / 2 + 1.2), new THREE.Vector3(W / 2, 0.03, T_W / 2 + 1.2)]);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xcc9f53, transparent: true, opacity: 0.7 });
+    this.world.add(ground, grid, new THREE.Line(lineGeo, lineMat));
+    this.disposables.push(ground.geometry, ground.material as THREE.Material, grid.geometry, grid.material as THREE.Material, lineGeo, lineMat);
+    const rank = (nat: string) => { const i = this.opts.natureOrder.indexOf(nat); return i < 0 ? 99 : i; };
+    let order = 0;
+    ten.forEach((t, ti) => {
+      const list = this.data.filter((b) => b.teneur === t.teneur).sort((a, b) => rank(a.nature) - rank(b.nature) || b.pct - a.pct);
+      let y = 0;
+      const x = x0 + ti * (T_W + T_GAP);
+      for (const b of list) {
+        const h = Math.max(0.15, b.pct * k - SEAM);
+        const col = new THREE.Color(this.opts.colors[b.nature] ?? "#8d929c");
+        const mat = new THREE.MeshStandardMaterial({ color: 0x0b111d, emissive: col, emissiveIntensity: 0.32, metalness: 0.85, roughness: 0.3, transparent: true, opacity: 1 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, y, 0);
+        const edgeMat = new THREE.LineBasicMaterial({ color: col.clone().lerp(new THREE.Color("#f3dcaa"), 0.35), transparent: true, opacity: 0.9 });
+        const edge = new THREE.LineSegments(edges, edgeMat);
+        edge.position.copy(mesh.position);
+        this.world.add(mesh, edge);
+        const tb: TBlock = { b, mesh, mat, edge, edgeMat, y0: y, h, cur: 0, ti, order: order++, alpha: 1 };
+        mesh.userData.tb = tb;
+        this.blocks.push(tb);
+        y += h + SEAM;
+      }
+      // Étiquette au pied de la tour : teneur et part de l'encours
+      const el = document.createElement("div");
+      el.className = "pa-ten3";
+      const nm = document.createElement("b"), v = document.createElement("span");
+      nm.textContent = t.teneur;
+      v.textContent = this.opts.fmt(t.pct);
+      el.append(nm, v);
+      this.opts.labelLayer.appendChild(el);
+      this.labels.push({ el, pos: new THREE.Vector3(x, 0, T_W / 2 + 1.6) });
+    });
+    this.span = Math.max(W, T_H * 1.4);
+  }
+
+  /** Les blocs se posent un à un (appelé quand la scène devient visible). */
   play() {
     if (this.played) return;
     this.played = true;
-    gsap.to(this.intro, { v: 1, duration: 2.2, ease: "power2.out" });
-    this.nodes.forEach((m, i) => gsap.to(m, { grow: 1, duration: 1.4, delay: 0.15 + i * 0.16, ease: "back.out(1.6)" }));
-  }
-
-  private buildDust() {
-    const n = 700;
-    const pos = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 140;
-      pos[i * 3 + 1] = (Math.random() - 0.5) * 80;
-      pos[i * 3 + 2] = -10 - Math.random() * 60;
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    const m = new THREE.PointsMaterial({ size: 0.35, map: this.tex, color: "#8ea4cc", transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending });
-    this.dust = new THREE.Points(g, m);
-    this.scene.add(this.dust);
-    this.disposables.push(g, m);
-  }
-
-  private radius(t: PTranche) { return t ? 0.95 + 0.5 * Math.min(8, Math.max(1, t.rank)) : 0.9; }
-
-  private buildNodes() {
-    this.data.forEach((n, i) => {
-      const r = this.radius(n.tranche);
-      const color = new THREE.Color(n.tranche ? KIND_COLOR[n.kind] : "#5c6475");
-      const group = new THREE.Group();
-      const coreGeo = new THREE.SphereGeometry(r, 48, 32);
-      const coreMat = new THREE.ShaderMaterial({ vertexShader: FRESNEL_VS, fragmentShader: FRESNEL_FS, transparent: true, depthWrite: false,
-        uniforms: { uColor: { value: color }, uGlow: { value: n.tranche ? 1.6 : 0.6 }, uCore: { value: 0.16 }, uDim: { value: 1 } } });
-      const core = new THREE.Mesh(coreGeo, coreMat);
-      // Noyau dense : un point de lumière au centre de chaque nœud
-      const seedGeo = new THREE.SphereGeometry(r * 0.28, 24, 16);
-      const seedMat = new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(n.tranche ? 1.6 : 0.6) });
-      core.add(new THREE.Mesh(seedGeo, seedMat));
-      const shellGeo = new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(r * 1.32, 1));
-      const shellMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.22, depthWrite: false });
-      const shell = new THREE.LineSegments(shellGeo, shellMat);
-      const rings: THREE.Mesh[] = [];
-      const nRings = n.kind === "flux" ? 2 : 1;
-      for (let k = 0; k < nRings; k++) {
-        const rg = new THREE.TorusGeometry(r * (1.7 + k * 0.32), 0.022 + 0.01 * (1 - k), 8, 128);
-        const rm = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55 - k * 0.2, depthWrite: false, blending: THREE.AdditiveBlending });
-        const ring = new THREE.Mesh(rg, rm);
-        ring.rotation.set(1.15 + k * 0.5, 0.35 - k * 0.7, 0);
-        rings.push(ring);
-        group.add(ring);
-        this.disposables.push(rg, rm);
-      }
-      const hitGeo = new THREE.SphereGeometry(r * 1.8, 12, 8);
-      const hitMat = new THREE.MeshBasicMaterial({ visible: false });
-      const hit = new THREE.Mesh(hitGeo, hitMat);
-      hit.userData.key = n.key;
-      group.add(core, shell, hit);
-      this.world.add(group);
-      this.disposables.push(coreGeo, coreMat, seedGeo, seedMat, shellGeo, shellMat, hitGeo, hitMat);
-
-      const label = document.createElement("div");
-      label.className = `pa-node pa-node--${n.kind}${n.tranche ? "" : " is-null"}`;
-      const k = document.createElement("span"); k.className = "pa-node__k"; k.textContent = n.title;
-      const v = document.createElement("span"); v.className = "pa-node__v"; v.textContent = n.tranche ? n.tranche.label : "non publié";
-      const s = document.createElement("span"); s.className = "pa-node__s"; s.textContent = n.unit;
-      label.append(k, v, s);
-      this.opts.labelLayer.appendChild(label);
-      this.nodes.push({ n, group, core, coreMat, shell, shellMat, rings, hit, r, label, grow: 0, hot: 0, phase: i * 1.37 });
+    this.blocks.forEach((b) => {
+      gsap.to(b, { cur: 1, duration: 0.9, delay: 0.15 + b.order * 0.07, ease: "expo.out", onUpdate: () => { this.dirty = true; } });
     });
   }
 
-  private positions(vertical: boolean): Record<ModelKey, THREE.Vector3> {
-    if (vertical) return {
-      clients: new THREE.Vector3(-5, 28, 0), comptes: new THREE.Vector3(-5, 13, 2),
-      positions: new THREE.Vector3(-8, -3, 0), operations: new THREE.Vector3(8, -3, 0), funds_held: new THREE.Vector3(-3, -25, 1),
-    };
-    return {
-      clients: new THREE.Vector3(-34, 1, 0), comptes: new THREE.Vector3(-15, -1, 2),
-      positions: new THREE.Vector3(5, 8.5, 0), operations: new THREE.Vector3(5, -8.5, 1), funds_held: new THREE.Vector3(25, 0, 0),
-    };
-  }
-
-  private buildLinks() {
-    this.links.forEach((l) => { this.world.remove(l.tube, l.pts); l.tube.geometry.dispose(); l.tubeMat.dispose(); l.pts.geometry.dispose(); l.ptsMat.dispose(); });
-    this.links = [];
-    const P = this.positions(this.vertical);
-    const byKey = new Map(this.nodes.map((m) => [m.n.key, m]));
-    for (const [a, b, kind] of LINKS) {
-      const A = P[a], B = P[b];
-      const mid = A.clone().add(B).multiplyScalar(0.5);
-      mid.z += 5;
-      if (!this.vertical) mid.y += (B.y - A.y) * 0.25; else mid.x += (B.x - A.x) * 0.25;
-      const curve = new THREE.QuadraticBezierCurve3(A.clone(), mid, B.clone());
-      const color = new THREE.Color(KIND_COLOR[kind]);
-      const tubeGeo = new THREE.TubeGeometry(curve, 80, 0.05, 6, false);
-      const tubeMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending });
-      const tube = new THREE.Mesh(tubeGeo, tubeMat);
-      const target = byKey.get(b)?.n.tranche ?? byKey.get(a)?.n.tranche;
-      const count = 14 + 7 * (target?.rank ?? 1);
-      const offs = new Float32Array(count);
-      for (let i = 0; i < count; i++) offs[i] = Math.random();
-      const g = new THREE.BufferGeometry();
-      g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
-      const ptsMat = new THREE.PointsMaterial({ size: kind === "flux" ? 0.75 : 0.95, map: this.tex, color, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending });
-      const pts = new THREE.Points(g, ptsMat);
-      this.world.add(tube, pts);
-      // Le stock (positions) s'écoule lentement, le flux (transactions) circule vite
-      const speed = kind === "flux" ? 0.2 : kind === "stock" ? 0.045 : 0.09;
-      const l: MLink = { a, b, kind, curve, tube, tubeMat, pts, ptsMat, offs, speed, dim: 1 };
-      this.links.push(l);
-      this.placeParticles(l, this.reduced ? 0 : (performance.now() - this.t0) / 1000);
-    }
-    this.nodes.forEach((m) => m.group.position.copy(P[m.n.key]));
-  }
-
-  private placeParticles(l: MLink, t: number) {
-    const arr = (l.pts.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
-    const v = new THREE.Vector3();
-    const reveal = this.intro.v;
-    for (let i = 0; i < l.offs.length; i++) {
-      let u = (l.offs[i] + t * l.speed * (0.8 + (i % 5) * 0.08)) % 1;
-      if (u > reveal) u = u * reveal;
-      l.curve.getPoint(u, v);
-      const j = Math.sin(i * 12.9898) * 0.35;
-      arr[i * 3] = v.x; arr[i * 3 + 1] = v.y + j * 0.6; arr[i * 3 + 2] = v.z + j;
-    }
-    (l.pts.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
-  }
-
   protected layout(w: number, h: number) {
-    const vertical = w / h < 0.95;
-    if (vertical !== this.vertical || !this.links.length) { this.vertical = vertical; this.buildLinks(); }
     const fov = THREE.MathUtils.degToRad(this.camera.fov / 2);
-    const halfW = vertical ? 15 : 41, halfH = vertical ? 37 : 20;
-    const d = Math.max(halfW / (Math.tan(fov) * (w / h)), halfH / Math.tan(fov));
-    this.camera.position.set(0, vertical ? 0 : -2, d);
-    this.camera.lookAt(0, vertical ? 0.5 : -0.5, 0);
-    this.base.copy(this.camera.position);
+    const span = this.span * 0.62;
+    const d = Math.max(span / (Math.tan(fov) * (w / h)), (T_H * 0.72) / Math.tan(fov));
+    if (!this.placed) {
+      const az = 0.38, pol = 1.12;
+      this.camera.position.set(d * Math.sin(pol) * Math.sin(az), d * Math.cos(pol) + T_H * 0.25, d * Math.sin(pol) * Math.cos(az));
+      this.placed = true;
+    } else this.camera.position.setLength(d);
+    this.camera.lookAt(0, T_H * 0.42, 0);
+    this.controls?.target.set(0, T_H * 0.42, 0);
   }
-  private base = new THREE.Vector3();
+  private placed = false;
 
   protected pick() {
-    let key: ModelKey | null = null;
+    let tb: TBlock | null = null;
     if (this.inside) {
       this.ray.setFromCamera(this.ptr, this.camera);
-      const hit = this.ray.intersectObjects(this.nodes.map((m) => m.hit), false)[0];
-      key = (hit?.object.userData.key as ModelKey) ?? null;
+      const hit = this.ray.intersectObjects(this.blocks.map((b) => b.mesh), false)[0];
+      tb = (hit?.object.userData.tb as TBlock) ?? null;
     }
-    if (key !== this.hovered) {
-      this.hovered = key;
-      this.renderer.domElement.style.cursor = key ? "pointer" : "default";
+    if (tb !== this.hovered) {
+      this.hovered = tb;
+      this.renderer.domElement.style.cursor = tb ? "pointer" : "grab";
+      this.paint();
     }
-    const m = key ? this.nodes.find((x) => x.n.key === key) : null;
-    if (m) {
-      const s = this.toScreen(m.group.position);
-      this.opts.onHover(m.n, s.x, s.y);
+    if (tb) {
+      const s = this.toScreen(new THREE.Vector3(tb.mesh.position.x, tb.y0 + tb.h * tb.cur, tb.mesh.position.z));
+      this.opts.onHover(tb.b, s.x, s.y);
     } else this.opts.onHover(null, 0, 0);
   }
 
-  /** Mise en avant depuis l'extérieur (légende au clavier). */
-  focus(key: ModelKey | null) { this.hovered = key; this.dirty = true; }
+  /** Mise en avant d'une nature de compte depuis la légende. */
+  highlight(nature: string | null) { this.focusNature = nature; this.paint(); }
+
+  private paint() {
+    const hb = this.hovered, fn = this.focusNature;
+    for (const b of this.blocks) {
+      const on = hb ? b === hb || (b.b.nature === hb.b.nature) : !fn || b.b.nature === fn;
+      b.alpha = on ? 1 : 0.18;
+      b.mat.emissiveIntensity = b === hb ? 0.9 : on ? 0.32 : 0.08;
+      b.edgeMat.opacity = on ? 0.95 : 0.15;
+    }
+    this.dirty = true;
+  }
 
   protected frame(t: number): boolean {
-    const red = this.reduced;
-    // Parallaxe douce à la souris
-    const tx = this.inside ? this.ptr.x * 2.2 : 0, ty = this.inside ? this.ptr.y * 1.4 : 0;
-    this.par.x += (tx - this.par.x) * 0.05; this.par.y += (ty - this.par.y) * 0.05;
-    this.camera.position.set(this.base.x + this.par.x, this.base.y + this.par.y, this.base.z);
-    this.camera.lookAt(0, this.vertical ? 0.5 : -0.5, 0);
-    const conn = new Set<ModelKey>();
-    if (this.hovered) { conn.add(this.hovered); this.links.forEach((l) => { if (l.a === this.hovered || l.b === this.hovered) { conn.add(l.a); conn.add(l.b); } }); }
-    let moving = !red && (this.intro.v < 1 || this.inside || gsap.isTweening(this.intro));
-    const tmp = new THREE.Vector3();
-    for (const m of this.nodes) {
-      const on = !this.hovered || conn.has(m.n.key);
-      const hotT = this.hovered === m.n.key ? 1 : 0;
-      m.hot += (hotT - m.hot) * (red ? 1 : 0.12);
-      const breathe = red ? 1 : 1 + 0.035 * Math.sin(t * 1.25 + m.phase);
-      const s = Math.max(0.001, m.grow) * breathe * (1 + m.hot * 0.12);
-      m.group.scale.setScalar(s);
-      const dim = on ? 1 : 0.32;
-      m.coreMat.uniforms.uDim.value += (dim - m.coreMat.uniforms.uDim.value) * (red ? 1 : 0.15);
-      m.shellMat.opacity = (0.16 + m.hot * 0.3) * (on ? 1 : 0.4);
-      if (!red) {
-        m.shell.rotation.y = t * 0.12 + m.phase; m.shell.rotation.x = t * 0.05;
-        m.rings.forEach((r, k) => { r.rotation.z = t * (0.18 + k * 0.1) * (k % 2 ? -1 : 1) + m.phase; });
-      }
-      // Étiquette sous le nœud (au-dessus pour le stock en disposition horizontale : il surplombe le flux)
-      // Vertical (mobile) : à droite des nœuds de la colonne, sous le stock et le flux
-      const above = !this.vertical && m.n.key === "positions";
-      const right = this.vertical && (m.n.key === "clients" || m.n.key === "comptes" || m.n.key === "funds_held");
-      tmp.copy(m.group.position);
-      if (right) tmp.x += m.r * 1.55 * Math.max(0.6, s); else tmp.y += (above ? 1 : -1) * m.r * 1.85 * Math.max(0.6, s);
-      const p = this.toScreen(tmp);
-      m.label.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(${right ? "0, -50%" : above ? "-50%, -100%" : "-50%, 0"})`;
-      m.label.classList.toggle("is-right", right);
-      m.label.style.opacity = String(Math.min(1, m.grow * 1.4) * (on ? 1 : 0.35));
-      m.label.classList.toggle("is-on", this.hovered === m.n.key);
-      if (Math.abs(hotT - m.hot) > 0.01) moving = true;
+    let moving = false;
+    if (!this.reduced && this.idle !== -1 && performance.now() - this.idle > 2500 && !this.inside) {
+      const sph = new THREE.Spherical().setFromVector3(this.camera.position.clone().sub(this.controls.target));
+      sph.theta = Math.max(-0.9, Math.min(0.9, sph.theta + Math.sin(t * 0.18) * 0.0011));
+      this.camera.position.setFromSpherical(sph).add(this.controls.target);
+      moving = true;
     }
-    for (const l of this.links) {
-      const on = !this.hovered || (conn.has(l.a) && conn.has(l.b) && (l.a === this.hovered || l.b === this.hovered));
-      l.dim += ((on ? 1 : 0.15) - l.dim) * (red ? 1 : 0.15);
-      l.tubeMat.opacity = 0.2 * l.dim * this.intro.v;
-      l.ptsMat.opacity = 0.95 * l.dim * Math.min(1, this.intro.v * 1.5);
-      if (!red) this.placeParticles(l, t);
+    this.controls.update();
+    for (const b of this.blocks) {
+      // Le bloc descend d'au-dessus de la tour et se pose à sa place
+      const drop = (1 - b.cur) * 14;
+      const s = Math.max(0.001, b.h * Math.min(1, b.cur * 1.4));
+      b.mesh.position.y = b.y0 + drop;
+      b.mesh.scale.y = s;
+      b.edge.position.y = b.mesh.position.y;
+      b.edge.scale.y = s;
+      b.mat.opacity = b.alpha * Math.min(1, b.cur * 2);
     }
-    if (!red) { this.dust.rotation.z = t * 0.004; this.dust.position.x = Math.sin(t * 0.05) * 2; moving = true; }
-    return moving;
+    for (const a of this.labels) {
+      const p = this.toScreen(a.pos);
+      a.el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, 0)`;
+    }
+    return moving || this.blocks.some((b) => b.cur < 1);
   }
 
   dispose() {
-    gsap.killTweensOf(this.intro);
-    this.nodes.forEach((m) => { gsap.killTweensOf(m); m.label.remove(); });
-    this.links.forEach((l) => { l.tube.geometry.dispose(); l.tubeMat.dispose(); l.pts.geometry.dispose(); l.ptsMat.dispose(); });
+    this.blocks.forEach((b) => { gsap.killTweensOf(b); b.mat.dispose(); b.edgeMat.dispose(); });
+    this.labels.forEach((a) => a.el.remove());
+    this.controls.dispose();
     super.dispose();
     this.opts.labelLayer.innerHTML = "";
   }
 }
 
-// ===================================================================== 2. matrice desk × classe d'actifs
+// ===================================================================== 2. desk × classe d'actifs
 export type MatrixCell = { desk: string; classe_actif: string; pct: number };
 export type MatrixOptions = {
   reduced: boolean;

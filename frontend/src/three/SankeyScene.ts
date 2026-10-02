@@ -12,7 +12,7 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import gsap from "gsap";
 import { Quality } from "./quality";
 
-export type SkNode = { id: string; label: string; col: number; value: number; n_funds: number; n_shares: number; family?: string; iso?: string; other?: boolean };
+export type SkNode = { id: string; label: string; col: number; value: number; n_funds: number; n_shares: number; family?: string; iso?: string; other?: boolean; kind?: string };
 export type SkLink = { source: number; target: number; value: number; family: string; n_funds: number; n_shares: number };
 export type SkData = { nodes: SkNode[]; links: SkLink[] };
 export type SkHover = { kind: "node"; node: SkNode } | { kind: "link"; link: SkLink; from: SkNode; to: SkNode };
@@ -147,7 +147,8 @@ export class SankeyScene {
 
     // Ordre dans chaque colonne, puis échelle commune (les flux se conservent d'une colonne à l'autre)
     const cols = [0, 1, 2].map((c) => nodes.map((n, i) => ({ n, i })).filter((x) => x.n.col === c)
-      .sort((a, b) => (a.n.family && b.n.family ? famRank(a.n) - famRank(b.n) : (a.n.other ? 1 : 0) - (b.n.other ? 1 : 0) || b.n.value - a.n.value)));
+      // Colonne des clients : ordre fourni par l'API (clients nommés d'abord, puis pools) ; ailleurs, par importance
+      .sort((a, b) => (c === 0 ? a.i - b.i : a.n.family && b.n.family ? famRank(a.n) - famRank(b.n) : (a.n.other ? 1 : 0) - (b.n.other ? 1 : 0) || b.n.value - a.n.value)));
     const pad = (c: number) => (c === 2 ? 1.25 : 2.2);
     const k = Math.min(...cols.map((col, c) => (HT - pad(c) * (col.length - 1)) / Math.max(1, col.reduce((s, x) => s + x.n.value, 0))));
     const pos: { top: number; h: number }[] = [];
@@ -208,7 +209,8 @@ export class SankeyScene {
       edge.position.copy(mesh.position);
       this.world.add(mesh, edge);
       const label = document.createElement("div");
-      label.className = `sk__lab sk__lab--c${n.col}${n.other ? " is-other" : ""}`;
+      // Nœud fin (petit client nommé, petit pays) : le nom seul, le détail reste dans l'infobulle
+      label.className = `sk__lab sk__lab--c${n.col}${n.other ? " is-other" : ""}${h < 3.2 ? " is-thin" : ""}`;
       const f = this.opts.formatLabel(n);
       label.innerHTML = `<span class="sk__lab-t"></span><span class="sk__lab-s"></span>`;
       (label.firstChild as HTMLElement).textContent = f.title;

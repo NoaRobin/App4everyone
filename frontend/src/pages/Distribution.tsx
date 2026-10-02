@@ -140,23 +140,27 @@ function FlowSection({ d, withRmm }: { d: Resp; withRmm: (u: string) => string }
   useEffect(() => { scene.current?.setData(d.sankey); }, [d.sankey]);
   useEffect(() => { scene.current?.focus(focus); }, [focus]);
 
-  const clients = d.sankey.nodes.filter((n) => n.col === 0).sort((a, b) => b.value - a.value);
+  // Clients nommés d'abord (parts dédiées), puis pools de clientèle : l'ordre vient de l'API
+  const clients = d.sankey.nodes.filter((n) => n.col === 0);
+  const named = clients.filter((n) => n.kind === "nommé"), pools = clients.filter((n) => n.kind !== "nommé");
   const fams = d.sankey.nodes.filter((n) => n.family).sort((a, b) => FAMILY_ORDER.indexOf(a.family as FamilyKey) - FAMILY_ORDER.indexOf(b.family as FamilyKey));
   return (
     <section className="flow reveal" aria-labelledby="h-flow">
       <div className="flow__head page">
         <Head id="flow" eyebrow="Le parcours d'une autorisation" title="Des clients aux pays, puis aux familles"
-          lede={<>D'abord à qui s'adresse la part (sa clientèle), puis les pays où elle est autorisée, enfin la famille de gestion du fonds. Épaisseur d'un flux&nbsp;: nombre d'enregistrements actifs (une part autorisée dans un pays) ; couleur&nbsp;: la famille de gestion. Survolez pour isoler un parcours, cliquez un pays pour l'ouvrir.</>}
+          lede={<>D'abord à qui s'adresse la part — le client nommé pour une part dédiée, sinon son pool de clientèle —, puis les pays où elle est autorisée, enfin la famille de gestion du fonds. Épaisseur d'un flux&nbsp;: nombre d'enregistrements actifs (une part autorisée dans un pays) ; couleur&nbsp;: la famille de gestion. Survolez pour isoler un parcours, cliquez un pays pour l'ouvrir.</>}
           right={gl ? <button type="button" className="btn btn--ghost" onClick={() => setTable((t) => !t)} aria-pressed={table}>{table ? <><I.Cube size={16} /> Vue 3D</> : <><I.List size={16} /> Vue tableau</>}</button> : undefined} />
-        <div className="flow__legend" role="group" aria-label="Clientèles : survoler pour isoler leur parcours">
-          {clients.map((n) => (
+        <div className="flow__legend" role="group" aria-label="Clients nommés puis pools de clientèle : survoler pour isoler leur parcours">
+          {[...(named.length ? [{ t: "Clients nommés", l: named }] : []), { t: named.length ? "Pools de clientèle" : "Clientèles", l: pools }].map((grp) => [
+            <span key={grp.t} className="flow__grp eyebrow">{grp.t}</span>,
+            ...grp.l.map((n) => (
             <button key={n.id} type="button" className="flow__fam" aria-pressed={focus === n.id}
               onMouseEnter={() => setFocus(n.id)} onMouseLeave={() => setFocus(null)} onFocus={() => setFocus(n.id)} onBlur={() => setFocus(null)}>
-              <span className="flow__fam-bar" style={{ background: "var(--brand-stone)" }} />
+              <span className="flow__fam-bar" style={{ background: n.kind === "nommé" ? "var(--gold)" : "var(--brand-stone)" }} />
               <span className="flow__fam-l">{n.label}</span>
               <span className="flow__fam-v num">{num(n.value)}</span>
             </button>
-          ))}
+          ))])}
         </div>
         <div className="flow__legend flow__legend--fam" role="group" aria-label="Familles de gestion : survoler pour isoler leur parcours">
           {fams.map((n) => (

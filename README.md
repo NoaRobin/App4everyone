@@ -29,8 +29,8 @@ Le site a **deux espaces**, commutés par le sélecteur de l'en-tête :
 | **Encours** | En deux parties : **I. la ville des encours** (ville 3D, un immeuble par fonds, rejouable mois par mois, familles en surbrillance) ; **II. l'analyse** (l'équation de l'année, répartition par famille, gamme, classe d'actifs, expertise, gérant, SFDR, SRI, domicile, devise, type de part…). |
 | **Sélection** | Toute combinaison de critères, avec agrégat en tête et détail en dessous, exportable. |
 | **Portefeuilles** | Ce que nous détenons (anneaux par classe d'actifs et par devise, ruban et classement des premières positions, lignes les plus partagées), et quels fonds détiennent une ligne donnée. |
-| **Distribution** | Où nos fonds sont commercialisés : le parcours d'une autorisation en Sankey 3D **clientèle → pays → famille de gestion**, un globe 3D interactif (rotation, survol, clic pour centrer un pays, filtre par clientèle, arcs depuis le pays de domiciliation), frise de l'ouverture des pays année après année, tableau des départs (drapeaux, palettes), teneurs de compte du passif, plateformes ; par pays, les fonds et parts autorisés. Un interrupteur retire les fonds **Rothschild Martin Maurel (RMM)** de toute la rubrique (chiffres, visuels, pays), et reste appliqué d'une page à l'autre (`?rmm=exclure`). |
-| **Passif** | Qui détient nos fonds : carte 3D du modèle (clients → comptes → positions / transactions → fonds), teneurs de compte et classifications, la photo de l'encours (matrice 3D desk × classe d'actifs, par type de client, par fonds), soixante jours d'opérations (souscriptions, rachats, transferts, après cut-off, par desk), et la lecture des tables sources. Uniquement des parts et des tranches, jamais un montant ni un flux net. |
+| **Distribution** | Où nos fonds sont commercialisés : le parcours d'une autorisation en Sankey 3D **clientèle → pays → famille de gestion**, les clients nommés (parts dédiées) d'abord, puis les pools de clientèle, un globe 3D interactif (rotation, survol, clic pour centrer un pays, filtre par clientèle, arcs depuis le pays de domiciliation), frise de l'ouverture des pays année après année, tableau des départs (drapeaux, palettes), teneurs de compte du passif, plateformes ; par pays, les fonds et parts autorisés. Un interrupteur retire les fonds **Rothschild Martin Maurel (RMM)** de toute la rubrique (chiffres, visuels, pays), et reste appliqué d'une page à l'autre (`?rmm=exclure`). |
+| **Passif** | Qui détient nos fonds, en huit questions dont le titre donne la réponse chiffrée : qui (tours 3D des teneurs de compte empilées par type de compte), où (pays des porteurs, drapeaux), concentration (part de l'encours des 1 %, 5 %, 10 %… premiers comptes), fidélité (ancienneté du premier achat et de la dernière opération), ce qui est détenu (matrice 3D desk × classe d'actifs, fonds les plus détenus), mouvements sur 60 jours ouvrés (entrées au-dessus de l'axe, sorties au-dessous, par desk, après cut-off), les comptes (ouverts, dissous, parents), et la lecture des tables sources (correspondance exacte, types, nulles, dates valides, rattachements). Uniquement des parts et des tranches, jamais un nom, un montant ni un flux net. |
 | **Comparateur** | Jusqu'à six fonds sur une même base 100 en 3D (vue de face en 2D), tableau d'indicateurs (performances, volatilité, perte maximale, ratios, mois en hausse, encours, collecte, revenus, frais, SRI), podium 3D par indicateur et carte risque / rendement ; sélection dans l'adresse. |
 
 La recherche universelle est accessible partout (`Ctrl K` / `⌘ K` ou `/`). Elle comprend les combinaisons
@@ -154,14 +154,34 @@ exprimée en fraction (0,015) est détectée et convertie. `GET /api/revenue`.
 
 ### Passif (tables `compte`, `position`, `transaction`)
 
-Tables du Lakehouse aux colonnes génériques `_c0…_cN` (texte). La correspondance de `compte` est connue ; pour `position` et
-`transaction`, le rôle de chaque colonne est reconnu automatiquement (vocabulaires métier, formes ISIN, dates, nombres,
-recouvrement avec les identifiants de comptes) et affiché dans la page, avec un niveau de confiance ; il s'impose au besoin
-par `APP_PASSIF_MAP_POSITION` / `APP_PASSIF_MAP_TRANSACTION` (voir `.env.example`). Tout est agrégé dans Fabric
-(`SELECT … GROUP BY`, garde-fou lecture seule) : aucune ligne de compte ni d'opération ne quitte le Lakehouse. Groupes de
-moins de 5 jamais montrés, effectifs en tranches, positions en part de l'encours, transactions en part du volume absolu du
-jour (souscriptions et rachats côte à côte, jamais soustraits). Agrégats recalculés toutes les 6 heures
-(`APP_PASSIF_TTL_HOURS`), les tables étant mises à jour chaque jour. Sans Fabric : données entièrement synthétiques.
+Correspondance **exacte** des colonnes, sans devinette : si une table porte ses vrais noms (« Montant EUR »…), ils sont
+utilisés ; si elle porte des noms génériques, la position fixe s'applique — Compte : `_c0` TeneurCompte, `_c1` Id Compte,
+`_c3` Id CompteParent, `_c5` Id Client, `_c7` Classification, `_c8` Devise, `_c9` DateCreation, `_c10` DateDissolution ;
+Position : `_c2` Teneur de compte, `_c3` Compte Centaure, `_c10` ISIN, `_c11` Classe d'Actif, `_c12` Desk, `_c13` Date,
+`_c14` Quantite, `_c15` Cours, `_c16` Montant Devise, `_c17` Devise, `_c18` **Montant EUR**, `_c19` Dernier trade,
+`_c20` Premier trade ; Transaction : `_c13` Date centralisation, `_c14` Date VL, `_c15` Date Valeur, `_c16` Sens, `_c17` Statut,
+`_c21` Montant Devise, `_c22` **Montant EUR**, `_c25` Reference, `_c26` Date de création (schéma complet dans
+`backend/rco/domain/passif.py`). `APP_PASSIF_MAP_*` peut ajuster une colonne (voir `.env.example`).
+
+- **Valeurs manquantes** : NULL, vide, espaces, `nan`, `none`, `null`, `N/A` sont nuls ; jamais affichés (« Non renseigné »).
+- **Dates** au format américain des exports (`9/30/2026 12:00:00 AM`), à défaut ISO ; l'heure est ignorée. La photo de
+  l'encours est à la dernière date valide de Position ; la période des transactions couvre les 60 derniers jours ouvrés
+  valides de Date centralisation. Sans date valide, la page affiche le format rejeté (forme `9/99/9999`, jamais la valeur).
+- **Transactions** : pondération Montant EUR ; seuls les statuts autorisés sont retenus (`APP_PASSIF_STATUTS_AUTORISES`,
+  par défaut « Valorisé » et « Clôturé / après cut-off ») ; une ligne n'est écartée comme doublon que si référence, compte,
+  ISIN, sens, statut, date et montant sont identiques ; « après cut-off » n'est calculé que si le statut est renseigné.
+- **Comptes** : dissous seulement si DateDissolution est une date valide ; « avec compte parent » = Id CompteParent non vide.
+  L'enregistrement vide et une éventuelle ligne d'en-tête relue comme donnée sont écartés.
+- **Rattachements** : Compte Centaure ↔ Compte.Id Compte, ISIN ↔ `PI_OUT_Share.ISIN_Code` (après normalisation) ; jamais
+  par nom de fonds. Le passif (positions détenues par les comptes) n'est jamais mélangé aux inventaires des portefeuilles.
+
+Tout est agrégé dans Fabric (`SELECT … GROUP BY`, garde-fou lecture seule) : aucune ligne de compte ni d'opération ne
+quitte le Lakehouse, les colonnes de noms (client, compte, commercial, commentaire) ne sont jamais lues. Groupes de moins de 5
+jamais montrés, effectifs en tranches, positions en part de l'encours, transactions en part du volume absolu (souscriptions et
+rachats côte à côte, jamais soustraits). La section « Lecture des tables sources » donne la correspondance appliquée, le
+type détecté, les valeurs nulles, les dates valides et invalides et les taux de rattachement ; `python run.py --fabric-check`
+vérifie les 11 / 21 / 28 colonnes, la correspondance, la lecture des dates et les lignes exploitables. Agrégats recalculés
+toutes les 6 heures (`APP_PASSIF_TTL_HOURS`), les tables étant mises à jour chaque jour. Sans Fabric : données synthétiques.
 `GET /api/passif`, `GET /api/passif/fonds/{id}`.
 
 ### Volumétrie (des dizaines de millions de cellules)

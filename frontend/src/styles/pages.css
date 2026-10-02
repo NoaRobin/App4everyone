@@ -52,6 +52,8 @@
 .flow__legend { display: flex; flex-wrap: wrap; gap: 0; border-top: 1px solid var(--line); margin-top: 8px; }
 .flow__fam { flex: 1 1 200px; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; gap: 6px 12px; padding: 16px 18px 14px 0; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--ink); text-align: left; cursor: pointer; transition: border-color .3s, background .3s; }
 .flow__fam + .flow__fam { padding-left: 18px; border-left: 1px solid var(--line); }
+.flow__grp { flex: 0 0 100%; color: var(--gold-ink); margin: 14px 0 0; }
+.flow__grp:first-child { margin-top: 0; }
 .flow__fam:hover, .flow__fam:focus-visible, .flow__fam[aria-pressed="true"] { background: color-mix(in srgb, var(--paper-2) 60%, transparent); }
 .flow__fam-bar { grid-column: 1 / -1; height: 3px; transform-origin: left; transition: transform .5s var(--ease); transform: scaleX(.35); }
 .flow__fam:hover .flow__fam-bar, .flow__fam:focus-visible .flow__fam-bar, .flow__fam[aria-pressed="true"] .flow__fam-bar { transform: scaleX(1); }
@@ -70,6 +72,8 @@
 .sk__lab--c1 .sk__lab-t { font-size: 14px; }
 .sk__lab--c1 .sk__lab-s { font-size: 12px; }
 .sk__lab-s { font-size: 12px; letter-spacing: .08em; color: var(--on-night-2); font-variant-numeric: tabular-nums; }
+.sk__lab.is-thin .sk__lab-s { display: none; }
+.sk__lab.is-thin .sk__lab-t { font-size: 14px; }
 .sk__lab.is-other .sk__lab-t { font-style: italic; color: var(--on-night-2); }
 .sk__head { position: absolute; left: 0; top: 0; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--gold-ink); white-space: nowrap; padding-bottom: 8px; border-bottom: 1px solid rgba(204, 159, 83, .4); }
 .flow__tip { z-index: 5; }
@@ -188,6 +192,8 @@
 .gl__half { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
 .gl__half.is-flow { background: var(--gold); }
 .gl__half.is-mkt { background: #6f95db; }
+/* Négatif : même couleur (l'identité de la série), hachurée, à gauche de l'axe */
+.gl__half.is-neg { background-image: repeating-linear-gradient(135deg, rgba(0, 0, 0, .55) 0 2px, transparent 2px 4px); }
 .gl__fmv { color: var(--ink-3); margin-top: 2px; }
 .gl__go { color: var(--ink-3); transition: transform .35s var(--ease), color .2s; }
 .gl__row:hover .gl__go { transform: translateX(4px); color: var(--gold); }

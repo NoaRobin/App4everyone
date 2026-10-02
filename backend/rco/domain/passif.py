@@ -1,18 +1,21 @@
 """Passif : comptes, positions (stock à une date) et transactions (flux) de la distribution des fonds.
 
-Règles (reprises du cahier des charges des exports anonymisés, appliquées aux données réelles) :
-- tout est agrégé côté source (GROUP BY) : aucune ligne de compte, de client ou d'opération ne quitte Fabric ;
+Règles de confidentialité (appliquées aux données réelles comme aux données fictives) :
+- tout est agrégé côté source (GROUP BY) : aucune ligne de compte, de client ou d'opération ne quitte Fabric ; les
+  colonnes de noms (client, compte, commercial, commentaire) ne sont jamais lues, seulement comptées (taux de remplissage) ;
 - un groupe de moins de 5 positions, opérations ou comptes n'est jamais montré (il reste compté dans les totaux) ;
-- aucun montant absolu : les positions sont exprimées en part de l'encours total, les transactions en part du
-  volume absolu de la journée ; les effectifs en tranches (« 5 à 19 », « 20 à 99 »…), jamais en nombres exacts ;
-- les parts de volume ne sont pas des flux nets : souscriptions et rachats sont montrés côte à côte, jamais soustraits ;
-- aucune jointure ligne à ligne entre les exports agrégés ; la seule jointure (position → compte, pour le type de
-  client) est faite dans la source, sur la clé reconnue, et n'en sort qu'agrégée.
+- aucun montant absolu : l'encours est exprimé en part du total (pondération Montant EUR), les transactions en part du
+  volume absolu ; les effectifs en tranches (« 5 à 19 », « 20 à 99 »…), jamais en nombres exacts ;
+- souscriptions et rachats sont montrés côte à côte, jamais soustraits (aucun flux net).
+Les compteurs techniques de la lecture des tables (lignes, valeurs nulles, dates valides) sont des nombres de lignes,
+jamais des montants : ils servent à vérifier la qualité de la source.
 
-Les tables sources n'ont que des colonnes génériques (_c0 … _cN, texte). Le rôle de chaque colonne est reconnu
-automatiquement (vocabulaires métier, formes ISIN, dates, nombres, recouvrement avec les identifiants de comptes),
-sans jamais afficher une valeur ; il peut être imposé par APP_PASSIF_MAP_POSITION / APP_PASSIF_MAP_TRANSACTION
-(« date=_c0,montant=_c10,… »).
+Correspondance des colonnes : exacte, sans aucune devinette. Si la table porte ses vrais noms (« Montant EUR »…), ils
+sont utilisés ; si elle porte des noms génériques (_c0 … _cN), la position fixe ci-dessous s'applique. Les variables
+APP_PASSIF_MAP_COMPTE / _POSITION / _TRANSACTION (« montant_eur=_c18,… ») peuvent l'ajuster, colonne par colonne.
+
+Valeurs manquantes : NULL, chaîne vide, espaces, « nan », « NaN », « none », « null », « N/A » sont nulles.
+Dates : format américain des exports (« 9/30/2026 12:00:00 AM »), à défaut ISO (« 2026-09-30 ») ; l'heure est ignorée.
 """
 from __future__ import annotations
 
@@ -21,6 +24,7 @@ import os
 import re
 import threading
 import time
+import unicodedata
 from datetime import date, datetime
 from typing import Any, Callable
 
@@ -32,37 +36,69 @@ from . import labels as L
 log = logging.getLogger(__name__)
 
 MIN_GROUP = 5
-COMPTE_MAP = {"teneur": "_c0", "compte": "_c1", "parent": "_c3", "client": "_c5", "classification": "_c7", "devise": "_c8",
-              "creation": "_c9", "dissolution": "_c10"}
 TABLES = ("compte", "position", "transaction")
+NULL_TOKENS = ("", "nan", "none", "null", "n/a", "nat", "#n/a")
+WINDOW_DAYS = 60
 
-# ------------------------------------------------------------------ vocabulaires (valeurs normalisées, sans accents)
-_V = {
-    "sens": {"souscription", "rachat", "transfert entrant", "transfert sortant", "subscription", "redemption", "transfer in",
-             "transfer out", "sous", "rach", "s", "r", "te", "ts", "sub", "red", "souscriptions", "rachats", "switch",
-             "conversion entrante", "conversion sortante"},
-    "statut": {"valorise", "cloture / apres cut-off", "cloture", "apres cut-off", "annule", "en attente", "valued", "pending",
-               "cancelled", "canceled", "rejete", "confirme", "execute", "regle", "cut-off", "a valoriser", "valorisee"},
-    "desk": {"valor", "conviction", "convictions", "thematic", "thematique", "rmm", "opal", "4change", "4 change"},
-    "classe_actif": {"diversified", "equities", "fixed income", "money market", "alternative", "non_renseigne", "actions",
-                     "obligations", "monetaire", "diversifie", "alternatif", "convertibles", "multi-asset", "balanced"},
-    "devise": {"eur", "usd", "chf", "gbp", "jpy", "sek", "nok", "dkk", "sgd", "hkd", "cad", "aud", "cny"},
+# ------------------------------------------------------------------ schémas exacts (clé, vrai nom, nature)
+# Natures : texte · id (identifiant, comparé après normalisation) · isin · date · nombre · confidentiel (jamais lu)
+SCHEMA: dict[str, list[tuple[str, str, str]]] = {
+    "compte": [
+        ("teneur", "TeneurCompte", "texte"), ("id_compte", "Id Compte", "id"), ("nom_compte", "Nom Compte", "confidentiel"),
+        ("id_parent", "Id CompteParent", "id"), ("nom_parent", "Nom CompteParent", "confidentiel"), ("id_client", "Id Client", "id"),
+        ("nom_client", "Nom Client", "confidentiel"), ("classification", "Classification", "texte"), ("devise", "Devise", "texte"),
+        ("date_creation", "DateCreation", "date"), ("date_dissolution", "DateDissolution", "date"),
+    ],
+    "position": [
+        ("nom_client", "Nom client", "confidentiel"), ("pays", "Pays", "texte"), ("teneur", "Teneur de compte", "texte"),
+        ("compte", "Compte Centaure", "id"), ("compte_nom", "Compte", "confidentiel"), ("classification", "Classification compte", "texte"),
+        ("commercial", "Commercial", "confidentiel"), ("sdg", "SdG", "texte"), ("type_fonds", "Type fonds", "texte"),
+        ("fonds", "Fonds", "texte"), ("isin", "ISIN", "isin"), ("classe_actif", "Classe d'Actif", "texte"), ("desk", "Desk", "texte"),
+        ("date", "Date", "date"), ("quantite", "Quantite", "nombre"), ("cours", "Cours", "nombre"),
+        ("montant_devise", "Montant Devise", "nombre"), ("devise", "Devise", "texte"), ("montant_eur", "Montant EUR", "nombre"),
+        ("dernier_trade", "Dernier trade", "date"), ("premier_trade", "Premier trade", "date"),
+    ],
+    "transaction": [
+        ("nom_client", "Nom client", "confidentiel"), ("pays", "Pays", "texte"), ("teneur", "Teneur de compte", "texte"),
+        ("compte", "Compte Centaure", "id"), ("compte_nom", "Compte", "confidentiel"), ("classification", "Classification compte", "texte"),
+        ("commercial", "Commercial", "confidentiel"), ("sdg", "SdG", "texte"), ("type_fonds", "Type fonds", "texte"),
+        ("fonds", "Fonds", "texte"), ("isin", "ISIN", "isin"), ("classe_actif", "Classe d'Actif", "texte"), ("desk", "Desk", "texte"),
+        ("date_centralisation", "Date centralisation", "date"), ("date_vl", "Date VL", "date"), ("date_valeur", "Date Valeur", "date"),
+        ("sens", "Sens", "texte"), ("statut", "Statut", "texte"), ("devise", "Devise", "texte"), ("quantite", "Quantite", "nombre"),
+        ("cours", "Cours", "nombre"), ("montant_devise", "Montant Devise", "nombre"), ("montant_eur", "Montant EUR", "nombre"),
+        ("commentaire", "Commentaire", "confidentiel"), ("centralisateur", "Centralisateur", "texte"), ("reference", "Reference", "id"),
+        ("date_creation", "Date de création", "date"), ("compte_indirect", "Compte indirect", "id"),
+    ],
 }
-CATEGORICAL = ("sens", "statut", "devise", "desk", "classe_actif")
-FIELDS = {"position": ("date", "compte", "isin", "classe_actif", "desk", "devise", "montant"),
-          "transaction": ("date", "compte", "isin", "classe_actif", "desk", "sens", "statut", "devise", "montant")}
-_ISIN = re.compile(r"^[A-Z]{2}[A-Z0-9]{9}\d$")
-_CUTOFF = re.compile(r"cut.?off|cloture|clôturé", re.I)
-SENS_LABEL = {"souscription": "Souscription", "rachat": "Rachat", "transfert entrant": "Transfert entrant", "transfert sortant": "Transfert sortant"}
+N_COLS = {t: len(v) for t, v in SCHEMA.items()}            # 11, 21, 28
+KIND = {t: {k: kind for k, _, kind in v} for t, v in SCHEMA.items()}
+REAL = {t: {k: n for k, n, _ in v} for t, v in SCHEMA.items()}
+# Colonnes indispensables : sans elles, la vue correspondante n'est pas calculée
+REQUIRED = {"compte": ("id_compte",), "position": ("date", "montant_eur"), "transaction": ("date_centralisation", "sens", "statut", "montant_eur")}
+# Lignes d'en-tête relues comme données (CSV chargé sans en-tête) : reconnues par la valeur de ces colonnes
+SENTINELS = {"compte": ("id_compte",), "position": ("compte", "isin"), "transaction": ("compte", "isin")}
+
+# Statuts d'opération retenus (comparaison sans accents ni casse) : configurable par APP_PASSIF_STATUTS_AUTORISES
+DEFAULT_STATUTS = ("Valorisé", "Clôturé / après cut-off")
+_CUTOFF = re.compile(r"cut.?off", re.I)
+SENS_LABEL = {"souscription": "Souscription", "rachat": "Rachat", "transfert entrant": "Transfert entrant", "transfert sortant": "Transfert sortant",
+              "subscription": "Souscription", "redemption": "Rachat", "transfer in": "Transfert entrant", "transfer out": "Transfert sortant"}
+NOT_SET = "Non renseigné"
 
 
-def _n(v: Any) -> str:
-    return L.norm(v) if v is not None else ""
+def fold(v: Any) -> str:
+    """Comparaison des libellés : minuscules, sans accents, espaces réduits."""
+    s = unicodedata.normalize("NFKD", str(v)).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _key(name: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", fold(name))
 
 
 def tranche(n: float | int | None) -> dict | None:
     """Effectif en tranche (jamais le nombre exact) ; None sous le seuil de 5 (groupe masqué)."""
-    if n is None or n < MIN_GROUP:
+    if n is None or (isinstance(n, float) and np.isnan(n)) or n < MIN_GROUP:
         return None
     for lo, hi, lab, k in ((5, 19, "5 à 19", 1), (20, 99, "20 à 99", 2), (100, 499, "100 à 499", 3), (500, 999, "500 à 999", 4),
                            (1000, 9999, "1 000 et plus", 5), (10000, 99999, "10 000 et plus", 6), (100000, 999999, "100 000 et plus", 7)):
@@ -71,77 +107,298 @@ def tranche(n: float | int | None) -> dict | None:
     return {"label": "1 million et plus", "rank": 8}
 
 
-def parse_dates(s: pd.Series) -> pd.Series:
-    """Dates texte (ISO, jj/mm/aaaa, aaaammjj, avec ou sans heure) → Timestamp ; illisible → NaT."""
-    s = s.astype("string").str.strip()
-    out = pd.to_datetime(s, format="ISO8601", errors="coerce")
-    for fmt in ("%d/%m/%Y", "%d/%m/%Y %H:%M:%S", "%Y%m%d", "%d-%m-%Y", "%d.%m.%Y"):
-        miss = out.isna() & s.notna()
-        if not miss.any():
-            break
-        out = out.fillna(pd.to_datetime(s.where(miss), format=fmt, errors="coerce"))
-    return out
+# ------------------------------------------------------------------ normalisation (même règle en Python et en SQL)
+def norm_text(s: pd.Series) -> pd.Series:
+    """Texte nettoyé ; les valeurs manquantes (NULL, vide, espaces, nan, none, null, N/A) deviennent <NA>."""
+    t = s.astype("string").str.replace(" ", " ", regex=False).str.strip()
+    return t.mask(t.str.lower().isin(NULL_TOKENS))
 
 
-def parse_amounts(s: pd.Series) -> pd.Series:
-    t = s.astype("string").str.replace(r"[\s  ]", "", regex=True).str.replace(",", ".", regex=False)
+def norm_id(s: pd.Series) -> pd.Series:
+    return norm_text(s).str.replace(" ", "", regex=False).str.upper()
+
+
+def to_num(s: pd.Series) -> pd.Series:
+    """Nombre texte : « 1234.5 », « 1 234,5 », « 1,234.5 » ; illisible → NaN."""
+    t = norm_text(s).str.replace(" ", "", regex=False)
+    dot = t.str.contains(".", regex=False).fillna(False).astype(bool)
+    t = t.where(~dot, t.str.replace(",", "", regex=False)).where(dot, t.str.replace(",", ".", regex=False))
     return pd.to_numeric(t, errors="coerce")
 
 
-# ------------------------------------------------------------------ lecteurs (pandas pour le fictif, SQL pour Fabric)
+def to_date(s: pd.Series) -> pd.Series:
+    """Dates des exports : américain m/j/aaaa (« 9/30/2026 12:00:00 AM »), m-j-aaaa, puis ISO aaaa-mm-jj ; heure ignorée."""
+    t = norm_text(s)
+    first = t.str.split(" ", n=1).str[0]
+    out = pd.to_datetime(first, format="%m/%d/%Y", errors="coerce")
+    for src, fmt in ((first, "%m-%d-%Y"), (t.str[:10], "%Y-%m-%d")):
+        miss = out.isna() & t.notna()
+        if not miss.any():
+            break
+        out = out.fillna(pd.to_datetime(src.where(miss), format=fmt, errors="coerce"))
+    return out
+
+
+def shape(v: Any) -> str:
+    """Forme d'une valeur, sans la valeur : chiffres → 9, lettres → a (« 9/99/9999 99:99:99 aa »)."""
+    return re.sub(r"[a-z]", "a", re.sub(r"\d", "9", str(v).lower()))[:40]
+
+
+def _sql_text(x: str) -> str:
+    v = f"LTRIM(RTRIM(CAST({x} AS VARCHAR(400))))"
+    toks = ", ".join(f"'{t}'" for t in NULL_TOKENS)
+    return f"(CASE WHEN LOWER({v}) IN ({toks}) THEN NULL ELSE {v} END)"
+
+
+def _sql_date(x: str) -> str:
+    t = _sql_text(x)
+    first = f"LEFT({t}, CHARINDEX(' ', {t} + ' ') - 1)"
+    return f"COALESCE(TRY_CONVERT(date, {first}, 101), TRY_CONVERT(date, {first}, 110), TRY_CONVERT(date, LEFT({t}, 10), 23))"
+
+
+def _sql_num(x: str) -> str:
+    t = f"REPLACE({_sql_text(x)}, ' ', '')"
+    return f"TRY_CAST(CASE WHEN CHARINDEX('.', {t}) > 0 THEN REPLACE({t}, ',', '') ELSE REPLACE({t}, ',', '.') END AS FLOAT)"
+
+
+def _sql_id(x: str) -> str:
+    return f"UPPER(REPLACE({_sql_text(x)}, ' ', ''))"
+
+
+# ------------------------------------------------------------------ correspondance exacte des colonnes
+def _overrides(table: str) -> dict[str, str]:
+    raw = os.environ.get(f"APP_PASSIF_MAP_{table.upper()}", "")
+    out = {}
+    for part in raw.split(","):
+        if "=" in part:
+            k, v = (x.strip() for x in part.split("=", 1))
+            if k and v:
+                out[k] = v
+    return out
+
+
+def resolve_mapping(columns: list[str], table: str) -> dict:
+    """Colonne effectivement lue pour chaque champ : vrais noms s'ils sont là, sinon _c0…_cN dans l'ordre exact ;
+    ajustements APP_PASSIF_MAP_<TABLE> appliqués s'ils désignent une colonne existante. Aucune devinette."""
+    present = {_key(c): c for c in columns}
+    generic = {c for c in columns if re.fullmatch(r"_c\d{1,3}", c)}
+    spec = SCHEMA[table]
+    real_hits = sum(1 for _, n, _ in spec if _key(n) in present)
+    mode = "noms" if real_hits == len(spec) else "_cN" if all(f"_c{i}" in generic for i in range(len(spec))) else \
+        "noms" if real_hits >= len(spec) / 2 else "_cN"
+    fields: dict[str, dict] = {}
+    for i, (k, name, kind) in enumerate(spec):
+        col = present.get(_key(name)) if mode == "noms" else (f"_c{i}" if f"_c{i}" in generic else None)
+        if col is None:   # disposition mixte : l'autre convention, si elle existe
+            col = present.get(_key(name)) or (f"_c{i}" if f"_c{i}" in generic else None)
+        fields[k] = {"col": col, "name": name, "kind": kind, "how": "schéma exact" if col else "absente"}
+    ignored = []
+    for k, c in _overrides(table).items():
+        if k not in fields:
+            ignored.append({"field": k, "col": c, "why": "champ inconnu"})
+        elif c in columns:
+            if fields[k]["col"] != c:
+                fields[k].update(col=c, how="configuré")
+            else:
+                fields[k]["how"] = "schéma exact (confirmé par la configuration)"
+        else:
+            ignored.append({"field": k, "col": c, "why": "colonne absente de la table"})
+    used = {f["col"] for f in fields.values() if f["col"]}
+    return {"mode": mode, "fields": fields, "missing": [k for k, f in fields.items() if not f["col"]],
+            "extra": [c for c in columns if c not in used], "ignored": ignored, "n_columns": len(columns), "expected": len(spec)}
+
+
+def cols_of(m: dict) -> dict[str, str]:
+    return {k: f["col"] for k, f in m["fields"].items() if f["col"]}
+
+
+# ------------------------------------------------------------------ lecteurs : mêmes opérations en pandas (fictif) et en SQL (Fabric)
+# Spécification d'un regroupement :
+#   dims  {alias: (op, champ)}  op ∈ text · id · date (ISO) · year · notnull (0/1) · validdate (0/1) · matched (0/1, compte connu)
+#   meas  {alias: (op, champ)}  op ∈ count · sum · sumabs · distinct · numvalid
+#   where [(op, champ, valeur)] op ∈ date_eq · date_ge
+#   dedup [champs]              lignes identiques sur ces champs (référence non nulle) comptées une seule fois
 class PandasReader:
-    """Mêmes opérations que SqlReader, sur des tables en mémoire (données fictives)."""
+    """Mêmes opérations que SqlReader, sur des tables en mémoire (données fictives). Les colonnes converties sont
+    mémorisées (les tables fictives ne changent pas pendant la session)."""
+
+    kind = "synthétique"
+    _FN = {"text": norm_text, "id": norm_id, "num": to_num, "date": to_date}
 
     def __init__(self, tables: Callable[[str], pd.DataFrame]):
         self.t = tables
-        self.kind = "synthétique"
+        self._memo: dict = {}
 
-    def profile(self, name: str) -> dict:
+    def columns(self, name: str) -> list[str]:
+        return [str(c) for c in self.t(name).columns]
+
+    def _conv(self, name: str, col: str, how: str) -> pd.Series:
+        key = (name, col, how)
+        if key not in self._memo:
+            # Conversion des valeurs distinctes seulement, puis report sur les lignes
+            src = self.t(name)[col]
+            codes, uniq = pd.factorize(src.astype(object), use_na_sentinel=True)
+            conv = self._FN[how](pd.Series(uniq, dtype=object))
+            vals = conv.to_numpy()
+            na = pd.NaT if how == "date" else (np.nan if how == "num" else pd.NA)
+            full = np.where(codes >= 0, vals[np.clip(codes, 0, None)] if len(vals) else na, na)
+            out = pd.Series(full, index=src.index)
+            out = pd.to_datetime(out) if how == "date" else pd.to_numeric(out, errors="coerce") if how == "num" else out.astype("string")
+            self._memo[key] = out
+        return self._memo[key]
+
+    def _of(self, name: str, c: dict[str, str], k: str, how: str, idx) -> pd.Series:
+        return self._conv(name, c[k], how).loc[idx]
+
+    def _base(self, name: str, c: dict[str, str]) -> pd.Series:
+        key = (name, "_base", tuple(sorted(c.items())))
+        if key in self._memo:
+            return self._memo[key]
         df = self.t(name)
-        out = {}
-        for c in df.columns:
-            vc = df[c].value_counts(dropna=True)
-            out[c] = {"rows": int(len(df)), "filled": int(df[c].notna().sum()), "distinct": int(len(vc)),
-                      "top": list(zip(vc.index[:60].tolist(), vc.to_numpy()[:60].tolist())),
-                      "sample": df[c].dropna().head(2000).tolist()}
+        ks = [k for k in SENTINELS[name] if k in c]
+        if not ks:
+            out = pd.Series(True, index=df.index)
+        else:
+            sent = [self._conv(name, c[k], "text") for k in ks]
+            some = pd.concat([x.notna() for x in sent], axis=1).any(axis=1)
+            header = pd.concat([x.fillna("").map(_key).eq(_key(REAL[name][k])) for x, k in zip(sent, ks)], axis=1).any(axis=1)
+            out = some & ~header
+        self._memo[key] = out
         return out
 
-    def overlap(self, name: str, col: str, ref: str, ref_col: str) -> float:
-        s = self.t(name)[col].dropna().head(5000)
-        return float(s.isin(set(self.t(ref)[ref_col].dropna())).mean()) if len(s) else 0.0
+    def _ids(self, m_compte: dict) -> set:
+        c = cols_of(m_compte)
+        ok = self._base("compte", c)
+        return set(self._conv("compte", c["id_compte"], "id")[ok].dropna())
 
-    def group(self, name: str, keys: dict[str, str], amount: str | None = None, join_compte: str | None = None,
-              compte_keys: dict[str, str] | None = None, distinct: str | None = None) -> pd.DataFrame:
-        df = self.t(name)
-        cols = {alias: df[c] for alias, c in keys.items()}
-        g = pd.DataFrame(cols)
-        if join_compte and compte_keys:
-            ref = self.t("compte").groupby(COMPTE_MAP["compte"])[[c for c in compte_keys.values()]].max()
-            for alias, c in compte_keys.items():
-                g[alias] = df[join_compte].map(ref[c])
-        if amount:
-            a = parse_amounts(df[amount])
-            g["amt"], g["amt_abs"] = a, a.abs()
-        if distinct:
-            g["_d"] = df[distinct]
-        keys_all = [k for k in g.columns if k not in ("amt", "amt_abs", "_d")]
-        gb = g.fillna({k: "\x00" for k in keys_all}).groupby(keys_all, dropna=False)
-        out = gb.size().rename("n").to_frame()
-        if amount:
-            out["amt"], out["amt_abs"] = gb["amt"].sum(min_count=1), gb["amt_abs"].sum(min_count=1)
-        if distinct:
-            out["distinct"] = gb["_d"].nunique()
-        out = out.reset_index().replace({"\x00": None})
+    def _keyconv(self, name: str, k: str) -> str:
+        return {"nombre": "num", "date": "date"}.get(KIND[name].get(k, ""), "id")
+
+    def _col(self, name: str, idx, c: dict[str, str], op: str, k: str, ctx: dict) -> pd.Series:
+        if k not in c:
+            return pd.Series(None, index=idx, dtype="object")
+        if op in ("text", "id"):
+            x = self._of(name, c, k, op, idx)
+            return x.astype(object).where(x.notna(), None)
+        if op in ("date", "year", "validdate"):
+            d = self._of(name, c, k, "date", idx)
+            if op == "validdate":
+                return d.notna().astype(int)
+            if op == "date":
+                return d.dt.strftime("%Y-%m-%d").where(d.notna(), None)
+            return d.dt.year.astype("Int64").astype(object).where(d.notna(), None)
+        if op == "notnull":
+            return self._of(name, c, k, "text", idx).notna().astype(int)
+        if op == "matched":
+            return self._of(name, c, k, "id", idx).isin(ctx["ids"]).fillna(False).astype(int)
+        raise ValueError(op)
+
+    def _index(self, name: str, m: dict, where=(), dedup=None):
+        c = cols_of(m)
+        ok = self._base(name, c)
+        for op, k, v in where:
+            d = self._conv(name, c[k], "date").dt.strftime("%Y-%m-%d")
+            ok = ok & ((d == v) if op == "date_eq" else (d >= v)).fillna(False)
+        idx = ok[ok].index
+        if dedup and "reference" in c:
+            keys = pd.DataFrame({k: self._of(name, c, k, self._keyconv(name, k), idx) for k in dedup if k in c})
+            has_ref = self._of(name, c, "reference", "id", idx).notna()
+            idx = idx[~(keys.duplicated() & has_ref).to_numpy()]
+        return idx
+
+    def group(self, name: str, m: dict, dims: dict, meas: dict, where=(), dedup=None, m_compte: dict | None = None) -> pd.DataFrame:
+        c = cols_of(m)
+        idx = self._index(name, m, where, dedup)
+        ctx = {"ids": self._ids(m_compte) if m_compte and any(op == "matched" for op, _ in dims.values()) else set()}
+        g = pd.DataFrame({a: self._col(name, idx, c, op, k, ctx) for a, (op, k) in dims.items()}, index=idx)
+        aggs = {}
+        for a, (op, k) in meas.items():
+            if op == "count":
+                g[a] = 1
+                aggs[a] = (a, "sum")
+            elif op in ("sum", "sumabs", "numvalid"):
+                x = self._of(name, c, k, "num", idx) if k in c else pd.Series(np.nan, index=idx)
+                g[a] = x.abs() if op == "sumabs" else x.notna().astype(int) if op == "numvalid" else x
+                aggs[a] = (a, "sum")
+            elif op == "distinct":
+                g[a] = self._of(name, c, k, "id", idx) if k in c else None
+                aggs[a] = (a, "nunique")
+        if not dims:
+            return pd.DataFrame([{a: (g[col].sum() if f == "sum" else g[col].nunique()) for a, (col, f) in aggs.items()}])
+        keys = list(dims)
+        if not len(g):
+            return pd.DataFrame(columns=keys + list(meas))
+        out = g.groupby(keys, dropna=False).agg(**aggs).reset_index()
+        for k in keys:
+            out[k] = out[k].astype(object).where(out[k].notna(), None)
         return out
+
+    def stats(self, name: str, m: dict) -> dict:
+        c = cols_of(m)
+        base = self._base(name, c)
+        idx = base[base].index
+        out = {"rows": int(len(self.t(name))), "usable": int(base.sum()), "fields": {}}
+        for k, f in m["fields"].items():
+            if not f["col"]:
+                continue
+            t = self._of(name, c, k, "text", idx)
+            num, dt = self._of(name, c, k, "num", idx), self._of(name, c, k, "date", idx)
+            st = {"nulls": int(t.isna().sum()), "filled": int(t.notna().sum()), "as_number": int(num.notna().sum()), "as_date": int(dt.notna().sum())}
+            if f["kind"] == "date":
+                st["valid"], st["invalid"] = int(dt.notna().sum()), int((t.notna() & dt.isna()).sum())
+                bad = t[t.notna() & dt.isna()]
+                st["rejected"] = [{"shape": s_, "n": int(n)} for s_, n in bad.map(shape).value_counts().head(5).items()]
+                if st["valid"]:
+                    st["min"], st["max"] = dt.min().date().isoformat(), dt.max().date().isoformat()
+            elif f["kind"] == "nombre":
+                st["valid"], st["invalid"] = int(num.notna().sum()), int((t.notna() & num.isna()).sum())
+            if f["kind"] != "confidentiel":
+                st["distinct"] = int(t.nunique())
+            out["fields"][k] = st
+        return out
+
+    def concentration(self, name: str, m: dict, where=()) -> dict:
+        c = cols_of(m)
+        idx = self._index(name, m, where)
+        a = pd.DataFrame({"k": self._of(name, c, "compte", "id", idx), "v": self._of(name, c, "montant_eur", "num", idx)}).dropna()
+        v = a.groupby("k")["v"].sum()
+        return _concentration(v[v > 0].sort_values(ascending=False).to_numpy())
+
+    def duplicates(self, name: str, m: dict, keys: list[str]) -> dict:
+        c = cols_of(m)
+        idx = self._index(name, m)
+        ref = self._of(name, c, "reference", "id", idx)
+        full = pd.DataFrame({k: self._of(name, c, k, self._keyconv(name, k), idx) for k in keys if k in c}).assign(_r=ref)
+        full = full[full["_r"].notna()]
+        per = full.groupby("_r").size()
+        distinct_lines = full.drop_duplicates().groupby("_r").size()
+        return {"references": int(len(per)), "refs_repeated": int((per > 1).sum()), "exact_duplicates": int(full.duplicated().sum()),
+                "refs_multi_lines": int((distinct_lines > 1).sum()), "without_reference": int(ref.isna().sum())}
+
+
+def _concentration(v: np.ndarray) -> dict:
+    n = len(v)
+    if n < 20:
+        return {"available": False, "accounts": tranche(n)}
+    cum = np.cumsum(v) / v.sum()
+    pts = []
+    for q in (0.01, 0.05, 0.10, 0.20, 0.50):
+        k = max(1, int(np.ceil(n * q)))
+        if k >= MIN_GROUP:
+            pts.append({"top_pct": q * 100, "pct": round(float(cum[k - 1]) * 100, 1)})
+    return {"available": True, "accounts": tranche(n), "points": pts,
+            "accounts_for_half": tranche(int(np.searchsorted(cum, 0.5) + 1)), "accounts_for_80": tranche(int(np.searchsorted(cum, 0.8) + 1))}
 
 
 class SqlReader:
     """Agrégats calculés dans Fabric (SELECT … GROUP BY, garde-fou lecture seule) : seuls des comptes et des sommes
     par groupe sont rapatriés."""
 
+    kind = "fabric"
+
     def __init__(self, source: Any, names: dict[str, str]):
         self.src, self.names = source, names
-        self.kind = "fabric"
+        self._cols: dict[str, list[str]] = {}
 
     def _t(self, name: str) -> str:
         n = self.names.get(name, name)
@@ -149,242 +406,218 @@ class SqlReader:
             raise ValueError(f"Nom de table invalide : {n!r}")
         return f"[dbo].[{n}]"
 
-    @staticmethod
-    def _c(c: str) -> str:
-        if not re.match(r"^_c\d{1,3}$", c):
-            raise ValueError(f"Colonne invalide : {c!r}")
-        return f"[{c}]"
+    def columns(self, name: str) -> list[str]:
+        if name not in self._cols:
+            df = self.src.query(f"SELECT TOP 0 * FROM {self._t(name)}", label=f"passif {name} (colonnes)")
+            self._cols[name] = [str(c) for c in df.columns]
+        return self._cols[name]
 
-    @staticmethod
-    def _num(expr: str) -> str:
-        return f"TRY_CAST(REPLACE(REPLACE({expr}, ' ', ''), ',', '.') AS FLOAT)"
+    def _q(self, name: str, col: str) -> str:
+        """Colonne citée : uniquement une colonne réellement présente dans la table (liste blanche)."""
+        if col not in self.columns(name):
+            raise ValueError(f"Colonne invalide : {col!r}")
+        return "p.[" + col.replace("]", "]]") + "]"
 
-    def profile(self, name: str) -> dict:
-        t = self._t(name)
-        n_cols = {"compte": 11, "position": 21, "transaction": 28}[name]
-        cols = [f"_c{i}" for i in range(n_cols)]
-        stats = self.src.query("SELECT COUNT(*) AS n, " + ", ".join(
-            f"COUNT({self._c(c)}) AS f{i}, COUNT(DISTINCT {self._c(c)}) AS d{i}" for i, c in enumerate(cols)) + f" FROM {t}",
-            label=f"passif {name} (profil)")
-        sample = self.src.query("SELECT TOP 2000 " + ", ".join(self._c(c) for c in cols) + f" FROM {t}", label=f"passif {name} (échantillon)")
-        out = {}
-        rows = int(stats.iloc[0]["n"])
-        for i, c in enumerate(cols):
-            d = int(stats.iloc[0][f"d{i}"])
-            top: list = []
-            if d <= 300:
-                vc = self.src.query(f"SELECT TOP 60 {self._c(c)} AS v, COUNT(*) AS n FROM {t} GROUP BY {self._c(c)} ORDER BY COUNT(*) DESC")
-                top = [(v, int(k)) for v, k in zip(vc["v"], vc["n"]) if v is not None]
-            out[c] = {"rows": rows, "filled": int(stats.iloc[0][f"f{i}"]), "distinct": d, "top": top,
-                      "sample": sample[c].dropna().tolist() if c in sample else []}
-        return out
+    def _base(self, name: str, c: dict[str, str]) -> str:
+        sent = [k for k in SENTINELS[name] if k in c]
+        if not sent:
+            return "1 = 1"
+        some = " OR ".join(f"{_sql_text(self._q(name, c[k]))} IS NOT NULL" for k in sent)
+        hdr = " AND ".join(f"COALESCE(LOWER(REPLACE({_sql_text(self._q(name, c[k]))}, ' ', '')), '') <> '{_key(REAL[name][k])}'" for k in sent)
+        return f"({some}) AND {hdr}"
 
-    def overlap(self, name: str, col: str, ref: str, ref_col: str) -> float:
-        c, rc = self._c(col), self._c(ref_col)
-        df = self.src.query(f"SELECT COUNT(*) AS n, SUM(CASE WHEN r.k IS NULL THEN 0 ELSE 1 END) AS hit FROM "
-                            f"(SELECT TOP 5000 {c} AS v FROM {self._t(name)} WHERE {c} IS NOT NULL) s "
-                            f"LEFT JOIN (SELECT DISTINCT {rc} AS k FROM {self._t(ref)}) r ON s.v = r.k")
-        n = int(df.iloc[0]["n"] or 0)
-        return float(df.iloc[0]["hit"] or 0) / n if n else 0.0
+    def _dim(self, name: str, c: dict[str, str], op: str, k: str) -> str:
+        if k not in c:
+            return "CAST(NULL AS VARCHAR(10))"
+        x = self._q(name, c[k])
+        return {"text": _sql_text(x), "id": _sql_id(x), "date": f"CONVERT(VARCHAR(10), {_sql_date(x)}, 23)", "year": f"YEAR({_sql_date(x)})",
+                "notnull": f"(CASE WHEN {_sql_text(x)} IS NULL THEN 0 ELSE 1 END)",
+                "validdate": f"(CASE WHEN {_sql_date(x)} IS NULL THEN 0 ELSE 1 END)",
+                "matched": f"(CASE WHEN r.k IS NULL THEN 0 ELSE 1 END)"}[op]
 
-    def group(self, name: str, keys: dict[str, str], amount: str | None = None, join_compte: str | None = None,
-              compte_keys: dict[str, str] | None = None, distinct: str | None = None) -> pd.DataFrame:
-        sel = [f"p.{self._c(c)} AS [{a}]" for a, c in keys.items()]
-        grp = [f"p.{self._c(c)}" for c in keys.values()]
+    def _from(self, name: str, m: dict, where=(), dedup=None) -> tuple[str, str]:
+        """FROM (avec dédoublonnage éventuel) et WHERE de base."""
+        c = cols_of(m)
+        conds = [self._base(name, c)]
+        for op, k, v in where:
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(v)):
+                raise ValueError("date invalide")
+            conds.append(f"{_sql_date(self._q(name, c[k]))} {'=' if op == 'date_eq' else '>='} '{v}'")
         frm = f"{self._t(name)} p"
-        if join_compte and compte_keys:
-            sub = ", ".join(f"MAX({self._c(c)}) AS [{a}]" for a, c in compte_keys.items())
-            frm += (f" LEFT JOIN (SELECT {self._c(COMPTE_MAP['compte'])} AS k, {sub} FROM {self._t('compte')} "
-                    f"GROUP BY {self._c(COMPTE_MAP['compte'])}) c ON p.{self._c(join_compte)} = c.k")
-            sel += [f"c.[{a}] AS [{a}]" for a in compte_keys]
-            grp += [f"c.[{a}]" for a in compte_keys]
-        meas = ["COUNT(*) AS n"]
-        if amount:
-            x = self._num(f"p.{self._c(amount)}")
-            meas += [f"SUM({x}) AS amt", f"SUM(ABS({x})) AS amt_abs"]
-        if distinct:
-            meas.append(f"COUNT(DISTINCT p.{self._c(distinct)}) AS [distinct]")
-        sql = f"SELECT {', '.join(sel + meas)} FROM {frm}" + (f" GROUP BY {', '.join(grp)}" if grp else "")
+        if dedup and "reference" in c:
+            part = ", ".join(_sql_num(self._q(name, c[k])) if KIND[name][k] == "nombre" else _sql_date(self._q(name, c[k])) if KIND[name][k] == "date"
+                             else _sql_id(self._q(name, c[k])) for k in dedup if k in c)
+            ref = _sql_id(self._q(name, c["reference"]))
+            frm = (f"(SELECT p.*, CASE WHEN {ref} IS NULL THEN 1 ELSE ROW_NUMBER() OVER (PARTITION BY {part} ORDER BY (SELECT NULL)) END AS [_rn] "
+                   f"FROM {self._t(name)} p WHERE {' AND '.join(conds)}) p")
+            return frm, "p.[_rn] = 1"
+        return frm, " AND ".join(conds)
+
+    def group(self, name: str, m: dict, dims: dict, meas: dict, where=(), dedup=None, m_compte: dict | None = None) -> pd.DataFrame:
+        c = cols_of(m)
+        frm, cond = self._from(name, m, where, dedup)
+        if any(op == "matched" for op, _ in dims.values()) and m_compte:
+            cc = cols_of(m_compte)
+            ids = _sql_id("q.[" + cc["id_compte"].replace("]", "]]") + "]")
+            if cc["id_compte"] not in self.columns("compte"):
+                raise ValueError("Colonne invalide")
+            key = next(k for op, k in dims.values() if op == "matched")
+            frm += f" LEFT JOIN (SELECT DISTINCT {ids} AS k FROM {self._t('compte')} q) r ON {_sql_id(self._q(name, c[key]))} = r.k"
+        sel = [f"{self._dim(name, c, op, k)} AS [{a}]" for a, (op, k) in dims.items()]
+        grp = [self._dim(name, c, op, k) for op, k in dims.values()]
+        for a, (op, k) in meas.items():
+            if op == "count":
+                sel.append(f"COUNT(*) AS [{a}]")
+            elif k not in c:
+                sel.append(f"CAST(NULL AS FLOAT) AS [{a}]")
+            elif op == "sum":
+                sel.append(f"SUM({_sql_num(self._q(name, c[k]))}) AS [{a}]")
+            elif op == "sumabs":
+                sel.append(f"SUM(ABS({_sql_num(self._q(name, c[k]))})) AS [{a}]")
+            elif op == "numvalid":
+                sel.append(f"SUM(CASE WHEN {_sql_num(self._q(name, c[k]))} IS NULL THEN 0 ELSE 1 END) AS [{a}]")
+            elif op == "distinct":
+                sel.append(f"COUNT(DISTINCT {_sql_id(self._q(name, c[k]))}) AS [{a}]")
+        sql = f"SELECT {', '.join(sel)} FROM {frm} WHERE {cond}" + (f" GROUP BY {', '.join(grp)}" if grp else "")
         return self.src.query(sql, label=f"passif {name} (agrégats)")
 
+    def stats(self, name: str, m: dict) -> dict:
+        c = cols_of(m)
+        t = self._t(name)
+        cnt = self.src.query(f"SELECT COUNT(*) AS [rows], SUM(CASE WHEN {self._base(name, c)} THEN 1 ELSE 0 END) AS [usable] FROM {t} p",
+                             label=f"passif {name} (lignes)").iloc[0]
+        parts = ["COUNT(*) AS [usable]"]
+        keys = [(k, f) for k, f in m["fields"].items() if f["col"]]
+        for i, (k, f) in enumerate(keys):
+            x = self._q(name, f["col"])
+            parts += [f"SUM(CASE WHEN {_sql_text(x)} IS NULL THEN 1 ELSE 0 END) AS [n{i}]",
+                      f"SUM(CASE WHEN {_sql_num(x)} IS NOT NULL THEN 1 ELSE 0 END) AS [u{i}]",
+                      f"SUM(CASE WHEN {_sql_date(x)} IS NOT NULL THEN 1 ELSE 0 END) AS [d{i}]"]
+            if f["kind"] == "date":
+                parts += [f"MIN({_sql_date(x)}) AS [lo{i}]", f"MAX({_sql_date(x)}) AS [hi{i}]"]
+            if f["kind"] != "confidentiel":
+                parts.append(f"COUNT(DISTINCT {_sql_text(x)}) AS [k{i}]")
+        # Lignes exploitables seulement (ni en-tête relu comme donnée, ni enregistrement vide)
+        r = self.src.query(f"SELECT {', '.join(parts)} FROM (SELECT * FROM {t} p WHERE {self._base(name, c)}) p", label=f"passif {name} (lecture)").iloc[0]
+        r["rows"] = cnt["rows"]
+        usable = int(r["usable"] or 0)
+        out = {"rows": int(r["rows"] or 0), "usable": usable, "fields": {}}
+        for i, (k, f) in enumerate(keys):
+            nulls = int(r[f"n{i}"] or 0)
+            st = {"nulls": nulls, "filled": usable - nulls, "as_number": int(r[f"u{i}"] or 0), "as_date": int(r[f"d{i}"] or 0)}
+            if f["kind"] == "date":
+                st["valid"], st["invalid"] = st["as_date"], max(0, usable - nulls - st["as_date"])
+                if st["valid"]:
+                    st["min"], st["max"] = str(r[f"lo{i}"])[:10], str(r[f"hi{i}"])[:10]
+                st["rejected"] = []
+                if st["invalid"]:
+                    x = self._q(name, f["col"])
+                    tr = f"LEFT(TRANSLATE(LOWER({_sql_text(x)}), 'abcdefghijklmnopqrstuvwxyz0123456789', '{'a' * 26}{'9' * 10}'), 40)"
+                    df = self.src.query(f"SELECT TOP 5 {tr} AS [shape], COUNT(*) AS [n] FROM {t} p WHERE {self._base(name, c)} AND "
+                                        f"{_sql_text(x)} IS NOT NULL AND {_sql_date(x)} IS NULL GROUP BY {tr} ORDER BY COUNT(*) DESC")
+                    st["rejected"] = [{"shape": str(a), "n": int(b)} for a, b in zip(df["shape"], df["n"])]
+            elif f["kind"] == "nombre":
+                st["valid"], st["invalid"] = st["as_number"], max(0, usable - nulls - st["as_number"])
+            if f["kind"] != "confidentiel":
+                st["distinct"] = int(r[f"k{i}"] or 0)
+            out["fields"][k] = st
+        return out
 
-# ------------------------------------------------------------------ reconnaissance des colonnes
-def _overrides(table: str) -> dict[str, str]:
-    raw = os.environ.get(f"APP_PASSIF_MAP_{table.upper()}", "")
-    out = {}
-    for part in raw.split(","):
-        if "=" in part:
-            k, v = (x.strip() for x in part.split("=", 1))
-            if k and re.match(r"^_c\d{1,3}$", v):
-                out[k] = v
-    return out
+    def concentration(self, name: str, m: dict, where=()) -> dict:
+        c = cols_of(m)
+        frm, cond = self._from(name, m, where)
+        k, v = _sql_id(self._q(name, c["compte"])), _sql_num(self._q(name, c["montant_eur"]))
+        qs = (0.01, 0.05, 0.10, 0.20, 0.50)
+        sql = ("WITH a AS (SELECT " + k + " AS k, SUM(" + v + ") AS v FROM " + frm + " WHERE " + cond + " AND " + k + " IS NOT NULL GROUP BY " + k + "), "
+               "r AS (SELECT v, ROW_NUMBER() OVER (ORDER BY v DESC) AS rn, COUNT(*) OVER () AS n, SUM(v) OVER () AS tot, "
+               "SUM(v) OVER (ORDER BY v DESC ROWS UNBOUNDED PRECEDING) AS cum FROM a WHERE v > 0) "
+               "SELECT MAX(n) AS [n], " + ", ".join(f"MAX(CASE WHEN rn = CASE WHEN CEILING(n * {q}) < 1 THEN 1 ELSE CEILING(n * {q}) END THEN cum / tot END) AS [q{i}]"
+                                                    for i, q in enumerate(qs)) +
+               ", MIN(CASE WHEN cum / tot >= 0.5 THEN rn END) AS [h50], MIN(CASE WHEN cum / tot >= 0.8 THEN rn END) AS [h80] FROM r")
+        r = self.src.query(sql, label=f"passif {name} (concentration)").iloc[0]
+        n = int(r["n"] or 0)
+        if n < 20:
+            return {"available": False, "accounts": tranche(n)}
+        pts = [{"top_pct": q * 100, "pct": round(float(r[f"q{i}"]) * 100, 1)} for i, q in enumerate(qs)
+               if max(1, int(np.ceil(n * q))) >= MIN_GROUP and r[f"q{i}"] is not None]
+        return {"available": True, "accounts": tranche(n), "points": pts, "accounts_for_half": tranche(int(r["h50"] or 0)),
+                "accounts_for_80": tranche(int(r["h80"] or 0))}
+
+    def duplicates(self, name: str, m: dict, keys: list[str]) -> dict:
+        c = cols_of(m)
+        frm, cond = self._from(name, m)
+        ref = _sql_id(self._q(name, c["reference"]))
+        full = ", ".join(_sql_num(self._q(name, c[k])) if KIND[name][k] == "nombre" else _sql_date(self._q(name, c[k])) if KIND[name][k] == "date"
+                         else _sql_id(self._q(name, c[k])) for k in keys if k in c)
+        sql = ("WITH b AS (SELECT " + ref + " AS r, ROW_NUMBER() OVER (PARTITION BY " + full + " ORDER BY (SELECT NULL)) AS rn, "
+               "DENSE_RANK() OVER (PARTITION BY " + ref + " ORDER BY " + full.replace(", ", ", ") + ") AS dr FROM " + frm + " WHERE " + cond + "), "
+               "g AS (SELECT r, COUNT(*) AS c, MAX(dr) AS lines FROM b WHERE r IS NOT NULL GROUP BY r) "
+               "SELECT (SELECT COUNT(*) FROM g) AS [refs], (SELECT COUNT(*) FROM g WHERE c > 1) AS [rep], "
+               "(SELECT COUNT(*) FROM b WHERE r IS NOT NULL AND rn > 1) AS [exact], (SELECT COUNT(*) FROM g WHERE lines > 1) AS [multi], "
+               "(SELECT COUNT(*) FROM b WHERE r IS NULL) AS [noref]")
+        r = self.src.query(sql, label=f"passif {name} (références)").iloc[0]
+        return {"references": int(r["refs"] or 0), "refs_repeated": int(r["rep"] or 0), "exact_duplicates": int(r["exact"] or 0),
+                "refs_multi_lines": int(r["multi"] or 0), "without_reference": int(r["noref"] or 0)}
 
 
-def detect_mapping(reader, table: str) -> dict:
-    """Rôle de chaque colonne d'une table source : {champ: {"col": "_cN", "confidence": 0..1, "how": "…"}}.
-
-    Uniquement des comptes et des formes ; aucune valeur n'est journalisée ni renvoyée."""
-    prof = reader.profile(table)
-    scores: dict[str, dict[str, float]] = {f: {} for f in CATEGORICAL}
-    kinds: dict[str, str] = {}
-    for c, p in prof.items():
-        filled = p["filled"] or 0
-        if not filled:
-            kinds[c] = "vide"
-            continue
-        sample = pd.Series(p["sample"], dtype=object)
-        st = sample.astype(str).str.strip()
-        isin_share = float(st.str.upper().str.match(_ISIN.pattern).mean()) if len(st) else 0
-        date_share = float(parse_dates(st).notna().mean()) if len(st) else 0
-        num_share = float(parse_amounts(st).notna().mean()) if len(st) else 0
-        if isin_share > 0.8:
-            kinds[c] = "isin"
-        elif date_share > 0.9 and not st.str.fullmatch(r"-?\d+([.,]\d+)?").mean() > 0.5:
-            kinds[c] = "date"
-        elif num_share > 0.9:
-            kinds[c] = "nombre"
-        else:
-            kinds[c] = "texte"
-        if p["top"] and p["distinct"] <= 300:
-            covered = sum(k for _, k in p["top"]) or 1
-            for f in CATEGORICAL:
-                hit = sum(k for v, k in p["top"] if _n(v) in _V[f] or (f == "statut" and _CUTOFF.search(str(v))))
-                scores[f][c] = hit / covered
-    mapping: dict[str, dict] = {}
-    used: set[str] = set()
-    for f in CATEGORICAL:
-        best = sorted(((s, c) for c, s in scores[f].items() if c not in used), reverse=True)
-        if best and best[0][0] >= 0.6:
-            mapping[f] = {"col": best[0][1], "confidence": round(best[0][0], 2), "how": "vocabulaire"}
-            used.add(best[0][1])
-    isins = [c for c, k in kinds.items() if k == "isin" and c not in used]
-    if isins:
-        mapping["isin"] = {"col": isins[0], "confidence": 1.0, "how": "forme ISIN"}
-        used.add(isins[0])
-    dates = [c for c, k in kinds.items() if k == "date" and c not in used]
-    if dates:
-        mapping["date"] = {"col": dates[0], "confidence": round(1 / len(dates), 2), "how": "forme date",
-                           "note": f"{len(dates)} colonnes de dates : la première retenue, à confirmer" if len(dates) > 1 else None}
-        used.add(dates[0])
-    nums = [c for c, k in kinds.items() if k == "nombre" and c not in used]
-    if nums:
-        med = {c: float(parse_amounts(pd.Series(prof[c]["sample"], dtype=object)).abs().median() or 0) for c in nums}
-        best = max(nums, key=lambda c: med[c])
-        mapping["montant"] = {"col": best, "confidence": round(1 / len(nums), 2), "how": "plus grandes valeurs numériques",
-                              "note": f"{len(nums)} colonnes numériques : à confirmer" if len(nums) > 1 else None}
-        used.add(best)
-    if table != "compte":
-        cands = [c for c, k in kinds.items() if k == "texte" and c not in used and prof[c]["distinct"] > 20]
-        best_c, best_s = None, 0.0
-        for c in cands:
-            s = reader.overlap(table, c, "compte", COMPTE_MAP["compte"])
-            if s > best_s:
-                best_c, best_s = c, s
-        if best_c and best_s >= 0.5:
-            mapping["compte"] = {"col": best_c, "confidence": round(best_s, 2), "how": "identifiants de comptes"}
-    for f, c in _overrides(table).items():
-        mapping[f] = {"col": c, "confidence": 1.0, "how": "configuré"}
-    return {"fields": mapping, "kinds": {c: k for c, k in kinds.items()}, "rows": next(iter(prof.values()))["rows"] if prof else 0}
-
-
-# ------------------------------------------------------------------ vues
+# ------------------------------------------------------------------ vues (parts, tranches, libellés propres)
 def _pct(x: float, tot: float) -> float | None:
     return round(100.0 * x / tot, 1) if tot else None
 
 
-def _measure(df: pd.DataFrame, col: str) -> pd.Series:
-    return df[col].fillna(0.0) if col in df else df["n"].astype(float)
+def _label(v: Any) -> str:
+    if v is None or (isinstance(v, float) and np.isnan(v)) or v is pd.NA:
+        return NOT_SET
+    s = str(v).strip()
+    return NOT_SET if s.lower() in NULL_TOKENS else s
 
 
-def _rollup(df: pd.DataFrame, by: list[str], col: str, tot: float) -> list[dict]:
-    g = df.groupby(by, dropna=False).agg(n=("n", "sum"), m=(col, "sum") if col in df else ("n", "sum")).reset_index()
+def _shares(df: pd.DataFrame, by: list[str], col: str, tot: float, cnt: str = "n") -> list[dict]:
+    """Parts par groupe, groupes de moins de 5 masqués (restent dans le total) ; libellé manquant → « Non renseigné »."""
+    if df.empty:
+        return []
+    d = df.copy()
+    for k in by:
+        d[k] = d[k].map(_label)
+    g = d.groupby(by, dropna=False).agg(n=(cnt, "sum"), m=(col, "sum")).reset_index().sort_values("m", ascending=False)
     out = []
-    for r in g.sort_values("m", ascending=False).itertuples(index=False):
+    for r in g.itertuples(index=False):
         t = tranche(r.n)
         if t is None:
             continue
-        out.append({**{k: (getattr(r, k) if getattr(r, k) is not None else "Non renseigné") for k in by}, "pct": _pct(r.m, tot), "tranche": t})
+        out.append({**{k: getattr(r, k) for k in by}, "pct": _pct(float(r.m or 0), tot), "tranche": t})
     return out
 
 
-def positions_view(g: pd.DataFrame, by_client: pd.DataFrame | None, amount: bool) -> dict:
-    col = "amt" if amount else "n"
-    if g.empty:
-        return {"available": False}
-    g = g.copy()
-    for k in ("classe_actif", "desk", "devise"):
-        if k not in g:
-            g[k] = None
-        g[k] = g[k].map(lambda v: (str(v).strip() or None) if v is not None else None)
-    g[col] = _measure(g, col)
-    tot = float(g[col].sum())
-    groups = _rollup(g, ["classe_actif", "desk", "devise"], col, tot)
-    shown = sum(x["pct"] or 0 for x in groups)
-    view = {
-        "available": True, "measure": "part de l'encours" if amount else "part du nombre de positions",
-        "groups": groups, "residual_pct": round(max(0.0, 100.0 - shown), 1),
-        "by_desk": _rollup(g, ["desk"], col, tot), "by_class": _rollup(g, ["classe_actif"], col, tot),
-        "by_currency": _rollup(g, ["devise"], col, tot), "total": tranche(int(g["n"].sum())),
-    }
-    m = g.groupby(["desk", "classe_actif"], dropna=False).agg(n=("n", "sum"), v=(col, "sum")).reset_index()
-    view["matrix"] = [{"desk": r.desk or "Non renseigné", "classe_actif": r.classe_actif or "Non renseigné", "pct": _pct(r.v, tot)}
-                      for r in m.itertuples(index=False) if r.n >= MIN_GROUP]
-    if by_client is not None and not by_client.empty:
-        b = by_client.copy()
-        b[col] = _measure(b, col)
-        b["teneur"] = b["teneur"].map(lambda v: str(v).strip() if v else "Compte inconnu")
-        b["classification"] = b["classification"].map(lambda v: str(v).strip() if v else "Compte inconnu")
-        view["by_client"] = _rollup(b, ["teneur", "classification"], col, float(b[col].sum()))
-        view["by_teneur"] = _rollup(b, ["teneur"], col, float(b[col].sum()))
-    return view
+def _residual(items: list[dict]) -> float:
+    return round(max(0.0, 100.0 - sum(x["pct"] or 0 for x in items)), 1)
 
 
-def transactions_view(g: pd.DataFrame, amount: bool, days: int = 60) -> dict:
-    col = "amt_abs" if amount else "n"
-    if g.empty or "date" not in g:
-        return {"available": False}
-    g = g.copy()
-    g["d"] = parse_dates(g["date"].astype("string")).dt.normalize()
-    g = g.dropna(subset=["d"])
-    if g.empty:
-        return {"available": False}
-    last = g["d"].max()
-    g = g[g["d"] > last - pd.Timedelta(days=int(days * 1.5))]
-    keep = sorted(g["d"].unique())[-days:]
-    g = g[g["d"].isin(keep)]
-    for k in ("classe_actif", "desk", "sens", "statut", "devise"):
-        if k not in g:
-            g[k] = None
-    g["sens"] = g["sens"].map(lambda v: SENS_LABEL.get(_n(v), str(v).strip() if v else "Non renseigné"))
-    g["late"] = g["statut"].map(lambda v: bool(_CUTOFF.search(str(v))) if v else False)
-    g[col] = _measure(g, col)
-    out_days = []
-    for d, x in g.groupby("d"):
-        tot = float(x[col].sum())
-        out_days.append({
-            "date": pd.Timestamp(d).date().isoformat(), "ops": tranche(int(x["n"].sum())),
-            "sens": _rollup(x, ["sens"], col, tot), "desks": _rollup(x, ["desk"], col, tot),
-            "late_pct": _pct(float(x.loc[x["late"], col].sum()), tot) if int(x.loc[x["late"], "n"].sum()) >= MIN_GROUP else None,
-            "groups": _rollup(x, ["classe_actif", "desk", "sens", "statut", "devise"], col, tot)[:12],
-        })
-    tot = float(g[col].sum())
-    return {"available": True, "measure": "part du volume absolu" if amount else "part du nombre d'opérations",
-            "first": out_days[0]["date"], "last": out_days[-1]["date"], "days": out_days,
-            "period_sens": _rollup(g, ["sens"], col, tot), "period_desks": _rollup(g, ["desk"], col, tot),
-            "period_classes": _rollup(g, ["classe_actif"], col, tot),
-            "period_late_pct": _pct(float(g.loc[g["late"], col].sum()), tot), "ops": tranche(int(g["n"].sum()))}
+def allowed_statuts() -> list[str]:
+    raw = os.environ.get("APP_PASSIF_STATUTS_AUTORISES")
+    return [s.strip() for s in raw.split(",") if s.strip()] if raw else list(DEFAULT_STATUTS)
+
+
+def sens_label(v: Any) -> str:
+    s = _label(v)
+    return SENS_LABEL.get(fold(s), s)
+
+
+def is_late(statut: Any) -> bool:
+    return bool(statut) and bool(_CUTOFF.search(fold(statut)))
 
 
 def comptes_view(g: pd.DataFrame, clients: pd.DataFrame) -> dict:
+    """Structure des comptes. Dissous = DateDissolution valide ; avec parent = Id CompteParent non vide."""
     if g.empty:
         return {"available": False}
     g = g.copy()
-    g["teneur"] = g["teneur"].map(lambda v: str(v).strip() if v else "Non renseigné")
-    g["classification"] = g["classification"].map(lambda v: str(v).strip() if v else "Non renseigné")
+    g["teneur"] = g["teneur"].map(_label)
+    g["classification"] = g["classification"].map(_label)
     for b in ("parent", "creation", "dissolution"):
-        g[b] = g[b].map(lambda v: bool(v) and str(v).strip() not in ("", "0", "NULL"))
+        g[b] = g[b].fillna(0).astype(int).astype(bool)
+    cl = {_label(r.teneur): int(r.clients or 0) for r in clients.itertuples(index=False)} if not clients.empty else {}
     teneurs = []
-    cl = {r.teneur: r.distinct for r in clients.itertuples(index=False)} if not clients.empty else {}
     for t, x in g.groupby("teneur"):
         n = int(x["n"].sum())
         if n < MIN_GROUP:
@@ -397,22 +630,49 @@ def comptes_view(g: pd.DataFrame, clients: pd.DataFrame) -> dict:
                 classes.append({"classification": c, "label": label, "tranche": tranche(k),
                                 "active": not re.search(r"inactif", c, re.I), "omnibus": bool(re.search(r"omnibus", c, re.I)),
                                 "opc": bool(re.search(r"\bopc\b", c, re.I))})
-        teneurs.append({"teneur": t, "tranche": tranche(n), "clients": tranche(cl.get(t)), "classifications":
-                        sorted(classes, key=lambda z: -z["tranche"]["rank"])})
+        teneurs.append({"teneur": t, "tranche": tranche(n), "clients": tranche(cl.get(t)),
+                        "classifications": sorted(classes, key=lambda z: -z["tranche"]["rank"])})
     tot = int(g["n"].sum())
-    flags = lambda col: {True: tranche(int(g.loc[g[col], "n"].sum())), False: tranche(int(g.loc[~g[col], "n"].sum()))}  # noqa: E731
+
+    def split(col: str) -> tuple[dict | None, dict | None]:
+        return tranche(int(g.loc[g[col], "n"].sum())), tranche(int(g.loc[~g[col], "n"].sum()))
+
+    wp, np_ = split("parent")
+    ck, cu = split("creation")
+    ds, op = split("dissolution")
     return {"available": True, "total": tranche(tot), "teneurs": sorted(teneurs, key=lambda z: -z["tranche"]["rank"]),
-            "with_parent": flags("parent")[True], "without_parent": flags("parent")[False],
-            "creation_known": flags("creation")[True], "creation_unknown": flags("creation")[False],
-            "dissolved": flags("dissolution")[True], "open": flags("dissolution")[False],
-            "currencies": [{"devise": d, "tranche": tranche(int(x["n"].sum()))} for d, x in g.groupby("devise") if int(x["n"].sum()) >= MIN_GROUP],
+            "with_parent": wp, "without_parent": np_, "creation_known": ck, "creation_unknown": cu, "dissolved": ds, "open": op,
+            "dissolution_rule": "Dissous uniquement si DateDissolution contient une date valide.",
+            "currencies": [{"devise": d, "tranche": tranche(int(x["n"].sum()))} for d, x in g.assign(devise=g["devise"].map(_label)).groupby("devise")
+                           if int(x["n"].sum()) >= MIN_GROUP],
             "clients": tranche(int(sum(cl.values()))) if cl else None}
+
+
+def _years_view(g: pd.DataFrame, as_of: pd.Timestamp | None, tot: float) -> list[dict]:
+    """Ancienneté de l'encours : année du premier achat, regroupée en tranches d'âge."""
+    if g.empty or as_of is None:
+        return []
+    y0 = as_of.year
+    bands = [("Moins d'un an", 0, 0), ("1 à 3 ans", 1, 3), ("3 à 5 ans", 4, 5), ("5 à 10 ans", 6, 10), ("Plus de 10 ans", 11, 999)]
+    out = []
+    g = g.assign(y=pd.to_numeric(g["y"], errors="coerce"))
+    known = g.dropna(subset=["y"])
+    for lab, lo, hi in bands:
+        x = known[(y0 - known["y"]).between(lo, hi)]
+        t = tranche(int(x["n"].sum()))
+        if t:
+            out.append({"band": lab, "pct": _pct(float(x["v"].sum()), tot), "tranche": t})
+    unk = g[g["y"].isna()]
+    if int(unk["n"].sum()) >= MIN_GROUP:
+        out.append({"band": "Date de premier achat non renseignée", "pct": _pct(float(unk["v"].sum()), tot), "tranche": tranche(int(unk["n"].sum()))})
+    return out
 
 
 # ------------------------------------------------------------------ calcul complet, mis en cache (rafraîchi chaque jour)
 class Passif:
-    def __init__(self, reader, isin_to_fund: dict[str, str] | None = None, ttl_hours: float = 6.0):
-        self.reader, self.isin_to_fund = reader, isin_to_fund or {}
+    def __init__(self, reader, isin_to_fund: dict[str, str] | None = None, ttl_hours: float = 6.0, fund_names: dict[str, str] | None = None):
+        self.reader, self.isin_to_fund = reader, {str(k).strip().upper().replace(" ", ""): v for k, v in (isin_to_fund or {}).items()}
+        self.fund_names = fund_names or {}
         self.ttl = ttl_hours * 3600
         self._data: dict | None = None
         self._at = 0.0
@@ -434,60 +694,251 @@ class Passif:
                 log.info("Passif calculé en %.1f s", time.time() - t0)
             return self._data
 
+    # -- étapes
+    def mappings(self) -> dict[str, dict]:
+        return {t: resolve_mapping(self.reader.columns(t), t) for t in TABLES}
+
     def compute(self) -> dict:
         r = self.reader
-        maps = {t: detect_mapping(r, t) for t in ("position", "transaction")}
-        cm = COMPTE_MAP
-        comptes = r.group("compte", {"teneur": cm["teneur"], "classification": cm["classification"], "devise": cm["devise"],
-                                     "parent": cm["parent"], "creation": cm["creation"], "dissolution": cm["dissolution"]})
-        clients = r.group("compte", {"teneur": cm["teneur"]}, distinct=cm["client"])
-        out: dict[str, Any] = {"available": True, "source": r.kind, "refreshed_at": datetime.now().isoformat(timespec="minutes"),
-                               "comptes": comptes_view(comptes, clients), "mapping": {}}
-        # Positions : photo à la dernière date d'arrêté
-        pm = {f: v["col"] for f, v in maps["position"]["fields"].items()}
-        keys = {k: pm[k] for k in ("classe_actif", "desk", "devise") if k in pm}
-        if "date" in pm:
-            dates = r.group("position", {"date": pm["date"]})
-            dd = parse_dates(dates["date"].astype("string"))
-            as_of = dd.max()
-            out["positions_as_of"] = as_of.date().isoformat() if pd.notna(as_of) else None
-            # La photo du jour : agrégats limités à la dernière date (filtre appliqué après agrégation par date)
-            keys_d = {**keys, "date": pm["date"]}
+        maps = self.mappings()
+        stats = {t: r.stats(t, maps[t]) for t in TABLES}
+        out: dict[str, Any] = {"available": True, "source": r.kind, "refreshed_at": datetime.now().isoformat(timespec="minutes")}
+        problems: list[dict] = []
+
+        def missing(t: str) -> list[str]:
+            return [k for k in REQUIRED[t] if k in maps[t]["missing"]]
+
+        # ---- comptes
+        mc = maps["compte"]
+        if missing("compte"):
+            out["comptes"] = {"available": False, "reason": f"Colonnes absentes : {', '.join(REAL['compte'][k] for k in missing('compte'))}"}
         else:
-            keys_d, as_of = keys, None
-        pos = r.group("position", keys_d, amount=pm.get("montant"))
-        if as_of is not None and "date" in pos:
-            pos = pos[parse_dates(pos["date"].astype("string")) == as_of].drop(columns="date")
-        by_client = None
-        if "compte" in pm:
-            bc = r.group("position", {**({"date": pm["date"]} if "date" in pm else {})}, amount=pm.get("montant"),
-                         join_compte=pm["compte"], compte_keys={"teneur": cm["teneur"], "classification": cm["classification"]})
-            if as_of is not None and "date" in bc:
-                bc = bc[parse_dates(bc["date"].astype("string")) == as_of].drop(columns="date")
-            by_client = bc
-        out["positions"] = positions_view(pos, by_client, amount="montant" in pm)
-        # Positions par fonds (complément des fiches) : part de l'encours et tranche de positions
-        if "isin" in pm:
-            pi = r.group("position", {"isin": pm["isin"], **({"date": pm["date"]} if "date" in pm else {})}, amount=pm.get("montant"))
-            if as_of is not None and "date" in pi:
-                pi = pi[parse_dates(pi["date"].astype("string")) == as_of]
-            col = "amt" if "montant" in pm else "n"
-            pi["fund"] = pi["isin"].map(lambda v: self.isin_to_fund.get(str(v).strip().upper()) if v else None)
-            tot = float(_measure(pi, col).sum())
-            by_fund = pi.dropna(subset=["fund"]).groupby("fund").agg(n=("n", "sum"), m=(col, "sum"))
-            out["funds"] = {f: {"pct": _pct(x.m, tot), "positions": tranche(int(x.n))} for f, x in by_fund.iterrows() if x.n >= MIN_GROUP}
-        tm = {f: v["col"] for f, v in maps["transaction"]["fields"].items()}
-        tkeys = {k: tm[k] for k in ("date", "classe_actif", "desk", "sens", "statut", "devise") if k in tm}
-        trx = r.group("transaction", tkeys, amount=tm.get("montant")) if "date" in tkeys else pd.DataFrame()
-        out["transactions"] = transactions_view(trx, amount="montant" in tm)
-        out["mapping"] = {t: {"fields": {f: {k: v for k, v in x.items() if k != "note" or v} for f, x in m["fields"].items()},
-                              "rows": tranche(m["rows"]), "unmapped": [c for c, k in m["kinds"].items() if c not in {x["col"] for x in m["fields"].values()} and k != "vide"]}
-                          for t, m in maps.items()}
+            g = r.group("compte", mc, {"teneur": ("text", "teneur"), "classification": ("text", "classification"), "devise": ("text", "devise"),
+                                       "parent": ("notnull", "id_parent"), "creation": ("validdate", "date_creation"),
+                                       "dissolution": ("validdate", "date_dissolution")}, {"n": ("count", None)})
+            cl = r.group("compte", mc, {"teneur": ("text", "teneur")}, {"clients": ("distinct", "id_client")})
+            out["comptes"] = comptes_view(g, cl)
+            sd = stats["compte"]["fields"].get("date_dissolution", {})
+            if sd.get("invalid"):
+                problems.append({"table": "compte", "field": "date_dissolution", "level": "info",
+                                 "text": f"{sd['invalid']} valeurs de DateDissolution illisibles : comptées comme non dissoutes."})
+
+        # ---- positions : photo à la dernière date valide
+        mp = maps["position"]
+        out["positions"], out["funds"], out["positions_as_of"] = {"available": False}, {}, None
+        if missing("position"):
+            out["positions"]["reason"] = f"Colonnes absentes : {', '.join(REAL['position'][k] for k in missing('position'))}"
+        else:
+            dts = r.group("position", mp, {"d": ("date", "date")}, {"n": ("count", None)})
+            valid = dts.dropna(subset=["d"])
+            if valid.empty:
+                sd = stats["position"]["fields"].get("date", {})
+                rej = ", ".join(f"« {x['shape']} »" for x in sd.get("rejected", [])) or "aucune valeur"
+                out["positions"]["reason"] = (f"Aucune date valide dans {REAL['position']['date']} ({mp['fields']['date']['col']}). "
+                                              f"Formats rejetés : {rej}. Formats acceptés : m/j/aaaa [h:mm:ss AM], aaaa-mm-jj.")
+                problems.append({"table": "position", "field": "date", "level": "erreur", "text": out["positions"]["reason"]})
+            else:
+                as_of = pd.Timestamp(max(valid["d"]))
+                iso = as_of.date().isoformat()
+                out["positions_as_of"] = iso
+                out["positions"] = self._positions(mp, mc, iso, as_of)
+                out["funds"] = out["positions"].pop("_funds", {})
+
+        # ---- transactions : 60 derniers jours ouvrés valides, statuts autorisés, doublons exacts écartés
+        mt = maps["transaction"]
+        if missing("transaction"):
+            out["transactions"] = {"available": False, "reason": f"Colonnes absentes : {', '.join(REAL['transaction'][k] for k in missing('transaction'))}"}
+        else:
+            out["transactions"] = self._transactions(mt, stats["transaction"], problems)
+
+        links = out["positions"].pop("links", None)
+        dups = out["transactions"].pop("duplicates", None)
+        out["lecture"] = self._lecture(maps, stats, out, problems, links, dups)
         out["model"] = {"clients": out["comptes"].get("clients"), "comptes": out["comptes"].get("total"),
                         "positions": out["positions"].get("total"), "operations": out["transactions"].get("ops"),
-                        "funds_held": tranche(len(out.get("funds", {}))) if out.get("funds") else None}
+                        "funds_held": tranche(len(out["funds"])) if out["funds"] else None}
         return out
+
+    def _positions(self, mp: dict, mc: dict, iso: str, as_of: pd.Timestamp) -> dict:
+        r = self.reader
+        w = [("date_eq", "date", iso)]
+        amt = {"n": ("count", None), "v": ("sum", "montant_eur"), "ok": ("numvalid", "montant_eur")}
+        main = r.group("position", mp, {"classe_actif": ("text", "classe_actif"), "desk": ("text", "desk"), "devise": ("text", "devise")}, amt, w)
+        main["v"] = pd.to_numeric(main["v"], errors="coerce").fillna(0.0)
+        tot = float(main["v"].sum())
+        if tot <= 0:
+            return {"available": False, "reason": "Montant EUR nul ou illisible à la date de la photo."}
+        groups = _shares(main, ["classe_actif", "desk", "devise"], "v", tot)
+
+        def by(dims: dict) -> pd.DataFrame:
+            x = r.group("position", mp, dims, amt, w, m_compte=mc)
+            x["v"] = pd.to_numeric(x["v"], errors="coerce").fillna(0.0)
+            return x
+
+        holders = by({"teneur": ("text", "teneur"), "classification": ("text", "classification")})
+        geo = by({"pays": ("text", "pays")})
+        sdg = by({"sdg": ("text", "sdg"), "type_fonds": ("text", "type_fonds")})
+        first = by({"y": ("year", "premier_trade")})
+        last = by({"y": ("year", "dernier_trade")})
+        link = by({"matched": ("matched", "compte")}) if mc["fields"]["id_compte"]["col"] else pd.DataFrame()
+        accts = r.group("position", mp, {"matched": ("matched", "compte")}, {"a": ("distinct", "compte")}, w, m_compte=mc) \
+            if mc["fields"]["id_compte"]["col"] else pd.DataFrame()
+        isin = by({"isin": ("id", "isin")})
+        # Contrôles de cohérence (comptes de lignes, jamais de montant) : Montant EUR = Montant Devise en EUR ; quantité × cours
+        view: dict[str, Any] = {
+            "available": True, "measure": "part de l'encours (Montant EUR)", "groups": groups, "residual_pct": _residual(groups),
+            "by_desk": _shares(main, ["desk"], "v", tot), "by_class": _shares(main, ["classe_actif"], "v", tot),
+            "by_currency": _shares(main, ["devise"], "v", tot), "total": tranche(int(main["n"].sum())),
+            "by_holder": _shares(holders, ["teneur", "classification"], "v", tot), "by_teneur": _shares(holders, ["teneur"], "v", tot),
+            "by_classification": _shares(holders, ["classification"], "v", tot),
+            "by_country": [{**x, "iso": L.country(x["pays"])[1] if x["pays"] != NOT_SET else "??"} for x in _shares(geo, ["pays"], "v", tot)],
+            "by_sdg": _shares(sdg, ["sdg"], "v", tot), "by_fund_type": _shares(sdg, ["type_fonds"], "v", tot),
+            "seniority": _years_view(first, as_of, tot),
+            "last_trade": _years_view(last, as_of, tot),
+            "amount_valid_pct": _pct(float(main["ok"].sum()), float(main["n"].sum())),
+        }
+        # compatibilité des autres pages (fiche fonds, distribution)
+        view["by_client"] = [{"teneur": x["teneur"], "classification": x["classification"], "pct": x["pct"], "tranche": x["tranche"]} for x in view["by_holder"]]
+        m = main.assign(desk=main["desk"].map(_label), classe_actif=main["classe_actif"].map(_label)).groupby(["desk", "classe_actif"]).agg(n=("n", "sum"), v=("v", "sum")).reset_index()
+        view["matrix"] = [{"desk": x.desk, "classe_actif": x.classe_actif, "pct": _pct(x.v, tot)} for x in m.itertuples(index=False) if x.n >= MIN_GROUP]
+        view["concentration"] = r.concentration("position", mp, w) if mp["fields"]["compte"]["col"] else {"available": False}
+        # Rattachements : comptes (Compte Centaure ↔ Id Compte) et ISIN (↔ PI_OUT_Share.ISIN_Code)
+        links: dict[str, Any] = {}
+        if not link.empty:
+            link["matched"] = link["matched"].fillna(0).astype(int)
+            hit = link[link["matched"] == 1]
+            links["accounts"] = {"rows_pct": _pct(float(hit["n"].sum()), float(link["n"].sum())), "amount_pct": _pct(float(hit["v"].sum()), tot),
+                                 "linked": int(accts.loc[accts["matched"].fillna(0).astype(int) == 1, "a"].sum()) if not accts.empty else 0,
+                                 "distinct": int(accts["a"].sum()) if not accts.empty else 0}
+        isin["fund"] = isin["isin"].map(lambda v: self.isin_to_fund.get(str(v)) if v else None)
+        ok = isin.dropna(subset=["fund"])
+        links["isin"] = {"distinct": int(isin["isin"].notna().sum()), "linked": int(len(ok)),
+                         "amount_pct": _pct(float(ok["v"].sum()), tot), "rows_pct": _pct(float(ok["n"].sum()), float(isin["n"].sum()))}
+        view["links"] = links
+        bf = ok.groupby("fund").agg(n=("n", "sum"), v=("v", "sum"))
+        funds = {f: {"pct": _pct(float(x.v), tot), "positions": tranche(int(x.n))} for f, x in bf.iterrows() if x.n >= MIN_GROUP}
+        view["top_funds"] = sorted(({"fund": f, "name": self.fund_names.get(f), **v} for f, v in funds.items()), key=lambda z: -(z["pct"] or 0))[:12]
+        view["_funds"] = funds
+        return view
+
+    def _transactions(self, mt: dict, st: dict, problems: list) -> dict:
+        r = self.reader
+        dedup = ["reference", "compte", "isin", "sens", "statut", "date_centralisation", "montant_eur"]
+        dims = {"d": ("date", "date_centralisation"), "desk": ("text", "desk"), "classe_actif": ("text", "classe_actif"),
+                "sens": ("text", "sens"), "statut": ("text", "statut"), "devise": ("text", "devise")}
+        meas = {"n": ("count", None), "v": ("sumabs", "montant_eur"), "ok": ("numvalid", "montant_eur")}
+        g = r.group("transaction", mt, dims, meas, dedup=dedup)
+        dup = r.duplicates("transaction", mt, dedup) if mt["fields"]["reference"]["col"] else None
+        g["v"] = pd.to_numeric(g["v"], errors="coerce").fillna(0.0)
+        # Statuts réellement présents, retenus seulement s'ils sont explicitement autorisés
+        allow = {fold(s) for s in allowed_statuts()}
+        sts = g.assign(statut=g["statut"].map(_label)).groupby("statut").agg(n=("n", "sum"), v=("v", "sum")).reset_index()
+        vol_all = float(sts["v"].sum())
+        statuts = [{"statut": x.statut, "included": fold(x.statut) in allow, "tranche": tranche(int(x.n)), "pct": _pct(float(x.v), vol_all)}
+                   for x in sts.sort_values("n", ascending=False).itertuples(index=False)]
+        base = {"statuts": statuts, "allowed": allowed_statuts(), "duplicates": dup, "window_days": WINDOW_DAYS}
+        g = g.loc[g["statut"].map(lambda v: fold(_label(v)) in allow).astype(bool)]
+        dated = g.dropna(subset=["d"])
+        if dated.empty:
+            sd = st["fields"].get("date_centralisation", {})
+            rej = ", ".join(f"« {x['shape']} »" for x in sd.get("rejected", [])) or "aucune valeur"
+            why = ("Aucune opération avec un statut autorisé." if g.empty else
+                   f"Aucune date valide dans {REAL['transaction']['date_centralisation']} ({mt['fields']['date_centralisation']['col']}). "
+                   f"Formats rejetés : {rej}. Formats acceptés : m/j/aaaa [h:mm:ss AM], aaaa-mm-jj.")
+            problems.append({"table": "transaction", "field": "date_centralisation", "level": "erreur", "text": why})
+            return {"available": False, "reason": why, **base}
+        days_all = sorted({d for d in dated["d"] if pd.Timestamp(d).dayofweek < 5})
+        keep = days_all[-WINDOW_DAYS:]
+        g = dated.loc[dated["d"].isin(keep).astype(bool)].copy()
+        g["sens"] = g["sens"].map(sens_label)
+        g["statut"] = g["statut"].map(_label)
+        statut_known = bool(mt["fields"]["statut"]["col"]) and st["fields"].get("statut", {}).get("filled", 0) > 0
+        g["late"] = g["statut"].map(is_late)
+        tot = float(g["v"].sum())
+        late = ({"calculable": True, "pct": _pct(float(g.loc[g["late"], "v"].sum()), tot),
+                 "rule": "Part du volume dont le statut indique « après cut-off »."} if statut_known and tot > 0 else
+                {"calculable": False, "pct": None, "rule": "Non calculable : statut ou Montant EUR indisponible."})
+        out_days = []
+        for d, x in g.groupby("d"):
+            t = float(x["v"].sum())
+            lt = x[x["late"]]
+            out_days.append({"date": str(d), "ops": tranche(int(x["n"].sum())), "sens": _shares(x, ["sens"], "v", t), "desks": _shares(x, ["desk"], "v", t),
+                             "late_pct": _pct(float(lt["v"].sum()), t) if late["calculable"] and int(lt["n"].sum()) >= MIN_GROUP else None,
+                             "groups": _shares(x, ["classe_actif", "desk", "sens", "statut", "devise"], "v", t)[:12]})
+        geo = r.group("transaction", mt, {"pays": ("text", "pays"), "sens": ("text", "sens"), "statut": ("text", "statut")}, meas,
+                      [("date_ge", "date_centralisation", keep[0])], dedup=dedup)
+        geo["v"] = pd.to_numeric(geo["v"], errors="coerce").fillna(0.0)
+        geo = geo.loc[geo["statut"].map(lambda v: fold(_label(v)) in allow).astype(bool)].assign(sens=lambda x: x["sens"].map(sens_label))
+        return {"available": True, **base, "measure": "part du volume absolu (Montant EUR)", "first": keep[0], "last": keep[-1],
+                "n_days": len(keep), "days": out_days, "period_sens": _shares(g, ["sens"], "v", tot), "period_desks": _shares(g, ["desk"], "v", tot),
+                "period_classes": _shares(g, ["classe_actif"], "v", tot),
+                "period_countries": [{**x, "iso": L.country(x["pays"])[1] if x["pays"] != NOT_SET else "??"} for x in _shares(geo, ["pays"], "v", float(geo["v"].sum()))],
+                "period_desk_sens": _shares(g, ["desk", "sens"], "v", tot),
+                "late": late, "period_late_pct": late["pct"], "ops": tranche(int(g["n"].sum())),
+                "amount_valid_pct": _pct(float(g["ok"].sum()), float(g["n"].sum()))}
+
+    def _lecture(self, maps: dict, stats: dict, out: dict, problems: list, links: dict | None, dups: dict | None) -> dict:
+        """Transparence : correspondance appliquée, type détecté, valeurs nulles, dates valides et invalides, rattachements."""
+        tables = {}
+        for t in TABLES:
+            m, s = maps[t], stats[t]
+            cols = []
+            usable = s["usable"] or 0
+            for k, name, kind in SCHEMA[t]:
+                f, x = m["fields"][k], s["fields"].get(k, {})
+                filled = x.get("filled", 0)
+                detected = "vide" if not filled else "date" if x.get("as_date", 0) >= 0.9 * filled else \
+                    "nombre" if x.get("as_number", 0) >= 0.9 * filled else "texte"
+                expected = {"date": "date", "nombre": "nombre"}.get(kind, "texte")
+                status = "absente" if not f["col"] else "vide" if not filled else \
+                    "à confirmer" if detected != expected and not (expected == "texte" and detected == "nombre" and kind in ("id", "texte", "confidentiel")) else "conforme"
+                cols.append({"field": k, "name": name, "kind": kind, "col": f["col"], "how": f["how"], "detected": detected, "status": status,
+                             "nulls": x.get("nulls"), "filled": filled, "valid": x.get("valid"), "invalid": x.get("invalid"),
+                             "rejected": x.get("rejected") or None, "min": x.get("min"), "max": x.get("max"), "distinct": x.get("distinct"),
+                             "used": kind != "confidentiel"})
+            tables[t] = {"mode": m["mode"], "rows": s["rows"], "usable": usable, "ignored_rows": s["rows"] - usable,
+                         "n_columns": m["n_columns"], "expected": m["expected"], "missing": m["missing"], "extra": m["extra"],
+                         "overrides_ignored": m["ignored"], "columns": cols,
+                         "to_confirm": [c["name"] for c in cols if c["status"] == "à confirmer"],
+                         "configured": [c["name"] for c in cols if c["col"]]}
+        return {"tables": tables, "links": links, "problems": problems, "duplicates": dups,
+                "statuts": (out.get("transactions") or {}).get("statuts"), "allowed_statuts": allowed_statuts(),
+                "env": {t: f"APP_PASSIF_MAP_{t.upper()}" for t in TABLES}}
 
 
 def table_names() -> dict[str, str]:
     return {t: (os.environ.get(f"APP_PASSIF_TABLE_{t.upper()}") or t).strip() for t in TABLES}
+
+
+def check(reader) -> list[tuple[bool | None, str]]:
+    """Contrôles du --fabric-check : colonnes, correspondance, dates, lignes exploitables. Aucune valeur affichée."""
+    res: list[tuple[bool | None, str]] = []
+    for t in TABLES:
+        try:
+            cols = reader.columns(t)
+        except Exception as e:
+            res.append((False, f"Passif · table {t} : inaccessible ({type(e).__name__})"))
+            continue
+        m = resolve_mapping(cols, t)
+        exp = N_COLS[t]
+        res.append((len(cols) == exp and not m["missing"], f"Passif · {t} : {len(cols)} colonnes sur {exp} attendues"
+                    + (f" (manquantes : {', '.join(REAL[t][k] for k in m['missing'])})" if m["missing"] else "")))
+        res.append((not m["missing"], f"Passif · {t} : correspondance {'vrais noms' if m['mode'] == 'noms' else '_c0…_c' + str(exp - 1)} appliquée"
+                    + ("".join(f" ; ajustement ignoré {x['field']}={x['col']} ({x['why']})" for x in m["ignored"]))))
+        try:
+            s = reader.stats(t, m)
+        except Exception as e:
+            res.append((False, f"Passif · {t} : lecture impossible ({type(e).__name__})"))
+            continue
+        res.append((s["usable"] > 0, f"Passif · {t} : {s['usable']} lignes exploitables sur {s['rows']}"))
+        for k, f in m["fields"].items():
+            if f["kind"] != "date" or not f["col"]:
+                continue
+            x = s["fields"].get(k, {})
+            ok = True if x.get("valid") and not x.get("invalid") else None if x.get("valid") else (False if x.get("filled") else None)
+            if k in REQUIRED[t] and not x.get("valid"):
+                ok = False
+            rej = ", ".join(r_["shape"] for r_ in x.get("rejected") or [])
+            res.append((ok, f"Passif · {t}.{f['name']} ({f['col']}) : {x.get('valid', 0)} dates valides, {x.get('invalid', 0)} illisibles, "
+                            f"{x.get('nulls', 0)} vides" + (f" — formats rejetés : {rej}" if rej else "")))
+    return res

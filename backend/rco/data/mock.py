@@ -394,6 +394,8 @@ class MockLakehouse:
                 Income_Distribution="Distribution" if sp.distrib else "Capitalisation",
                 Distribution_Frequency="Annuelle" if sp.distrib else None,
                 Investor_Type="Investisseurs institutionnels" if sp.inst else ("Réservée aux distributeurs" if sp.code == "F" else "Tous souscripteurs"),
+                Investor_Type_free_field=(f"Mandat dédié {['Alpha', 'Bêta', 'Gamma', 'Delta', 'Epsilon', 'Zêta', 'Êta', 'Thêta'][sum(map(ord, sp.isin)) % 8]} (client fictif)"
+                                          if sp.inst and sum(map(ord, sp.isin)) % 3 == 0 else None),
                 Investor_Type_Retail=_yn(not sp.inst), Investor_Type_Professional="Yes", Investor_Type_Eligible_Counterparty="Yes",
                 Initial_Subscription_Minimum_Amount=(1_000_000.0 if sp.inst else None),
                 Initial_Subscription_Minimum_Quantity=(None if sp.inst else 1.0),

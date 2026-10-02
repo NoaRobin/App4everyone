@@ -117,7 +117,7 @@ function GroupList({ groups, colorFor, onOpen }: { groups: Group[]; colorFor: (g
   const half = (v: number | null | undefined, cls: string) => {
     const x = v ?? 0;
     const w = (Math.abs(x) / maxAbs) * 50;
-    return <span className={`gl__half ${cls}`} style={{ left: x >= 0 ? "50%" : `${50 - w}%`, width: `${w}%` }} />;
+    return <span className={`gl__half ${cls}${x < 0 ? " is-neg" : ""}`} style={{ left: x >= 0 ? "50%" : `${50 - w}%`, width: `${w}%` }} />;
   };
   return (
     <ol className="gl" role="list">

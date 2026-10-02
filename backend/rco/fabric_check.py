@@ -1,7 +1,7 @@
 """Diagnostic de la connexion Fabric, sans charger le modèle : `python -m rco.fabric_check`.
 
 Étapes : configuration → connecteur → connexion et SELECT 1 → existence des tables et colonnes (SELECT TOP 0 : aucune
-ligne lue). N'affiche jamais de données, seulement des noms de tables et de colonnes.
+ligne lue) → passif : nombre de colonnes, correspondance exacte, lecture des dates et lignes exploitables (comptages seulement). N'affiche jamais de données, seulement des noms de tables et de colonnes.
 Codes de sortie : 0 tout est prêt · 1 table ou colonne manquante · 2 configuration · 3 connecteur · 4 connexion ou authentification.
 """
 from __future__ import annotations
@@ -99,9 +99,20 @@ def main(argv: list[str] | None = None) -> int:
             _p(True, f"Lecture compacte des encours acceptée par Fabric ({time.perf_counter() - t:.1f} s)")
         except FabricError as e:
             _p(None, f"Lecture compacte des encours refusée ({e.code}) : l'application lira les libellés ligne à ligne (plus lent)")
+    # Passif : 11 colonnes Compte, 21 Position, 28 Transaction ; correspondance exacte ; dates ; lignes exploitables
+    from .domain import passif as P
+    print("Passif (tables " + ", ".join(f"{k} = {v}" for k, v in P.table_names().items()) + ") :")
+    passif_bad = 0
+    try:
+        for ok, msg in P.check(P.SqlReader(src, P.table_names())):
+            _p(ok, msg)
+            passif_bad += ok is False
+    except FabricError as e:
+        passif_bad += 1
+        _p(False, f"Passif : {e.message}")
     src.close()
-    if bad:
-        print("Des tables ou colonnes manquent : transmettez les noms ci-dessus pour adapter l'application.")
+    if bad or passif_bad:
+        print("Des tables, colonnes ou dates posent problème : transmettez les lignes ÉCHEC ci-dessus pour adapter l'application.")
         return 1
     print("Fabric est prêt : lancez python run.py --fabric")
     return 0

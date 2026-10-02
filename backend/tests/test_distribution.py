@@ -49,3 +49,14 @@ def test_sankey_flux_conserves(svc, excl):
     total = svc.distribution(None, excl)
     # Unité : un enregistrement actif (part × pays) ; la somme des pays affichés égale le total des nœuds
     assert sum(n["value"] for n in sk["nodes"] if n["col"] == 2) == sum(c["n_shares"] for c in total["countries"])
+
+
+def test_sankey_clients_nommes_avant_les_pools(svc):
+    """Graphique 01 : d'abord les clients nommés (champ libre du type d'investisseur), puis les pools de clientèle."""
+    nodes = [n for n in svc.distribution(None)["sankey"]["nodes"] if n["col"] == 0]
+    kinds = [n["kind"] for n in nodes]
+    assert "nommé" in kinds and "pool" in kinds
+    assert kinds == sorted(kinds, key=lambda k: k != "nommé")                  # tous les nommés en tête
+    named = [n for n in nodes if n["kind"] == "nommé"]
+    assert [n["value"] for n in named] == sorted((n["value"] for n in named), reverse=True)
+    assert all("Tous souscripteurs" != n["label"] for n in named)

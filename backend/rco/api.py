@@ -191,7 +191,8 @@ def passif_obj():
         mock = PassifMock(src.reference_date, by_class, scale=s.mock_scale)
         reader = P.PandasReader(mock.table)
     ttl = float(__import__("os").environ.get("APP_PASSIF_TTL_HOURS") or 6)
-    _S.passif = P.Passif(reader, isin_to_fund, ttl_hours=ttl)
+    names = {fid: str(n) for fid, n in m.funds["name"].items()} if "name" in m.funds else {}
+    _S.passif = P.Passif(reader, isin_to_fund, ttl_hours=ttl, fund_names=names)
     return _S.passif
 
 
