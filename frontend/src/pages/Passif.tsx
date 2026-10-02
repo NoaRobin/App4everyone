@@ -238,7 +238,7 @@ function Orbit({ teneurs, total, current, onHover, onSelect }:
   { teneurs: Teneur[]; total: Tranche; current: string | null; onHover: (t: string | null) => void; onSelect: (t: string) => void }) {
   const svg = useRef<SVGSVGElement>(null);
   const planets = useRef<(SVGGElement | null)[]>([]);
-  const moons = useRef<(SVGCircleElement | null)[][]>([]);
+  const moons = useRef<(SVGRectElement | null)[][]>([]);
   const paused = useRef(false);
   const [moonTip, setMoonTip] = useState<{ t: string; label: string; tranche: Tranche; x: number; y: number } | null>(null);
   const n = teneurs.length;
@@ -277,8 +277,9 @@ function Orbit({ teneurs, total, current, onHover, onSelect }:
           const ph = mt * (0.5 + 0.08 * k) + (k * 2 * Math.PI) / Math.max(1, ms.length) + i;
           const rr = r0 + 18 + k * 10;
           const front = Math.sin(ph) > 0;
-          m.setAttribute("cx", (rr * Math.cos(ph)).toFixed(1));
-          m.setAttribute("cy", (rr * 0.42 * Math.sin(ph)).toFixed(1));
+          const half = Number(m.getAttribute("width") ?? 0) / 2;      // satellites carrés : position par le coin
+          m.setAttribute("x", (rr * Math.cos(ph) - half).toFixed(1));
+          m.setAttribute("y", (rr * 0.42 * Math.sin(ph) - half).toFixed(1));
           m.style.opacity = front ? "1" : "0.45";
         });
       });
@@ -321,8 +322,8 @@ function Orbit({ teneurs, total, current, onHover, onSelect }:
         <ellipse className="pa-orb__ring" cx={CX} cy={CY} rx={RX} ry={RY} />
         <ellipse className="pa-orb__ring pa-orb__ring--2" cx={CX} cy={CY} rx={RX * 0.62} ry={RY * 0.62} />
         <ellipse className="pa-orb__ring pa-orb__ring--3" cx={CX} cy={CY} rx={RX * 1.22} ry={RY * 1.22} />
-        <circle cx={CX} cy={CY} r={sunR * 2.6} fill="url(#pa-halo)" />
-        <circle cx={CX} cy={CY} r={sunR} fill="url(#pa-sun)" className="pa-orb__sun" />
+        <rect x={CX - sunR * 2.6} y={CY - sunR * 2.6} width={sunR * 5.2} height={sunR * 5.2} fill="url(#pa-halo)" />
+        <rect x={CX - sunR} y={CY - sunR} width={sunR * 2} height={sunR * 2} fill="url(#pa-sun)" className="pa-orb__sun" transform={`rotate(45 ${CX} ${CY})`} />
         <text x={CX} y={CY - 4} className="pa-orb__sun-k" textAnchor="middle">Comptes</text>
         <text x={CX} y={CY + (compact ? 24 : 18)} className="pa-orb__sun-v" textAnchor="middle">{total ? total.label : "non publié"}</text>
         {teneurs.map((t, i) => {
@@ -334,15 +335,15 @@ function Orbit({ teneurs, total, current, onHover, onSelect }:
               onMouseEnter={() => onHover(t.teneur)} onClick={() => onSelect(t.teneur)} style={{ cursor: "pointer" }}>
               <g className="pa-orb__planet-in">
                 <ellipse rx={r + 18 + Math.max(0, cls.length - 1) * 10} ry={(r + 18 + Math.max(0, cls.length - 1) * 10) * 0.42} className="pa-orb__moonring" />
-                <circle r={r + 30} fill="transparent" />
-                {on && <circle r={r + 7} className="pa-orb__sel" />}
-                <circle r={r} fill="url(#pa-planet)" className="pa-orb__body" />
+                <rect x={-(r + 30)} y={-(r + 30)} width={(r + 30) * 2} height={(r + 30) * 2} fill="transparent" />
+                {on && <rect x={-(r + 7)} y={-(r + 7)} width={(r + 7) * 2} height={(r + 7) * 2} className="pa-orb__sel" transform="rotate(45)" />}
+                <rect x={-r} y={-r} width={r * 2} height={r * 2} fill="url(#pa-planet)" className="pa-orb__body" transform="rotate(45)" />
                 {cls.map((m, k) => {
                   const nat = natureOf(m);
                   return (
-                    <circle key={m.classification} ref={(e) => { (moons.current[i] ??= [])[k] = e; }} r={mr(m.tranche)}
+                    <rect key={m.classification} ref={(e) => { (moons.current[i] ??= [])[k] = e; }} width={mr(m.tranche) * 2} height={mr(m.tranche) * 2}
                       className={`pa-orb__moon${nat === "inactif" ? " is-hollow" : ""}`} style={{ ["--c" as string]: natureColor(nat) }}
-                      onMouseEnter={(e) => { const box = svg.current!.getBoundingClientRect(); const b = (e.target as SVGCircleElement).getBoundingClientRect(); setMoonTip({ t: t.teneur, label: m.label, tranche: m.tranche, x: b.left + b.width / 2 - box.left, y: b.top - box.top }); }}
+                      onMouseEnter={(e) => { const box = svg.current!.getBoundingClientRect(); const b = (e.target as SVGRectElement).getBoundingClientRect(); setMoonTip({ t: t.teneur, label: m.label, tranche: m.tranche, x: b.left + b.width / 2 - box.left, y: b.top - box.top }); }}
                       onMouseLeave={() => setMoonTip(null)} />
                   );
                 })}

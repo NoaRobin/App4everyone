@@ -32,7 +32,10 @@ Les surcharges par page sont dans `pages/` ; elles l'emportent sur ce fichier.
 6. **Graphiques** : courbes pour le temps (≤ 6 séries), barres pour les classements, pas de mosaïque ; infobulle au survol et au focus ; tableau de repli.
 7. **Chargement** : espace réservé et squelette scintillant plutôt que des valeurs qui sautent (CLS) ; vues lourdes chargées à la demande (`import()`).
 8. **Liens profonds** : chaque section a une ancre (`#h-…`) atteignable depuis une URL ; décalage sous l'en-tête collant (`scroll-margin-top`).
-9. **Three.js** : `dispose()` de toute géométrie, matière et texture ; rendu suspendu hors écran ; qualité adaptée au poste (`quality.ts`).
+9. **Formes : institutionnelles, à l'équerre.** Rayon 0 à 2 px (`--radius`), aucune pastille, bulle, bouton rond ni particule ronde ;
+   repères carrés ou losanges, filets d'or, coins de cadre. Graphiques en nuage : carrés ∝ encours, pas de disques.
+10. **Épinglage** : une seule section épinglée par page (l'ouverture de l'Accueil), jamais quand le mouvement est réduit ou en pause.
+11. **Three.js** : `dispose()` de toute géométrie, matière et texture ; rendu suspendu hors écran ; qualité adaptée au poste (`quality.ts`).
 
 ## Liste de contrôle avant livraison
 - [ ] 375 / 768 / 1024 / 1440 px sans défilement horizontal de la page

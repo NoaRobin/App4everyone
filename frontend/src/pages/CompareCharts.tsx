@@ -441,9 +441,9 @@ export function RiskMap({ funds, focus, onFocus, periodLabel }: { funds: CFund[]
               onPointerEnter={() => onFocus(f.id)} onPointerLeave={() => onFocus(null)} tabIndex={0} onFocus={() => onFocus(f.id)} onBlur={() => onFocus(null)}
               aria-label={`${f.name} : volatilité ${pct(f.ind.vol, { signed: false })}, performance annualisée ${pct(f.ind.perf_ann)}, encours ${eur(f.ind.aum)}`}>
               <g className="cmprr__in">
-                <circle r={Math.max(R(f), 14)} fill="transparent" />
-                <circle r={R(f)} fill={f.color} fillOpacity={0.22} stroke={f.color} strokeWidth={2} />
-                <circle r={8} fill={f.color} stroke="var(--paper)" strokeWidth={2} />
+                <rect x={-Math.max(R(f), 14)} y={-Math.max(R(f), 14)} width={Math.max(R(f), 14) * 2} height={Math.max(R(f), 14) * 2} fill="transparent" />
+                <rect x={-R(f)} y={-R(f)} width={R(f) * 2} height={R(f) * 2} fill={f.color} fillOpacity={0.18} stroke={f.color} strokeWidth={1.5} />
+                <rect x={-6} y={-6} width={12} height={12} fill={f.color} stroke="var(--paper)" strokeWidth={2} transform="rotate(45)" />
                 <text dy="0.34em" textAnchor="middle" className="cmprr__l">{f.letter}</text>
               </g>
             </g>
@@ -461,7 +461,7 @@ export function RiskMap({ funds, focus, onFocus, periodLabel }: { funds: CFund[]
           </div>
         </div>
       )}
-      <p className="small muted cmprr__note">{pts.length > 0 && "Taille du disque : encours. "}{off.length > 0 && <>Sans historique suffisant sur la période&nbsp;: {off.map((f) => f.name).join(", ")}.</>}</p>
+      <p className="small muted cmprr__note">{pts.length > 0 && "Taille du carré : encours. "}{off.length > 0 && <>Sans historique suffisant sur la période&nbsp;: {off.map((f) => f.name).join(", ")}.</>}</p>
     </div>
   );
 }

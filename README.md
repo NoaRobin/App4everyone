@@ -11,8 +11,10 @@ dividendes, indices, inventaires) croisé avec **Product Info** (référentiel f
 
 Le site a **deux espaces**, commutés par le sélecteur de l'en-tête :
 
-- **Accueil** (`/`) — **ce qui rapporte** : en trois secondes, la cité des revenus se construit (une tour par fonds, hauteur
-  = revenus de gestion annuels estimés, quatre quartiers = les familles), puis le classement des fonds qui rapportent le plus,
+- **Accueil** (`/`) — **ce qui rapporte** : deux battants s'écartent sur une couture d'or et la cité des revenus sort de terre
+  (un monolithe par fonds, hauteur = revenus de gestion annuels estimés, quatre districts carrés = les familles). Un plan-séquence
+  épinglé au défilement mène ensuite la caméra vers les trois fonds qui rapportent le plus, puis au-dessus des quatre districts
+  (sommaire des chapitres cliquable ; à plat si les animations sont réduites ou en pause). Suivent le classement des fonds qui rapportent le plus,
   ce qui a fait bouger les revenus en un an (collecte ou marché), la répartition par famille, gamme et classe d'actifs, la
   trajectoire mois par mois, les encours, le tableau des départs (pays, drapeaux) et l'entrée vers l'espace métiers.
 - **Espace métiers** (`/metiers` et toutes les rubriques ci-dessous) — pour aller chercher une information vite.

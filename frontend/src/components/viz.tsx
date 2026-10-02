@@ -47,7 +47,7 @@ export function Bridge({ v, end, height = 260, label = "Encours", compact = fals
           return (
             <g key={s.key} onPointerEnter={() => setHover(i)} onPointerLeave={() => setHover(null)} tabIndex={0} onFocus={() => setHover(i)} onBlur={() => setHover(null)}
               role="img" aria-label={`${s.label} : ${s.kind === "total" ? eur(s.value) : eur(s.value, { signed: true })}`} opacity={hover == null || hover === i ? 1 : 0.55}>
-              <rect x={xx} y={top} width={bw} height={h} rx={4} fill={fill} />
+              <rect x={xx} y={top} width={bw} height={h} fill={fill} />
               {next && <line x1={xx + bw} x2={x(next.key)!} y1={y(s.to)} y2={y(s.to)} className="bridge__link" />}
               <text x={xx + bw / 2} y={top - 10} textAnchor="middle" className="bridge__v">{s.kind === "total" ? eur(s.value) : eur(s.value, { signed: true })}</text>
               <text x={xx + bw / 2} y={H - m.b + 20} textAnchor="middle" className="bridge__l">{compact ? s.short : s.kind === "total" ? s.short : s.label.replace("nette estimée", "nette")}</text>
@@ -184,8 +184,8 @@ export function RiskReturn({ points, height = 480, onSelect, xLabel = "Volatilit
           <g key={p.key} className="rr__p" tabIndex={0} role="button" aria-label={`${p.label} : volatilité ${pct(p.x, { signed: false })}, performance ${pct(p.y)}`}
             onPointerEnter={() => setHover(p.key)} onPointerLeave={() => setHover(null)} onFocus={() => setHover(p.key)} onBlur={() => setHover(null)}
             onClick={() => onSelect?.(p)} onKeyDown={(e) => e.key === "Enter" && onSelect?.(p)} opacity={hover && hover !== p.key ? 0.35 : 1}>
-            <circle cx={x(p.x)} cy={y(p.y)} r={r(p.size)} fill={p.color} fillOpacity={0.35} stroke={p.color} strokeWidth={1.5} />
-            <circle cx={x(p.x)} cy={y(p.y)} r={2} fill={p.color} />
+            <rect x={x(p.x) - r(p.size)} y={y(p.y) - r(p.size)} width={r(p.size) * 2} height={r(p.size) * 2} fill={p.color} fillOpacity={0.22} stroke={p.color} strokeWidth={1.5} />
+            <rect x={x(p.x) - 2} y={y(p.y) - 2} width={4} height={4} fill={p.color} />
             {labelled.has(p.key) && hover !== p.key && (
               (p as ScatterPoint & { _left?: boolean })._left
                 ? <text x={x(p.x) - r(p.size) - 4} y={y(p.y)} dy="0.32em" textAnchor="end" className="rr__lab">{p.label}</text>
@@ -220,7 +220,7 @@ export function CalendarBars({ years, color }: { years: CalYear[]; color: string
   const bw = x.bandwidth() / 2 - 2;
   const bar = (xx: number, v: number, fill: string, dashed = false) => {
     const top = y(Math.max(0, v)), h = Math.max(1.5, Math.abs(y(v) - y(0)));
-    return <rect x={xx} y={top} width={bw} height={h} rx={3} fill={fill} stroke={dashed ? "var(--ink-3)" : "none"} strokeDasharray={dashed ? "3 2" : undefined} fillOpacity={dashed ? 0.25 : 1} />;
+    return <rect x={xx} y={top} width={bw} height={h} fill={fill} stroke={dashed ? "var(--ink-3)" : "none"} strokeDasharray={dashed ? "3 2" : undefined} fillOpacity={dashed ? 0.25 : 1} />;
   };
   return (
     <div ref={ref} className="chart">

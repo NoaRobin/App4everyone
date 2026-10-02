@@ -58,8 +58,8 @@
   --sans: "Inter Tight Variable", "Inter Tight", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
 
-  --radius: 16px;
-  --radius-s: 8px;
+  --radius: 2px;
+  --radius-s: 2px;
   --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 20px 50px -30px rgba(0, 0, 0, 0.9);
   --ease: cubic-bezier(0.2, 0.7, 0.1, 1);
   /* Mouvement (design-system/rothschild-am/MASTER.md) : durées selon la distance parcourue, sortie ≈ 65 % de l'entrée */
