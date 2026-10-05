@@ -10,7 +10,7 @@ I.   L'attente : quelques notes de piano, posées, sur une nappe très légère.
      note, la question, puis l'harmonie s'ouvre doucement.
 II.  Toutes les informations métiers : le piano se met à couler en croches, la nappe s'élargit ; un accord qui fleurit
      sur 50,3 Md€ et sur R-co Valor, des clochettes pour la tour, un peu plus d'élan sur le mur.
-III. Le compte : retour au calme, puis l'accord chaud de la fin et la signature.
+III. Le compte : retour au calme, puis l'accord chaud de la fin, la signature, et un dernier accord pour « Nexus ».
 
     python3 music/teaser.py          # écrit public/teaser.wav ; calage repris de src/teaser/timeline.ts
 """
@@ -159,6 +159,8 @@ for j, m in enumerate([26, 38, 45, 50, 54, 57, 62, 66, 69, 76]):
     P(felt(m, 8.0, 0.4), TS + j * 0.06, gain=0.32, pan=-0.4 + j * 0.08, wet=0.65)
 P(warm(CH["Dfin"][1], TOTAL - TS + 1.0, a=2.0, r=3.5), TS, gain=0.36, wet=0.6)
 P(bell(81, 5.0, 0.2), at("sign", 176), gain=0.4, pan=0.3, wet=0.75)
+# Nexus : le nom de l'application, un dernier accord qui s'ouvre
+bloom(at("sign", 334), [50, 57, 62, 66, 69, 74], 0.34, top=86)
 
 VO = json.loads((Path(__file__).resolve().parents[1] / "src" / "teaser" / "vo.json").read_text())
 voice = [(START[v["shot"]] + v["at"] / FPS, START[v["shot"]] + (v["at"] + v["frames"]) / FPS) for v in VO]

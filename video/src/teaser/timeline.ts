@@ -18,7 +18,7 @@ export const SHOTS = {
   search: 390,       //     plus de recherches Product Info (application)
   wall: 240,         //     le mur : tout, en même temps
   count: 360,        // III. Le compte : l'extraction n'est pas finie
-  sign: 300,         //     signature
+  sign: 450,         //     signature, puis le nom de l'application : Nexus
 } as const;
 export type Shot = keyof typeof SHOTS;
 

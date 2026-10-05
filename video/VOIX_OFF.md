@@ -50,4 +50,4 @@ phrase du compte. Prononciations : JUMP « djeump », R-co « ère-co », Rothsc
 | 2:41.80 | 2.5 s | Signature | `vo/sign-0.wav` | Rothschild & Co Asset Management. |
 | 2:44.20 | 2.7 s | Signature | `vo/sign-1.wav` | Toutes les informations métiers, au même endroit. |
 
-Durée totale du film : 2:51.00 (5130 images à 30 i/s).
+Durée totale du film : 2:56.00 (5280 images à 30 i/s). Le film se termine sur le nom de l'application, Nexus (sans voix).

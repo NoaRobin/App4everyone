@@ -8,7 +8,9 @@ import { GoldPoint, Grain } from "../components/Chrome";
 import { mix, prog, tracking } from "../lib/anim";
 import { COLOR, EASE, FONT, NUMERIC, TYPE, VIDEO } from "../theme";
 import { Letterbox, Night } from "./kit";
-import { JUMP_DURATION_S, jumpElapsed, mmss, START } from "./timeline";
+import { JUMP_DURATION_S, jumpElapsed, mmss, SHOTS, START } from "./timeline";
+
+const SIGN_END = SHOTS.sign;
 
 export const Count: React.FC = () => {
   const frame = useCurrentFrame();
@@ -54,6 +56,11 @@ export const Sign: React.FC = () => {
   const half = mix(600, 300, line);
   const name = prog(frame, 14, 30), am = prog(frame, 30, 30), tag = prog(frame, 96, 26), soon = prog(frame, 176, 26);
   const black = prog(frame, 262, 36, EASE.premium);
+  // le nom de l'application, sur le noir : un point d'or, un trait qui s'étire, puis « Nexus »
+  const NX = 312;
+  const nxPoint = prog(frame, NX, 18), nxLine = prog(frame, NX + 10, 40, EASE.signature);
+  const nxName = prog(frame, NX + 22, 36, EASE.premium), nxOut = prog(frame, SIGN_END - 34, 32, EASE.premium);
+  const nxHalf = mix(0, 330, nxLine);
   return (
     <AbsoluteFill>
       <Night glow={1.5} />
@@ -73,6 +80,13 @@ export const Sign: React.FC = () => {
       </div>
       <Grain />
       <AbsoluteFill style={{ background: "#000", opacity: black }} />
+      <AbsoluteFill style={{ opacity: 1 - nxOut }}>
+        <div style={{ position: "absolute", left: 0, width: VIDEO.width, top: CY - 150, textAlign: "center", opacity: nxName, transform: `translateY(${(1 - nxName) * 22}px)` }}>
+          <span style={{ ...TYPE.display, fontSize: 200, color: COLOR.ink, letterSpacing: tracking(frame, NX + 22, 60, 0.12, 0.02) }}>Nexus</span>
+        </div>
+        <div style={{ position: "absolute", left: VIDEO.width / 2 - nxHalf, width: nxHalf * 2, top: CY + 96, height: 2, background: `linear-gradient(90deg, transparent, ${COLOR.gold} 30%, ${COLOR.goldGlow} 70%, transparent)`, boxShadow: "0 0 14px rgba(220,179,109,0.45)", opacity: nxLine }} />
+        <GoldPoint x={VIDEO.width / 2} y={CY + 97} size={12} glow={1.2} style={{ opacity: nxPoint * (1 - 0.6 * nxLine) }} />
+      </AbsoluteFill>
       <Letterbox k={prog(frame, 200, 40, EASE.premium)} />
     </AbsoluteFill>
   );
