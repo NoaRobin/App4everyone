@@ -1,54 +1,36 @@
-# Remotion video
+# « Le fil d'or » — vidéo de présentation
 
-<p align="center">
-  <a href="https://github.com/remotion-dev/logo">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/remotion-dev/logo/raw/main/animated-logo-banner-dark.apng">
-      <img alt="Animated Remotion Logo" src="https://github.com/remotion-dev/logo/raw/main/animated-logo-banner-light.gif">
-    </picture>
-  </a>
-</p>
+Vidéo Remotion de **Rothschild & Co Asset Management** : 55,8 s, 1920 × 1080, 30 i/s. Le storyboard est dans
+`STORYBOARD.md` et la charte dans `src/theme.ts`.
 
-Welcome to your Remotion project!
-
-## Commands
-
-**Install Dependencies**
+## Commandes
 
 ```console
-npm i --loglevel=error
+npm i                      # dépendances
+npm run dev                # Remotion Studio : aperçu interactif, une composition par scène dans « Scenes »
+npx remotion render FilDor out/fil-dor.mp4 --codec=h264 --crf=16 --audio-codec=aac --audio-bitrate=320k
+python3 music/score.py     # régénère public/music.wav (numpy requis)
 ```
 
-**Start Preview**
+Dans un environnement sans Chrome téléchargeable, ajoutez `--browser-executable=<chemin de chrome-headless-shell>`.
 
-```console
-npm run dev
-```
+## Organisation
 
-**Render video**
+| Chemin | Rôle |
+|---|---|
+| `src/Video.tsx` | Le montage (`TransitionSeries`) et les durées des scènes |
+| `src/scenes/S01…S10` | Une scène par fichier, chacune enregistrée comme composition dans Studio |
+| `src/lib/chart.ts` | Échelles partagées par les scènes 3 et 4 : le zoom de l'une aboutit au cadrage de l'autre |
+| `src/components/` | Fond, grain, repères de chapitre, mention « Données illustratives », balayage d'or |
+| `src/data/sample.ts` | Chiffres d'exemple, générés une fois depuis le jeu **fictif** de l'application |
+| `public/app/` | Captures de l'application sur ce même jeu fictif |
+| `public/fonts/` | Polices de l'application (Instrument Serif, Inter Tight, JetBrains Mono, licence OFL), servies en local |
+| `music/score.py` | Partition originale synthétisée, calée sur le montage, d'où `public/music.wav` |
 
-```console
-npx remotion render
-```
+## Règles
 
-**Upgrade Remotion**
-
-```console
-npx remotion upgrade
-```
-
-## Docs
-
-Get started with Remotion by reading the [fundamentals page](https://www.remotion.dev/docs/the-fundamentals).
-
-## Help
-
-We provide help on our [Discord server](https://discord.gg/6VzzNDwUwV).
-
-## Issues
-
-Found an issue with Remotion? [File an issue here](https://github.com/remotion-dev/remotion/issues/new).
-
-## License
-
-Note that for some entities a company license is needed. [Read the terms here](https://github.com/remotion-dev/remotion/blob/main/LICENSE.md).
+- **Aucune donnée réelle.** Tous les chiffres viennent du jeu synthétique de l'application, et chaque scène chiffrée
+  porte la mention « Données illustratives, issues d'un jeu fictif ». Ne remplacez jamais `sample.ts` par un export
+  Fabric.
+- **Hors ligne.** Polices et musique sont locales, le rendu n'appelle aucun service externe.
+- **Si le montage change** (durées dans `src/Video.tsx`), reportez-les dans `music/score.py` puis régénérez la musique.

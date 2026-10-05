@@ -6,10 +6,8 @@
  * Personnalité de mouvement : « Premium » (skill motion-design) — pas de rebond, entrées décélérées, sorties plus courtes,
  * une courbe signature pour 80 % des mouvements, trois durées, un seul motif d'entrée (montée courte + fondu).
  */
-import { Easing } from "remotion";
-import { loadFont as loadSerif } from "@remotion/google-fonts/InstrumentSerif";
-import { loadFont as loadSans } from "@remotion/google-fonts/InterTight";
-import { loadFont as loadMono } from "@remotion/google-fonts/JetBrainsMono";
+import { Easing, staticFile } from "remotion";
+import { loadFont } from "@remotion/fonts";
 
 // ------------------------------------------------------------------ format
 export const VIDEO = { width: 1920, height: 1080, fps: 30 } as const;
@@ -63,16 +61,19 @@ export const DIVERGING = { neg: "#c2476f", mid: "#3a4254", pos: "#6189d6" } as c
 export const FLOW = { in: "#cc9f53", out: "#c2476f" } as const;
 
 // ------------------------------------------------------------------ typographie
-// Les polices de l'application (Instrument Serif, Inter Tight, JetBrains Mono), chargées avant le rendu de chaque image.
-const serif = loadSerif("normal", { weights: ["400"], subsets: ["latin", "latin-ext"] });
-loadSerif("italic", { weights: ["400"], subsets: ["latin", "latin-ext"] });
-const sans = loadSans("normal", { weights: ["300", "400", "500", "600", "700"], subsets: ["latin", "latin-ext"] });
-const mono = loadMono("normal", { weights: ["400"], subsets: ["latin"] });
+// Les polices de l'application (Instrument Serif, Inter Tight, JetBrains Mono — licence OFL), servies en local depuis
+// public/fonts (copies des fichiers @fontsource de l'application) : le rendu ne dépend d'aucun service externe.
+// Le chargement bloque le rendu de chaque image jusqu'à ce que la police soit prête.
+const FAMILIES = { serif: "Instrument Serif", sans: "Inter Tight", mono: "JetBrains Mono" } as const;
+loadFont({ family: FAMILIES.serif, url: staticFile("fonts/instrument-serif-latin-400-normal.woff2"), weight: "400", style: "normal" });
+loadFont({ family: FAMILIES.serif, url: staticFile("fonts/instrument-serif-latin-400-italic.woff2"), weight: "400", style: "italic" });
+loadFont({ family: FAMILIES.sans, url: staticFile("fonts/inter-tight-latin-wght-normal.woff2"), weight: "100 900", style: "normal" });
+loadFont({ family: FAMILIES.mono, url: staticFile("fonts/jetbrains-mono-latin-400-normal.woff2"), weight: "400", style: "normal" });
 
 export const FONT = {
-  serif: `${serif.fontFamily}, "Iowan Old Style", Georgia, serif`,  // chiffres héros, titres éditoriaux
-  sans: `${sans.fontFamily}, system-ui, sans-serif`,                 // textes, libellés, surtitres
-  mono: `${mono.fontFamily}, ui-monospace, monospace`,               // codes, horodatages techniques
+  serif: `"${FAMILIES.serif}", "Iowan Old Style", Georgia, serif`,  // chiffres héros, titres éditoriaux
+  sans: `"${FAMILIES.sans}", system-ui, sans-serif`,                 // textes, libellés, surtitres
+  mono: `"${FAMILIES.mono}", ui-monospace, monospace`,               // codes, horodatages techniques
 } as const;
 
 /**
@@ -125,7 +126,7 @@ export const DUR = {
   slow: 30,        // 1 s — révélations
   hero: 45,        // 1,5 s — chiffre héros, tracé principal
   exitRatio: 0.65,
-  transition: 20,  // fondu ou balayage entre deux scènes
+  cut: 20,         // fondu ou balayage entre deux scènes
 } as const;
 
 /** Décalages en cascade : le total d'une cascade reste sous ~0,5 s (règle du skill motion-design). */

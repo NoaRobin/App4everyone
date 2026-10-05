@@ -1,6 +1,6 @@
 # « Le fil d'or » — storyboard
 
-Vidéo de présentation de l'application **Fonds & encours** · 58 s · 1920 × 1080 · 30 i/s (1 740 images).
+Vidéo de présentation de **Rothschild & Co Asset Management** · 55,8 s · 1920 × 1080 · 30 i/s (1 674 images, transitions déduites).
 Charte : `src/theme.ts`. Données : uniquement le jeu fictif de l'application (`MockSource`), affiché avec la mention
 « Données illustratives ». Aucune donnée réelle, aucun nom de client.
 
@@ -38,18 +38,33 @@ avec la sobriété de sa charte.
 | 3 | 0:09–0:17 | **L'encours, en un trait.** | La courbe des encours sur trois ans se dessine de gauche à droite (`d3.line`, `curveMonotoneX`). Arête lumineuse `goldGlow`, aire en dégradé vertical qui s'efface vers le bas. Graduations en Md€ qui apparaissent avec le tracé. Le chiffre héros compte jusqu'au point d'arrivée. | **34,4 Md€** · +36,7 % sur 3 ans · 44 fonds · 187 parts | Tracé de 4 s (`EASE.draw`) avec une tête d'or qui laisse une traînée. Compteur synchronisé sur la tête. Lent travelling latéral de 3 % (parallaxe entre courbe et graduations). | La caméra plonge sur l'extrémité droite de la courbe. |
 | 4 | 0:17–0:23 | **Du jour à l'année.** | Gros plan sur la dernière année. Un sélecteur à angles vifs passe Année → Trimestre → Mois → Semaine → Jour. À chaque cran, la courbe se reforme avec plus de points, et la collecte de chaque période pousse en barres sous l'axe (or au-dessus, rouge au-dessous). | **Du jour à l'année** · 1 042 jours d'historique · collecte de la semaine : +75 M€ | Changement de forme de la courbe par interpolation des points (0,6 s par cran, de gauche à droite). Barres qui montent depuis l'axe en cascade de 1 image. Le cran actif glisse sous le libellé. | Les barres de collecte s'additionnent et glissent vers la gauche : elles deviennent un segment de l'équation. |
 | 5 | 0:23–0:29 | **D'où vient la croissance.** | Un pont horizontal en barres proportionnelles. L'encours au 31/12 + la collecte nette estimée (or) + l'effet marché (bleu) = l'encours du jour. Les opérateurs + et = en serif, géants et très fins. | **31,0 Md€ + 2,98 Md€ + 0,44 Md€ = 34,4 Md€** · **+11,0 %** depuis le 1er janvier | Chaque segment entre de la gauche et se pose bord à bord avec le précédent (0,6 s, cascade de 5 images). Un compteur par segment, puis le total. | Le dernier segment pivote à la verticale : la première tour de la scène 6. |
-| 6 | 0:29–0:37 | **Ce qui rapporte.** | La cité des revenus en 2,5D isométrique (SVG extrudé) : une tour par fonds, hauteur = revenus, quatre quartiers de familles autour d'une place carrée. Les 22 fonds qui font 80 % des revenus restent allumés, les autres s'éteignent à 25 %. Étiquette du n° 1. | **397 M€ de revenus de gestion par an** · 1,15 % de frais moyens · **22 fonds = 80 % des revenus** · n° 1 : Europe Valeur, 39,5 M€ | Tours qui montent du plus gros au plus petit (cascade 0,5 s au total, `EASE.signature`). Lente orbite de 12° sur toute la scène. Traits de lumière verticaux sur les toits. | La caméra passe au-dessus de la cité, qui s'aplatit en plan : la place centrale devient le point de départ des routes. |
-| 7 | 0:37–0:43 | **Partout où nous sommes autorisés.** | Un tableau des départs d'aéroport à palettes, à angles vifs, avec les drapeaux SVG locaux de l'application. Les lignes se retournent : France, Luxembourg, Suisse, Autriche, Norvège, Royaume-Uni… Derrière, des routes d'or partent de Paris. | **18 pays** · **185 parts enregistrées** | Palettes qui basculent en 3D CSS (`rotateX`) en cascade de 2 images, avec un son de palette discret. Les routes se dessinent avec `evolvePath`. | Les routes convergent en une seule courbe qui se plie : la courbe de concentration. |
-| 8 | 0:43–0:48 | **Qui détient nos fonds.** | Une courbe de concentration (part des comptes en x, part de l'encours en y) qui se dessine. Un repère carré se fixe sur 10 %. À droite, les segments de porteurs en barres fines. | **10 % des comptes détiennent 53 % de l'encours** · clients directs : 46,9 % · parts et tranches uniquement, aucun nom | Tracé de 1,5 s. Repère qui glisse le long de la courbe et se pose. Le chiffre monte au repère. | La courbe se redresse en filet vertical, qui découpe l'écran en panneaux. |
-| 9 | 0:48–0:54 | **Une seule application.** | Les écrans de l'application (Accueil, Encours, Fiche fonds, Distribution, Passif, Comparateur), en captures stylisées sur données fictives. Ils se rangent en une pile 3D à angles vifs, puis s'alignent de face. Texte : « Locale. En lecture seule. Vos données ne quittent pas Fabric. » | 6 rubriques · 1 commande pour lancer | Pile en perspective (`rotateY` de −18° → 0°), panneaux qui entrent l'un après l'autre (cascade de 3 images, total sous 0,5 s), puis mise à plat. | Les panneaux se replient vers le centre jusqu'à ne laisser qu'un filet d'or horizontal. |
-| 10 | 0:54–0:58 | **Signature.** | Le filet se raccourcit sous « Fonds & encours », en serif, et la ligne « Rothschild & Co Asset Management ». Le point d'or du début revient au bout du filet. Mention « Données illustratives » en pied de cadre. | — | Rétraction du filet (`EASE.exit`), apparition du titre en montée et fondu, dernier battement du halo, noir. | Fin. |
+| 6 | 0:28–0:36 | **Ce qui rapporte.** | La cité des revenus en 2,5D isométrique (SVG extrudé) : une tour par fonds, hauteur = revenus, quatre quartiers de familles autour d'une place carrée. Les 22 fonds qui font 80 % des revenus restent allumés, les autres s'éteignent à 25 %. Étiquette du n° 1. | **397 M€ de revenus de gestion par an** · 1,15 % de frais moyens · **22 fonds = 80 % des revenus** · n° 1 : Europe Valeur, 39,5 M€ | Tours qui montent du plus gros au plus petit (cascade 0,5 s au total, `EASE.signature`). Lente orbite de 12° sur toute la scène. Traits de lumière verticaux sur les toits. | La caméra passe au-dessus de la cité, qui s'aplatit en plan : la place centrale devient le point de départ des routes. |
+| 7 | 0:36–0:41 | **Partout où nous sommes autorisés.** | Un tableau des départs d'aéroport à palettes, à angles vifs, avec les drapeaux SVG locaux de l'application. Les lignes se retournent : France, Luxembourg, Suisse, Autriche, Norvège, Royaume-Uni… Derrière, des routes d'or partent de Paris. | **18 pays** · **185 parts enregistrées** | Palettes qui basculent en 3D CSS (`rotateX`) en cascade de 2 images, avec un son de palette discret. Les routes se dessinent avec `evolvePath`. | Les routes convergent en une seule courbe qui se plie : la courbe de concentration. |
+| 8 | 0:41–0:46 | **Qui détient nos fonds.** | Une courbe de concentration (part des comptes en x, part de l'encours en y) qui se dessine. Un repère carré se fixe sur 10 %. À droite, les segments de porteurs en barres fines. | **10 % des comptes détiennent 53 % de l'encours** · clients directs : 46,9 % · parts et tranches uniquement, aucun nom | Tracé de 1,5 s. Repère qui glisse le long de la courbe et se pose. Le chiffre monte au repère. | La courbe se redresse en filet vertical, qui découpe l'écran en panneaux. |
+| 9 | 0:46–0:52 | **Une seule application.** | Les écrans de l'application (Accueil, Encours, Fiche fonds, Distribution, Passif, Comparateur), en captures stylisées sur données fictives. Ils se rangent en une pile 3D à angles vifs, puis s'alignent de face. Texte : « Locale · En lecture seule · Sans service externe ». | 6 rubriques · 1 commande pour lancer | Pile en perspective (`rotateY` de −18° → 0°), panneaux qui entrent l'un après l'autre (cascade de 3 images, total sous 0,5 s), puis mise à plat. | Les panneaux se replient vers le centre jusqu'à ne laisser qu'un filet d'or horizontal. |
+| 10 | 0:52–0:56 | **Signature.** | Le filet se raccourcit entre « Rothschild & Co », en serif, et « Asset Management », en capitales espacées. Le point d'or du début revient au bout du filet. Mention « Données illustratives » en pied de cadre. | — | Rétraction du filet (`EASE.exit`), apparition du titre en montée et fondu, dernier battement du halo, noir. | Fin. |
 
-## Son (proposition)
+## Montage réel
 
-- Une nappe de piano et de cordes, retenue, à 60–70 BPM. Les coupes tombent sur les temps : 0:09, 0:17, 0:29, 0:48.
-- Effets très discrets : un « tic » mécanique sur chaque compteur qui se fige, des palettes sur le tableau des départs, un
-  souffle sur le raccord de la cité.
-- Pas de voix off : tout se lit à l'écran, ce qui permet aussi une lecture sans le son.
+Coupes franches sur le fil entre les scènes 1 → 5 et 8 → 10, où la géométrie est identique des deux côtés. Un balayage
+d'or ouvre la cité (scène 6) et le passif (scène 8), et un fondu mène au tableau des départs (scène 7).
+
+Débuts des scènes : 0,0 · 4,0 · 9,0 · 17,0 · 23,0 · 28,2 · 35,6 · 40,8 · 45,8 · 51,8 s, fin à 55,8 s.
+
+## Son
+
+- **Partition originale synthétisée** (`music/score.py`, libre de droits) : nappe de cordes et piano retenus,
+  60 battements par minute, si mineur résolu en ré majeur à la signature.
+- **Calage sur les images :**
+  - une note pour l'apparition du point ;
+  - l'aspiration des données vers le filet ;
+  - un « tic » quand chaque compteur se fige ;
+  - un clic à chaque cran de granularité, et un piano qui joue plus serré quand la période devient plus fine ;
+  - une note par terme de l'équation ;
+  - une montée puis un impact à l'entrée dans la cité, une gamme ascendante quand les tours montent ;
+  - le bruit des palettes du tableau des départs ;
+  - un accord égrené à la signature.
+- Pas de voix off : tout se lit à l'écran, sans le son.
 
 ## Construction (skills Remotion)
 
@@ -61,5 +76,7 @@ avec la sobriété de sa charte.
 - Tout est animé par `useCurrentFrame()` et `interpolate()`, sans transition ni animation CSS. `premountFor={fps}` sur chaque séquence.
 - Données : un fichier `src/data/sample.ts` généré une fois depuis le jeu fictif de l'application (séries mensuelles et
   quotidiennes, revenus par fonds, pays, concentration). Il est versionné, et aucune lecture de Fabric n'a lieu.
+- Polices : les fichiers de l'application, servis en local (`public/fonts`) avec `@remotion/fonts`. Le rendu ne dépend
+  pas de Google Fonts.
 - Contrôle : images clés rendues en PNG pour vérifier les marges de sécurité (144 px de côté, 100 px en haut et en bas)
   et la taille minimale des textes.

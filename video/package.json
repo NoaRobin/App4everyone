@@ -7,10 +7,13 @@
   "private": true,
   "dependencies": {
     "@remotion/cli": "4.0.533",
+    "@remotion/fonts": "4.0.533",
     "@remotion/google-fonts": "4.0.533",
+    "@remotion/media": "4.0.533",
     "@remotion/paths": "4.0.533",
     "@remotion/tailwind-v4": "4.0.533",
     "@remotion/transitions": "4.0.533",
+    "country-flag-icons": "^1.6.20",
     "d3": "^7.9.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
