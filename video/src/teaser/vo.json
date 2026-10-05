@@ -4,23 +4,23 @@
   "i": 0,
   "file": "vo/launch-0.wav",
   "at": 18,
-  "frames": 50,
+  "frames": 59,
   "text": "Chaque matin, la même scène."
  },
  {
   "shot": "launch",
   "i": 1,
   "file": "vo/launch-1.wav",
-  "at": 77,
-  "frames": 56,
+  "at": 80,
+  "frames": 62,
   "text": "On lance une extraction JUMP."
  },
  {
   "shot": "launch",
   "i": 2,
   "file": "vo/launch-2.wav",
-  "at": 142,
-  "frames": 43,
+  "at": 145,
+  "frames": 49,
   "text": "Dix minutes d'attente."
  },
  {
@@ -28,7 +28,7 @@
   "i": 0,
   "file": "vo/ritual-0.wav",
   "at": 24,
-  "frames": 48,
+  "frames": 54,
   "text": "Pendant ce temps, on cherche."
  },
  {
@@ -36,7 +36,7 @@
   "i": 1,
   "file": "vo/ritual-1.wav",
   "at": 81,
-  "frames": 52,
+  "frames": 57,
   "text": "Une fiche dans Product Info."
  },
  {
@@ -44,23 +44,23 @@
   "i": 2,
   "file": "vo/ritual-2.wav",
   "at": 142,
-  "frames": 53,
+  "frames": 59,
   "text": "Un document dans Doc Info."
  },
  {
   "shot": "ritual",
   "i": 3,
   "file": "vo/ritual-3.wav",
-  "at": 201,
-  "frames": 56,
+  "at": 204,
+  "frames": 62,
   "text": "Puis Centaure, puis Adjuto."
  },
  {
   "shot": "ritual",
   "i": 4,
   "file": "vo/ritual-4.wav",
-  "at": 266,
-  "frames": 79,
+  "at": 269,
+  "frames": 81,
   "text": "Chaque outil détient une partie de la réponse."
  },
  {
@@ -68,7 +68,7 @@
   "i": 0,
   "file": "vo/rupture-0.wav",
   "at": 56,
-  "frames": 49,
+  "frames": 55,
   "text": "Et si tout était déjà là ?"
  },
  {
@@ -76,15 +76,15 @@
   "i": 0,
   "file": "vo/fabric-0.wav",
   "at": 16,
-  "frames": 57,
+  "frames": 60,
   "text": "Toutes ces données existent déjà."
  },
  {
   "shot": "fabric",
   "i": 1,
   "file": "vo/fabric-1.wav",
-  "at": 78,
-  "frames": 122,
+  "at": 79,
+  "frames": 127,
   "text": "Elles sont réunies dans Fabric, la plateforme de données de Microsoft :"
  },
  {
@@ -92,7 +92,7 @@
   "i": 2,
   "file": "vo/fabric-2.wav",
   "at": 209,
-  "frames": 71,
+  "frames": 83,
   "text": "un seul endroit, mis à jour chaque jour."
  },
  {
@@ -100,15 +100,15 @@
   "i": 3,
   "file": "vo/fabric-3.wav",
   "at": 300,
-  "frames": 106,
+  "frames": 107,
   "text": "Notre application lit ces données, sans jamais les modifier."
  },
  {
   "shot": "fabric",
   "i": 4,
   "file": "vo/fabric-4.wav",
-  "at": 407,
-  "frames": 82,
+  "at": 410,
+  "frames": 100,
   "text": "Elle les relie, les calcule, et les met en forme."
  },
  {
@@ -116,7 +116,7 @@
   "i": 0,
   "file": "vo/manifesto-0.wav",
   "at": 56,
-  "frames": 101,
+  "frames": 111,
   "text": "Résultat : toutes les informations métiers, au même endroit."
  },
  {
@@ -124,7 +124,7 @@
   "i": 0,
   "file": "vo/aum-0.wav",
   "at": 150,
-  "frames": 107,
+  "frames": 131,
   "text": "Plus de cinquante milliards d'euros d'encours, suivis au jour le jour."
  },
  {
@@ -132,15 +132,15 @@
   "i": 0,
   "file": "vo/valor-0.wav",
   "at": 64,
-  "frames": 85,
+  "frames": 94,
   "text": "Notre plus gros fonds, R-co Valor : dix milliards."
  },
  {
   "shot": "valor",
   "i": 1,
   "file": "vo/valor-1.wav",
-  "at": 158,
-  "frames": 51,
+  "at": 161,
+  "frames": 50,
   "text": "Près d'un euro sur cinq."
  },
  {
@@ -148,7 +148,7 @@
   "i": 0,
   "file": "vo/courbe-0.wav",
   "at": 30,
-  "frames": 119,
+  "frames": 121,
   "text": "L'encours de chaque fonds, par jour, par semaine, par mois ou par année."
  },
  {
@@ -156,7 +156,7 @@
   "i": 1,
   "file": "vo/courbe-1.wav",
   "at": 155,
-  "frames": 34,
+  "frames": 30,
   "text": "En un clic."
  },
  {
@@ -164,7 +164,7 @@
   "i": 0,
   "file": "vo/revenus-0.wav",
   "at": 40,
-  "frames": 57,
+  "frames": 63,
   "text": "Les fonds qui nous font gagner le plus,"
  },
  {
@@ -172,7 +172,7 @@
   "i": 1,
   "file": "vo/revenus-1.wav",
   "at": 106,
-  "frames": 95,
+  "frames": 102,
   "text": "estimés à partir des encours et des frais de gestion."
  },
  {
@@ -180,7 +180,7 @@
   "i": 0,
   "file": "vo/distribution-0.wav",
   "at": 40,
-  "frames": 96,
+  "frames": 90,
   "text": "Où chaque fonds est autorisé à la vente, pays par pays,"
  },
  {
@@ -188,7 +188,7 @@
   "i": 1,
   "file": "vo/distribution-1.wav",
   "at": 138,
-  "frames": 36,
+  "frames": 42,
   "text": "et pour quels clients."
  },
  {
@@ -196,7 +196,7 @@
   "i": 0,
   "file": "vo/passif-0.wav",
   "at": 24,
-  "frames": 121,
+  "frames": 136,
   "text": "Qui détient nos fonds : par type de client, par teneur de compte, par pays."
  },
  {
@@ -204,7 +204,7 @@
   "i": 0,
   "file": "vo/perf-0.wav",
   "at": 60,
-  "frames": 112,
+  "frames": 137,
   "text": "Les performances, comparées côte à côte, sur la même période."
  },
  {
@@ -212,7 +212,7 @@
   "i": 0,
   "file": "vo/search-0.wav",
   "at": 22,
-  "frames": 71,
+  "frames": 82,
   "text": "Plus besoin de chercher dans Product Info."
  },
  {
@@ -220,7 +220,7 @@
   "i": 1,
   "file": "vo/search-1.wav",
   "at": 120,
-  "frames": 109,
+  "frames": 138,
   "text": "Une question sur un fonds ? Les frais, le dépositaire, un pays ?"
  },
  {
@@ -228,7 +228,7 @@
   "i": 2,
   "file": "vo/search-2.wav",
   "at": 272,
-  "frames": 86,
+  "frames": 112,
   "text": "La réponse s'affiche, directement sur la fiche."
  },
  {
@@ -244,7 +244,7 @@
   "i": 1,
   "file": "vo/wall-1.wav",
   "at": 38,
-  "frames": 29,
+  "frames": 25,
   "text": "Revenus."
  },
  {
@@ -252,14 +252,14 @@
   "i": 2,
   "file": "vo/wall-2.wav",
   "at": 68,
-  "frames": 36,
+  "frames": 33,
   "text": "Distribution."
  },
  {
   "shot": "wall",
   "i": 3,
   "file": "vo/wall-3.wav",
-  "at": 98,
+  "at": 104,
   "frames": 27,
   "text": "Passif."
  },
@@ -267,16 +267,16 @@
   "shot": "wall",
   "i": 4,
   "file": "vo/wall-4.wav",
-  "at": 128,
-  "frames": 34,
+  "at": 134,
+  "frames": 32,
   "text": "Performance."
  },
  {
   "shot": "wall",
   "i": 5,
   "file": "vo/wall-5.wav",
-  "at": 164,
-  "frames": 33,
+  "at": 169,
+  "frames": 26,
   "text": "Tout est relié."
  },
  {
@@ -284,7 +284,7 @@
   "i": 0,
   "file": "vo/count-0.wav",
   "at": 40,
-  "frames": 97,
+  "frames": 120,
   "text": "Pendant ce film, une extraction JUMP n'aurait pas fini."
  },
  {
@@ -292,7 +292,7 @@
   "i": 1,
   "file": "vo/count-1.wav",
   "at": 196,
-  "frames": 70,
+  "frames": 84,
   "text": "L'application, elle, vous a tout montré."
  },
  {
@@ -300,15 +300,15 @@
   "i": 0,
   "file": "vo/sign-0.wav",
   "at": 24,
-  "frames": 77,
+  "frames": 75,
   "text": "Rothschild & Co Asset Management."
  },
  {
   "shot": "sign",
   "i": 1,
   "file": "vo/sign-1.wav",
-  "at": 96,
-  "frames": 81,
+  "at": 102,
+  "frames": 88,
   "text": "Toutes les informations métiers, au même endroit."
  }
 ]

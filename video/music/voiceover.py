@@ -7,8 +7,13 @@ Deux moteurs :
             AZURE_SPEECH_KEY=… AZURE_SPEECH_REGION=francecentral python3 music/voiceover.py
             python3 music/voiceover.py --voice fr-FR-HenriNeural          # autre voix
             python3 music/voiceover.py --compare                          # comparatif de voix (out/voix-comparatif.wav)
-  kokoro  synthèse hors ligne (voix française Kokoro), voix de travail :
+  piper   voix masculine française hors ligne (Piper « miro », haute qualité), grave et posée — voix du film :
+            PIPER_DIR=<vits-piper-fr_FR-miro-high> python3 music/voiceover.py --engine piper --keep-timing
+          Modèle : github.com/k2-fsa/sherpa-onnx, releases tts-models (vits-piper-fr_FR-miro-high). Non versionné.
+  kokoro  synthèse hors ligne (voix française Kokoro, féminine), ancienne voix de travail :
             KOKORO_DIR=<dossier du modèle> python3 music/voiceover.py --engine kokoro
+
+--keep-timing garde les débuts de phrase actuels de vo.json (une phrase n'est repoussée que si la précédente déborde).
 
 Sortie : public/vo/<plan>-<i>.wav et src/teaser/vo.json ; un contrôle vérifie que chaque phrase tient dans son plan.
 """
@@ -57,7 +62,7 @@ SEGMENTS: dict[str, list[tuple[int | None, str]]] = {
     "sign": [(24, "Rothschild & Co Asset Management."), (96, "Toutes les informations métiers, au même endroit.")],
 }
 PRONONCIATION = {
-    "JUMP": "djeumpe", "R-co Valor": "Ère-co Valor", "Rothschild & Co": "Rotchild and Co", "Product Info": "Prodeuct Info",
+    "JUMP": "djeumpe", "R-co Valor": "Ère-co Valor", "Rothschild & Co": "Rotchild ènde Co", "Asset Management": "Assète Manadjmeunte", "Product Info": "Prodeuct Info",
     "Fabric": "Fabrique",
 }
 
@@ -135,6 +140,27 @@ def kokoro_tts_factory():
     return tts
 
 
+PIPER_PACE = [1.15, 1.08, 1.0, 0.94]   # débit posé ; accéléré seulement pour une phrase qui ne tiendrait pas dans son créneau
+
+
+def piper_tts_factory():
+    """Voix Piper par sherpa-onnx, un moteur par débit. Lissée (bruit réduit) pour un timbre calme et régulier."""
+    import sherpa_onnx
+    d = Path(os.environ.get("PIPER_DIR", "."))
+    model = next(d.glob("*.onnx"), None)
+    if model is None:
+        sys.exit("PIPER_DIR doit contenir le modèle Piper (.onnx, tokens.txt, espeak-ng-data).")
+    engines = {ls: sherpa_onnx.OfflineTts(sherpa_onnx.OfflineTtsConfig(model=sherpa_onnx.OfflineTtsModelConfig(
+        vits=sherpa_onnx.OfflineTtsVitsModelConfig(model=str(model), tokens=str(d / "tokens.txt"), data_dir=str(d / "espeak-ng-data"),
+                                                   length_scale=ls, noise_scale=0.45, noise_scale_w=0.6), num_threads=4)))
+               for ls in PIPER_PACE}
+
+    def tts(text: str, pace: float = PIPER_PACE[0]) -> tuple[np.ndarray, int]:
+        a = engines[pace].generate(spoken(text), sid=0, speed=1.0)
+        return np.asarray(a.samples, dtype=np.float32), a.sample_rate
+    return tts
+
+
 def studio(s: np.ndarray, sr: int) -> np.ndarray:
     """Retrait du continu, rognage des silences de bord, normalisation, attaque et queue adoucies."""
     s = s - s.mean()
@@ -178,30 +204,51 @@ def compare(voices: list[str]) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--engine", choices=["azure", "kokoro"], default="azure" if os.environ.get("AZURE_SPEECH_KEY") else "kokoro")
+    ap.add_argument("--engine", choices=["azure", "piper", "kokoro"], default="azure" if os.environ.get("AZURE_SPEECH_KEY") else "kokoro")
     ap.add_argument("--voice", default=AZURE_VOICE)
     ap.add_argument("--compare", action="store_true", help="comparatif Rémy / Henri, sans toucher au film")
+    ap.add_argument("--keep-timing", action="store_true", help="garder les débuts de phrase actuels de vo.json")
     ap.add_argument("--force", action="store_true", help="écrire même si une phrase déborde de son plan")
     args = ap.parse_args()
     if args.compare:
         compare([AZURE_VOICE, "fr-FR-HenriNeural"])
         return
-    tts = (lambda t: azure_tts(t, args.voice)) if args.engine == "azure" else kokoro_tts_factory()
+    if args.engine == "piper":
+        from affiner_voix import studio as studio_chaud   # chaleur, présence, compression douce
+        piper = piper_tts_factory()
+    tts = (lambda t: azure_tts(t, args.voice)) if args.engine == "azure" else piper if args.engine == "piper" else kokoro_tts_factory()
+    vo_json = ROOT / "src" / "teaser" / "vo.json"
+    keep = {m["file"]: m["at"] for m in json.loads(vo_json.read_text())} if args.keep_timing else {}
+    # créneau d'une phrase gardée à sa place : jusqu'au début de la suivante (ou la fin du plan), marges de fit_check()
+    def slot(shot: str, i: int) -> int:
+        nxt = keep.get(f"vo/{shot}-{i + 1}.wav")
+        return (nxt - 3 if nxt is not None else SHOTS[shot] - 6) - keep[f"vo/{shot}-{i}.wav"]
     print(f"moteur : {args.engine}" + (f" · voix {args.voice}" if args.engine == "azure" else ""))
     # Tout est synthétisé en mémoire d'abord : rien n'est remplacé si un appel échoue ou si une phrase déborde
     ap_force = args.force
     clips, meta = {}, []
     for shot, segs in SEGMENTS.items():
-        t = 0
+        t, prev_end = 0, -99
         for i, (at, text) in enumerate(segs):
-            s, sr = tts(text)
-            s = studio(s, sr)
             name = f"{shot}-{i}"
+            if args.engine == "piper":
+                for pace in PIPER_PACE:   # le débit le plus posé qui tient dans le créneau
+                    s, sr = piper(text, pace)
+                    s = studio_chaud(s, sr)
+                    loud = np.flatnonzero(np.abs(s) > 0.02 * np.max(np.abs(s)))   # silence de fin rendu par Piper
+                    s = s[: loud[-1] + int(0.12 * sr)].copy()
+                    s[-int(0.03 * sr):] *= np.linspace(1, 0, int(0.03 * sr))
+                    if not keep or np.ceil(len(s) / sr * 30) <= slot(shot, i):
+                        break
+            else:
+                s, sr = tts(text)
+                s = studio(s, sr)
             clips[name] = (s, sr)
             frames = int(np.ceil(len(s) / sr * 30))
-            start = at if at is not None else t
+            # phrase gardée à sa place, ou repoussée juste après la précédente si celle-ci est plus longue
+            start = max(keep[f"vo/{name}.wav"], prev_end + 3) if keep else at if at is not None else t
             meta.append({"shot": shot, "i": i, "file": f"vo/{name}.wav", "at": start, "frames": frames, "text": text})
-            t = start + frames + GAP
+            t, prev_end = start + frames + GAP, start + frames
             print(f"{name:15s} @{start:4d} +{frames:3d}  {text}")
     if not fit_check(meta) and not ap_force:
         sys.exit("Des phrases ne tiennent pas dans leur plan : rien n'a été remplacé. Ajuster SEGMENTS ou les durées "
@@ -212,7 +259,7 @@ def main() -> None:
         old.unlink()
     for name, (s, sr) in clips.items():
         sf.write(out / f"{name}.wav", s, sr)
-    (ROOT / "src" / "teaser" / "vo.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1) + "\n")
+    vo_json.write_text(json.dumps(meta, ensure_ascii=False, indent=1) + "\n")
     print(f"{len(clips)} phrases écrites dans public/vo ; toutes tiennent dans leur plan")
 
 if __name__ == "__main__":
