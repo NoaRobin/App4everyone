@@ -13,8 +13,8 @@ Deux films Remotion en 1920 × 1080, 30 i/s, qui partagent la charte de `src/the
 
 | Fichier | Contenu |
 |---|---|
-| `rendus/dix-minutes.mp4` | « Dix minutes », pleine qualité (1920 × 1080, H.264, son AAC 320 kb/s), voix off masculine « miro » |
-| `rendus/dix-minutes-leger.mp4` | La même vidéo allégée (moins de 30 Mo), pour l'envoyer par messagerie |
+| `rendus/dix-minutes.mp4` | « Dix minutes », pleine qualité (1920 × 1080, H.264, son AAC 320 kb/s, 80 Mo), voix off hors ligne affinée |
+| `rendus/dix-minutes-leger.mp4` | La même vidéo allégée (23 Mo), pour l'envoyer par messagerie |
 
 ## Commandes
 
@@ -23,8 +23,6 @@ npm i                      # dépendances
 npm run dev                # Remotion Studio : aperçu interactif, une composition par scène dans « Scenes »
 npx remotion render DixMinutes out/dix-minutes.mp4 --codec=h264 --crf=17 --audio-codec=aac --audio-bitrate=320k
 node record/recorder.mjs   # réenregistre les prises de l'application (application lancée sur APP_URL, Playwright requis)
-PIPER_DIR=<vits-piper-fr_FR-miro-high> python3 music/voiceover.py --engine piper --keep-timing
-                                       # voix du film : masculine, hors ligne ; garde les débuts de phrase actuels
 python3 music/voiceover.py --compare   # comparatif de voix Azure (Rémy, Henri), sans toucher au film
 python3 music/voiceover.py             # voix off Azure AI Speech si AZURE_SPEECH_KEY et AZURE_SPEECH_REGION sont définies,
                                        # sinon voix de travail hors ligne (KOKORO_DIR=<modèle>) ; vérifie que tout tient
@@ -51,7 +49,7 @@ Dans un environnement sans Chrome téléchargeable, ajoutez `--browser-executabl
 | `src/teaser/` | « Dix minutes » : minutage (`timeline.ts`), actes I à III, plan « Comment ça marche », voix off et sous-titres |
 | `record/` | Enregistreur de l'application en temps virtuel : 1/30 s exactement entre deux captures, donc des prises sans saccade |
 | `public/rec/` | Les prises de l'application, sur son jeu de données fictif |
-| `public/vo/`, `VOIX_OFF.md` | Voix off (voix masculine française Piper « miro », produite hors ligne) et texte minuté |
+| `public/vo/`, `VOIX_OFF.md` | Voix off (Azure AI Speech, voix masculine fr-FR-RemyMultilingualNeural ; seul le texte de la voix off est envoyé au service) et texte minuté |
 | `music/synth.py`, `music/teaser.py` | Instruments de synthèse, et la partition du teaser |
 
 ## Règles
