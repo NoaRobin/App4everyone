@@ -44,7 +44,7 @@
   "i": 2,
   "file": "vo/ritual-2.wav",
   "at": 142,
-  "frames": 50,
+  "frames": 53,
   "text": "Un document dans Doc Info."
  },
  {
@@ -60,7 +60,7 @@
   "i": 4,
   "file": "vo/ritual-4.wav",
   "at": 266,
-  "frames": 75,
+  "frames": 79,
   "text": "Chaque outil détient une partie de la réponse."
  },
  {
@@ -76,7 +76,7 @@
   "i": 0,
   "file": "vo/fabric-0.wav",
   "at": 16,
-  "frames": 53,
+  "frames": 57,
   "text": "Toutes ces données existent déjà."
  },
  {
@@ -100,7 +100,7 @@
   "i": 3,
   "file": "vo/fabric-3.wav",
   "at": 300,
-  "frames": 98,
+  "frames": 106,
   "text": "Notre application lit ces données, sans jamais les modifier."
  },
  {
@@ -140,7 +140,7 @@
   "i": 1,
   "file": "vo/valor-1.wav",
   "at": 158,
-  "frames": 47,
+  "frames": 51,
   "text": "Près d'un euro sur cinq."
  },
  {
@@ -148,7 +148,7 @@
   "i": 0,
   "file": "vo/courbe-0.wav",
   "at": 30,
-  "frames": 116,
+  "frames": 119,
   "text": "L'encours de chaque fonds, par jour, par semaine, par mois ou par année."
  },
  {
@@ -156,7 +156,7 @@
   "i": 1,
   "file": "vo/courbe-1.wav",
   "at": 155,
-  "frames": 32,
+  "frames": 34,
   "text": "En un clic."
  },
  {
@@ -180,7 +180,7 @@
   "i": 0,
   "file": "vo/distribution-0.wav",
   "at": 40,
-  "frames": 89,
+  "frames": 96,
   "text": "Où chaque fonds est autorisé à la vente, pays par pays,"
  },
  {
@@ -196,7 +196,7 @@
   "i": 0,
   "file": "vo/passif-0.wav",
   "at": 24,
-  "frames": 118,
+  "frames": 121,
   "text": "Qui détient nos fonds : par type de client, par teneur de compte, par pays."
  },
  {
@@ -244,7 +244,7 @@
   "i": 1,
   "file": "vo/wall-1.wav",
   "at": 38,
-  "frames": 24,
+  "frames": 29,
   "text": "Revenus."
  },
  {
@@ -276,7 +276,7 @@
   "i": 5,
   "file": "vo/wall-5.wav",
   "at": 164,
-  "frames": 32,
+  "frames": 33,
   "text": "Tout est relié."
  },
  {
@@ -300,7 +300,7 @@
   "i": 0,
   "file": "vo/sign-0.wav",
   "at": 24,
-  "frames": 75,
+  "frames": 77,
   "text": "Rothschild & Co Asset Management."
  },
  {

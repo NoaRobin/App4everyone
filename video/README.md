@@ -13,7 +13,7 @@ Deux films Remotion en 1920 × 1080, 30 i/s, qui partagent la charte de `src/the
 
 | Fichier | Contenu |
 |---|---|
-| `rendus/dix-minutes.mp4` | « Dix minutes », pleine qualité (1920 × 1080, H.264, son AAC 320 kb/s, 80 Mo), voix off provisoire |
+| `rendus/dix-minutes.mp4` | « Dix minutes », pleine qualité (1920 × 1080, H.264, son AAC 320 kb/s, 80 Mo), voix off hors ligne affinée |
 | `rendus/dix-minutes-leger.mp4` | La même vidéo allégée (23 Mo), pour l'envoyer par messagerie |
 
 ## Commandes
@@ -27,6 +27,7 @@ python3 music/voiceover.py --compare   # comparatif de voix Azure (Rémy, Henri)
 python3 music/voiceover.py             # voix off Azure AI Speech si AZURE_SPEECH_KEY et AZURE_SPEECH_REGION sont définies,
                                        # sinon voix de travail hors ligne (KOKORO_DIR=<modèle>) ; vérifie que tout tient
                                        # dans les plans
+KOKORO_DIR=<modèle> WHISPER_DIR=<whisper> python3 music/affiner_voix.py   # affine la voix hors ligne (variantes jugées par Whisper, traitement studio)
 python3 music/teaser.py    # musique du teaser, effacée sous la voix (public/teaser.wav)
 python3 music/score.py     # musique du « Fil d'or » (public/music.wav)
 ```

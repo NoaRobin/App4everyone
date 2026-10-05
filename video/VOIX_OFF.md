@@ -2,7 +2,7 @@
 
 Texte définitif de la voix off, avec le minutage du montage (`src/teaser/vo.json`). Voix de diffusion : Azure AI Speech,
 voix masculine `fr-FR-RemyMultilingualNeural`, débit posé et registre grave (`python3 music/voiceover.py`, avec
-`AZURE_SPEECH_KEY` et `AZURE_SPEECH_REGION`). Sans clé, le script produit une voix de travail hors ligne. Un comédien peut
+`AZURE_SPEECH_KEY` et `AZURE_SPEECH_REGION`). Sans clé, la voix est produite hors ligne (Kokoro, voix française) puis affinée par `music/affiner_voix.py` : pour chaque phrase, plusieurs graphies et débits sont essayés, une reconnaissance vocale (Whisper) retient la plus intelligible, et un traitement studio discret est appliqué. L'erreur de retranscription passe de 12,1 % à 5,7 %. Un comédien peut
 aussi enregistrer ce texte phrase par phrase et déposer les fichiers dans `public/vo/` sous les mêmes noms.
 
 Ton : posé, chaleureux, sans emphase publicitaire ; un léger sourire sur « Et si tout était déjà là ? » et sur la dernière
