@@ -550,7 +550,7 @@ function FundEconomics({ id }: { id: string }) {
         </Link>
       )}
       {p && (
-        <Link to="/passif" className="fund__eco-i" title="Part de l'encours suivi au passif (positions des comptes), en tranche de positions">
+        <Link to={`/passif?fonds=${encodeURIComponent(id)}#h-clients`} className="fund__eco-i" title="Part de l'encours suivi au passif (positions des comptes), en tranche de positions">
           <span className="eyebrow">Au passif</span>
           <b className="num">{p.pct != null ? pctRaw(p.pct, 1) : "—"}</b>
           <span className="small muted">{p.positions ? `${p.positions.label} positions` : "positions < 5"}{pas.data?.source === "synthétique" ? " · synthétique" : ""}</span>

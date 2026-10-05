@@ -67,7 +67,7 @@ export type PassifResp = {
   comptes?: (Comptes & { reason?: string; dissolution_rule?: string }) | null; positions?: Positions | null; transactions?: Transactions | null;
   lecture?: Lecture | null;
   synthese?: import("./PassifSections").Synthese | null;
-  funds?: Record<string, { pct: number; positions?: Tranche }> | null;
+  funds?: Record<string, { pct: number; positions?: Tranche; name?: string | null }> | null;
 };
 
 /** Nature d'une classification d'après son libellé (« TA/Client Actif », « RMM/OPC », « TA/Omnibus »…). */

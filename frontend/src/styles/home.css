@@ -249,3 +249,42 @@
 @media (max-width: 1100px) { .pth__g { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px) { .pth__g { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .rv__copy .rv__legend, .rv__cue { display: none; } .rv__ctl { bottom: calc(5.5vh + 12px); } }
+
+/* ---------------------------------------------------------------- Accueil : le prisme des revenus */
+.rv__film:not(.is-static) .rv__vignette { background: radial-gradient(70% 55% at 18% 18%, rgba(2, 4, 9, .92), rgba(2, 4, 9, 0) 70%),
+  linear-gradient(180deg, rgba(2, 4, 9, .35) 0%, rgba(2, 4, 9, 0) 20%, rgba(2, 4, 9, 0) 80%, rgba(2, 4, 9, .8) 100%); }
+/* Sommaire des chapitres : en bas, à l'horizontale (le mur du classement occupe la droite) */
+.rv__film:not(.is-static) .rv__rail { right: auto; top: auto; left: 50%; bottom: calc(5.5vh + 14px); transform: translateX(-50%); }
+.rv__film:not(.is-static) .rv__rail ol { display: flex; gap: 0; border-right: 0; border-top: 1px solid var(--night-line); }
+.rv__film:not(.is-static) .rv__rail button { padding: 0 14px; margin: -1px 0 0; border-right: 0; border-top: 1px solid transparent; }
+.rv__film:not(.is-static) .rv__rail button[aria-current="step"] { border-top-color: var(--gold); }
+.rv__film:not(.is-static) .rv__ctl { bottom: calc(5.5vh + 14px); }
+.rv__facts--chap { margin-top: 22px; grid-template-columns: 1fr 1fr; }
+.prism__slot { position: absolute; left: 0; top: 0; display: grid; grid-template-columns: 30px minmax(0, auto) auto; column-gap: 12px; align-items: baseline;
+  white-space: nowrap; pointer-events: auto; cursor: pointer; padding: 2px 8px 2px 0; color: var(--on-night); }
+.prism__slot span { font-size: 12px; color: var(--gold-ink); }
+.prism__slot b { font-family: var(--serif); font-weight: 400; font-size: 15px; max-width: 26ch; overflow: hidden; text-overflow: ellipsis; }
+.prism__slot em { font-style: normal; font-size: 12px; color: var(--on-night-2); font-variant-numeric: tabular-nums; }
+.prism__slot:hover b, .prism__slot:focus-visible b { color: var(--gold-ink); }
+.prism__slot.is-first { row-gap: 2px; }
+.prism__slot.is-first i { grid-column: 1 / -1; font-style: normal; font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: var(--gold); }
+.prism__slot.is-first b { font-size: clamp(20px, 1.8vw, 28px); color: #fff3d6; }
+.prism__slot.is-first span { font-size: 16px; }
+.prism__slot.is-first em { font-size: 14px; color: var(--gold-ink); }
+.prism__slot.is-rest { cursor: default; pointer-events: none; }
+.prism__slot.is-rest b { font-style: italic; color: var(--on-night-2); }
+.prism__tag { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; gap: 2px; white-space: nowrap; pointer-events: none; }
+.prism__tag b { font-family: var(--serif); font-weight: 400; font-size: 15px; color: var(--on-night); }
+.prism__tag span { font-size: 12px; color: var(--on-night-2); font-variant-numeric: tabular-nums; }
+.prism__tag.is-fam { align-items: flex-end; text-align: right; padding-right: 10px; }
+.prism__tag.is-prism { align-items: center; }
+.prism__tag.is-prism b { color: var(--gold-ink); letter-spacing: .04em; }
+@media (max-width: 900px) {
+  .prism__slot[data-r="5"], .prism__slot[data-r="6"], .prism__slot[data-r="7"], .prism__slot[data-r="8"], .prism__slot[data-r="9"] { display: none; }
+  .prism__tag.is-fam, .prism__tag.is-src { display: none; }
+  .prism__slot b { max-width: 14ch; }
+  .rv__film:not(.is-static) .rv__rail { display: none; }
+}
+/* Fiches de chapitre : fond sombre pour rester lisibles au-dessus des faisceaux */
+.rv__film:not(.is-static) .rv__chap { padding: 26px 28px; background: linear-gradient(90deg, rgba(2, 4, 9, .86), rgba(2, 4, 9, .7)); border-left: 2px solid var(--gold);
+  backdrop-filter: blur(6px); }

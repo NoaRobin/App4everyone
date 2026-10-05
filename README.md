@@ -11,12 +11,11 @@ dividendes, indices, inventaires) croisé avec **Product Info** (référentiel f
 
 Le site a **deux espaces**, commutés par le sélecteur de l'en-tête :
 
-- **Accueil** (`/`) — **ce qui rapporte** : deux battants s'écartent sur une couture d'or et la cité des revenus sort de terre
-  (un monolithe par fonds, hauteur = revenus de gestion annuels estimés, quatre rangées parallèles = les familles). Un plan-séquence
-  épinglé au défilement mène la caméra vers les trois fonds qui rapportent le plus, puis chaque tour quitte sa rangée et
-  s'empile sur celles de sa famille, à la même échelle : la ville devient l'histogramme exact des revenus par famille
-  (sommaire des chapitres cliquable ; à plat si les animations sont réduites ou en pause). Le pont « il y a un an + collecte
-  + marché = aujourd'hui » se construit sous les yeux, la trajectoire se trace au rythme du défilement. Suivent le classement des fonds qui rapportent le plus,
+- **Accueil** (`/`) — **ce qui rapporte** : le prisme des revenus. Dans le noir, un faisceau d'encours traverse un prisme
+  (les frais de gestion) et en ressort en revenus, séparés en quatre faisceaux de familles puis en faisceaux de fonds qui
+  frappent un mur de classement, du fonds qui rapporte le plus (en haut, le plus épais) au dixième, puis les autres fonds ;
+  l'épaisseur est linéaire en revenus et se conserve d'une étape à l'autre. Un plan-séquence au défilement suit les
+  familles, les trois premiers fonds et le mur (sommaire cliquable ; à plat si les animations sont réduites ou en pause). Suivent le classement des fonds qui rapportent le plus,
   ce qui a fait bouger les revenus en un an (collecte ou marché), la répartition par famille, gamme et classe d'actifs, la
   trajectoire mois par mois, les encours, le tableau des départs (pays, drapeaux) et l'entrée vers l'espace métiers.
 - **Espace métiers** (`/metiers` et toutes les rubriques ci-dessous) — pour aller chercher une information vite.
@@ -30,7 +29,7 @@ Le site a **deux espaces**, commutés par le sélecteur de l'en-tête :
 | **Sélection** | Toute combinaison de critères, avec agrégat en tête et détail en dessous, exportable. |
 | **Portefeuilles** | Ce que nous détenons (anneaux par classe d'actifs et par devise, ruban et classement des premières positions, lignes les plus partagées), et quels fonds détiennent une ligne donnée. |
 | **Distribution** | Où nos fonds sont commercialisés : le parcours d'une autorisation en Sankey 3D **clientèle → pays → famille de gestion**, les clients nommés (parts dédiées) d'abord, puis les pools de clientèle, un globe 3D interactif (rotation, survol, clic pour centrer un pays, filtre par clientèle, arcs depuis le pays de domiciliation), frise de l'ouverture des pays année après année, tableau des départs (drapeaux, palettes), teneurs de compte du passif, plateformes ; par pays, les fonds et parts autorisés. Un interrupteur retire les fonds **Rothschild Martin Maurel (RMM)** de toute la rubrique (chiffres, visuels, pays), et reste appliqué d'une page à l'autre (`?rmm=exclure`). |
-| **Passif** | Qui détient nos fonds, lu comme un analyste : les milliers de positions regroupées en segments de clientèle (clients directs actifs, banque privée et institutionnels, OPC, omnibus et plateformes, inactifs), quatre teneurs et six pays (le reste regroupé), classes d'actifs et desks. Pour chacun : part de l'encours, part des entrées et des sorties de la période, lecture (« pèse plus dans les entrées / les sorties ») et activité relative (×2 = deux fois plus de mouvements que son poids). Tours 3D des teneurs empilées par segment, concentration, fidélité, fonds les plus détenus, rythme hebdomadaire des mouvements, lecture des tables sources. Uniquement des parts et des tranches, jamais un nom, un montant ni un flux net. |
+| **Passif** | Qui détient nos fonds, lu comme un analyste : les milliers de positions regroupées en segments de clientèle (clients directs actifs, banque privée et institutionnels, OPC, omnibus et plateformes, inactifs), quatre teneurs et six pays (le reste regroupé), classes d'actifs et desks. Pour chacun : part de l'encours, part des entrées et des sorties de la période, lecture (« pèse plus dans les entrées / les sorties ») et activité relative (×2 = deux fois plus de mouvements que son poids). Tours 3D des teneurs empilées par segment, concentration, fidélité, fonds les plus détenus, rythme hebdomadaire des mouvements, lecture des tables sources. Uniquement des parts et des tranches, jamais un nom, un montant ni un flux net. **Clients et fonds** : pour un fonds, ses clients porteurs (part du fonds détenue, nombre de positions et de comptes, teneur, pays, segment) ; pour un client, les fonds qu'il détient. Vue nominative calculée à la demande dans Fabric (requêtes paramétrées), jamais conservée ni journalisée, en parts sans montant. |
 | **Comparateur** | Jusqu'à six fonds sur une même base 100 en 3D (vue de face en 2D), tableau d'indicateurs (performances, volatilité, perte maximale, ratios, mois en hausse, encours, collecte, revenus, frais, SRI), podium 3D par indicateur et carte risque / rendement ; sélection dans l'adresse. |
 
 La recherche universelle est accessible partout (`Ctrl K` / `⌘ K` ou `/`). Elle comprend les combinaisons
@@ -182,7 +181,7 @@ rachats côte à côte, jamais soustraits). La section « Lecture des tables sou
 type détecté, les valeurs nulles, les dates valides et invalides et les taux de rattachement ; `python run.py --fabric-check`
 vérifie les 11 / 21 / 28 colonnes, la correspondance, la lecture des dates et les lignes exploitables. Agrégats recalculés
 toutes les 6 heures (`APP_PASSIF_TTL_HOURS`), les tables étant mises à jour chaque jour. Sans Fabric : données synthétiques.
-`GET /api/passif`, `GET /api/passif/fonds/{id}`.
+`GET /api/passif`, `GET /api/passif/fonds/{id}`, `GET /api/passif/fonds/{id}/porteurs`, `GET /api/passif/clients?q=`.
 
 ### Volumétrie (des dizaines de millions de cellules)
 

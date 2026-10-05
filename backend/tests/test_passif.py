@@ -376,3 +376,49 @@ def test_tables_absentes_passif_indisponible():
             raise RuntimeError("table inconnue")
     d = P.Passif(Broken()).get()
     assert d["available"] is False and "reason" in d
+
+
+# ---------------------------------------------------------------- vue nominative (choix explicite de l'équipe)
+@pytest.fixture(scope="module")
+def nominatif(mock):
+    return P.Passif(P.PandasReader(mock.table), {"FR0000000001": "PR1", "FR0000000002": "PR2"}, fund_names={"PR1": "Fonds Un", "PR2": "Fonds Deux"})
+
+
+def test_porteurs_d_un_fonds(nominatif):
+    h = nominatif.holders("PR1")
+    assert h["available"] and h["nominatif"] and h["n_clients"] > 10
+    assert sum(x["pct"] for x in h["clients"]) + (h["others_pct"] or 0) == pytest.approx(100, abs=1.5)
+    assert all(x["client"].startswith("Client synthétique") for x in h["clients"])
+    pcts = [x["pct"] for x in h["clients"]]
+    assert pcts == sorted(pcts, reverse=True)
+    for path, v in _walk(h):                                   # des parts et des comptages, jamais un montant
+        if isinstance(v, float):
+            assert 0 <= v <= 100, path
+    assert nominatif.holders("INCONNU")["clients"] == []
+
+
+def test_recherche_d_un_client(nominatif):
+    top = nominatif.holders("PR1")["clients"][0]["client"]
+    r = nominatif.client_search(top)
+    hit = next(x for x in r["clients"] if x["client"] == top)
+    f = next(x for x in hit["funds"] if x["fund"] == "PR1")
+    assert f["name"] == "Fonds Un" and f["pct_of_fund"] == pytest.approx(nominatif.holders("PR1")["clients"][0]["pct"], abs=0.2)
+    assert nominatif.client_search("a")["clients"] == []                     # au moins deux caractères
+
+
+def test_vue_nominative_sql_parametree():
+    """Le nom recherché et les ISIN passent en paramètres, jamais dans le texte de la requête."""
+    seen: list[tuple[str, list]] = []
+
+    class Fake:
+        def query(self, sql, params=(), **kw):
+            seen.append((assert_read_only(sql), list(params)))
+            if "TOP 0 *" in sql:
+                return pd.DataFrame(columns=[f"_c{i}" for i in range(21)])
+            return pd.DataFrame(columns=["client", "isin", "n", "v", "comptes", "teneur", "pays", "classification"])
+    r = P.SqlReader(Fake(), P.table_names())
+    m = P.resolve_mapping(r.columns("position"), "position")
+    r.holders("position", m, ["FR0000000001"], [("date_eq", "date", "2026-09-30")])
+    r.client_funds("position", m, "Dupont'; DROP TABLE x --", [("date_eq", "date", "2026-09-30")])
+    assert seen[-2][1] == ["FR0000000001"] and "FR0000000001" not in seen[-2][0]
+    assert "Dupont" not in seen[-1][0] and seen[-1][1][0].startswith("%dupont")

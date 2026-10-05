@@ -9,7 +9,7 @@ import { gsap, onVisible, ScrollTrigger, SplitText } from "../lib/gsap";
 import type { FamilyKey, Overview } from "../lib/types";
 import { Board, Money, type BoardRow } from "../components/Story";
 import { TimeChart, useWidth } from "../components/charts";
-import type { RevenueScene, RevFund } from "../three/RevenueScene";
+import type { PrismScene, RevFund } from "../three/PrismScene";
 import * as I from "../components/Icon";
 
 /** Revenus de gestion estimés (GET /api/revenue) : encours × taux de frais de gestion financière. */
@@ -66,14 +66,14 @@ export default function Home() {
   );
 }
 
-// ------------------------------------------------------------------ ouverture : la cité des revenus, un plan-séquence au défilement
-const CHAPTERS = ["Total", "N° 1", "N° 2", "N° 3", "Familles"];
+// ------------------------------------------------------------------ ouverture : le prisme des revenus, un plan-séquence au défilement
+const CHAPTERS = ["Total", "Familles", "N° 1", "N° 2", "N° 3", "Classement"];
 
 function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const labels = useRef<HTMLDivElement>(null);
   const film = useRef<HTMLElement>(null);
-  const scene = useRef<RevenueScene | null>(null);
+  const scene = useRef<PrismScene | null>(null);
   const st = useRef<ScrollTrigger | null>(null);
   const nav = useNavigate();
   const reduced = useReducedMotion();
@@ -85,6 +85,7 @@ function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
   const top = useMemo(() => (r ? [...r.funds].filter((f) => f.revenue > 0).sort((a, b) => b.revenue - a.revenue).slice(0, 3) : []), [r]);
   const fams = r ? FAMILY_ORDER.map((k) => r.families.find((g) => g.key === k)).filter(Boolean) as RevGroup[] : [];
   const filmOn = !reduced && gl;
+  const top10 = r ? Math.round([...r.funds].sort((a, b) => b.revenue - a.revenue).slice(0, 10).reduce((s, f) => s + (f.share ?? 0), 0) * 1000) / 10 : null;
 
   // Portes d'ouverture : une couture d'or s'allume au centre, les deux battants s'écartent
   useLayoutEffect(() => {
@@ -92,20 +93,15 @@ function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
     if (!el || prefersReducedMotion()) return;
     const ctx = gsap.context(() => {
       const tl = gsap.timeline({ defaults: { ease: "power3.inOut" } });
-      tl.set(".rv__doors", { autoAlpha: 1 })
-        .fromTo(".rv__seam", { scaleY: 0 }, { scaleY: 1, duration: 0.7, ease: "power4.inOut" }, 0.05)
-        .to(".rv__door--l", { xPercent: -100, duration: 1.25, ease: "expo.inOut" }, 0.7)
-        .to(".rv__door--r", { xPercent: 100, duration: 1.25, ease: "expo.inOut" }, 0.7)
-        .to(".rv__seam", { scaleX: 40, opacity: 0, duration: 0.9, ease: "power2.in" }, 0.75)
-        .set(".rv__doors", { autoAlpha: 0 }, 2.0)
-        .fromTo(".rv__bars i", { scaleY: 1.8 }, { scaleY: 1, duration: 1.3 }, 0.8)
-        .fromTo(".rv__kicker", { opacity: 0, letterSpacing: "0.7em" }, { opacity: 1, letterSpacing: "0.24em", duration: 1.4, ease: "power2.out" }, 1.0)
-        .fromTo(".rv__big", { opacity: 0, yPercent: 24 }, { opacity: 1, yPercent: 0, duration: 1.2, ease: "expo.out" }, 1.1)
-        .fromTo(".rv__rule", { scaleX: 0 }, { scaleX: 1, duration: 1.1, ease: "expo.inOut" }, 1.5)
-        .fromTo(".rv__what", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.9 }, 1.7)
-        .fromTo(".rv__facts > *", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.8, stagger: 0.08, ease: "power3.out", clearProps: "transform" }, 2.1)
-        .fromTo(".rv__legend > *", { opacity: 0, x: -12 }, { opacity: 1, x: 0, duration: 0.6, stagger: 0.06, clearProps: "transform" }, 2.3)
-        .fromTo(".rv__rail, .rv__cue, .rv__ctl", { opacity: 0 }, { opacity: 1, duration: 0.8 }, 2.7);
+      // Les premières secondes appartiennent à la lumière ; le texte arrive quand le prisme a séparé les revenus
+      tl.fromTo(".rv__bars i", { scaleY: 2.4 }, { scaleY: 1, duration: 1.6, ease: "expo.inOut" }, 0.2)
+        .fromTo(".rv__kicker", { opacity: 0, letterSpacing: "0.7em" }, { opacity: 1, letterSpacing: "0.24em", duration: 1.4, ease: "power2.out" }, 2.1)
+        .fromTo(".rv__big", { opacity: 0, yPercent: 24 }, { opacity: 1, yPercent: 0, duration: 1.2, ease: "expo.out" }, 2.2)
+        .fromTo(".rv__rule", { scaleX: 0 }, { scaleX: 1, duration: 1.1, ease: "expo.inOut" }, 2.5)
+        .fromTo(".rv__what", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.9 }, 2.7)
+        .fromTo(".rv__facts > *", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.8, stagger: 0.08, ease: "power3.out", clearProps: "transform" }, 3.0)
+        .fromTo(".rv__legend > *", { opacity: 0, x: -12 }, { opacity: 1, x: 0, duration: 0.6, stagger: 0.06, clearProps: "transform" }, 3.1)
+        .fromTo(".rv__rail, .rv__ctl", { opacity: 0 }, { opacity: 1, duration: 0.8 }, 3.5);
     }, el);
     return () => ctx.revert();
   }, []);
@@ -114,16 +110,15 @@ function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
   useEffect(() => {
     const el = host.current, lab = labels.current;
     if (!el || !lab || !r || !gl) return;
-    let alive = true, s: RevenueScene | null = null;
-    import("../three/RevenueScene").then(({ RevenueScene }) => {
+    let alive = true, s: PrismScene | null = null;
+    import("../three/PrismScene").then(({ PrismScene }) => {
       if (!alive) return;
       const colors = Object.fromEntries([...FAMILY_ORDER, "nc"].map((k) => [k, famHex(k as FamilyKey, true)]));
-      s = new RevenueScene(el, {
+      s = new PrismScene(el, {
         funds: r.funds.map((f) => ({ id: f.id, name: f.name, family: f.family, revenue: f.revenue, aum: f.aum, rate: f.rate, share: f.share })),
-        colors, reduced, labelLayer: lab,
+        total: r.total, aum: r.funds.reduce((a, f) => a + (f.aum ?? 0), 0) || null, colors, reduced, labelLayer: lab,
         familyLabels: Object.fromEntries(r.families.map((g) => [g.key, FAMILY_LABEL[g.key as FamilyKey] ?? g.label])),
-        familyShares: Object.fromEntries(r.families.map((g) => [g.key, g.share])),
-        familyRevenue: Object.fromEntries(r.families.map((g) => [g.key, g.revenue])), formatEur: (v) => eur(v),
+        familyOrder: [...FAMILY_ORDER, "nc"], formatEur: (v) => eur(v), formatPct: (v) => pct(v, { signed: false }),
         onHover: (f, x, y) => setTip(f ? { f, x, y } : null), onSelect: (f) => nav(`/fonds/${encodeURIComponent(f.id)}`),
       });
       scene.current = s;
@@ -169,7 +164,7 @@ function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
   useEffect(() => {
     const s = scene.current;
     if (!s || !filmOn) return;
-    s.goTo(chap === 0 ? { kind: "overview" } : chap === CHAPTERS.length - 1 ? { kind: "stack" } : { kind: "fund", i: chap - 1 });
+    s.goTo(chap === 0 ? { kind: "overview" } : chap === 1 ? { kind: "families" } : chap === CHAPTERS.length - 1 ? { kind: "wall" } : { kind: "fund", i: chap - 2 });
   }, [chap, filmOn]);
 
   const jump = (i: number) => {
@@ -195,17 +190,17 @@ function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
             <i className="rv__rule" aria-hidden="true" />
             <span className="rv__what">de revenus de gestion par an, estimés sur les encours d'aujourd'hui.</span>
           </h1>
-          {r && (
+          {r && !filmOn && (
             <div className="rv__facts">
               <div><b className="num">{r.rate != null ? pctRaw(r.rate) : "—"}</b><span>taux moyen de frais de gestion</span></div>
               <div><b className="num">{r.concentration.n_for_80pct ?? "—"}</b><span>fonds font 80&nbsp;% des revenus, sur {r.concentration.n_funds}</span></div>
               <div><b className={`num ${(r.change_1y.total ?? 0) >= 0 ? "up-t" : "down-t"}`}>{eur(r.change_1y.total, { signed: true })}</b><span>en un an, dont {eur(r.change_1y.flows, { signed: true })} par la collecte</span></div>
             </div>
           )}
-          {fams.length > 0 && <FamilyList fams={fams} focus={focus} setFocus={setFocus} label="Familles de gestion (survolez pour isoler)" />}
+          {fams.length > 0 && !filmOn && <FamilyList fams={fams} focus={focus} setFocus={setFocus} label="Familles de gestion (survolez pour isoler)" />}
         </div>
         {gl && r && (
-          <div className="rv__ctl" role="group" aria-label="Vue de la cité des revenus">
+          <div className="rv__ctl" role="group" aria-label="Vue du prisme des revenus">
             <button type="button" data-touch onClick={() => scene.current?.nudge(-35)} aria-label="Tourner vers la gauche"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg></button>
             <button type="button" data-touch onClick={() => scene.current?.resetView()} aria-label="Revenir au cadrage d'origine"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="5" y="5" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" /><rect x="10" y="10" width="4" height="4" fill="currentColor" /></svg></button>
             <button type="button" data-touch onClick={() => scene.current?.nudge(35)} aria-label="Tourner vers la droite"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg></button>
@@ -220,35 +215,46 @@ function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
             </ol>
           </nav>
         )}
-        <div className="home__cue rv__cue" aria-hidden="true" style={chap > 0 ? { opacity: 0 } : undefined}><span>{filmOn ? "Faire défiler" : "Ce qui rapporte"}</span><i /></div>
+        {!filmOn && <div className="home__cue rv__cue" aria-hidden="true"><span>Ce qui rapporte</span><i /></div>}
       </div>
 
       {r && top.length > 0 && (
         <div className="rv__chaps">
+          <article className="rv__chap rv__chap--map" aria-labelledby="h-fams">
+            <div className="rv__cbody">
+              <div className="eyebrow rv__cf">Le prisme des frais</div>
+              <h2 className="rv__ct" id="h-fams">L'encours traverse les frais, les revenus se séparent en quatre familles.</h2>
+              <i className="rv__crule" aria-hidden="true" />
+              <div className="rv__cd"><FamilyList fams={fams} focus={focus} setFocus={setFocus} label="Part des revenus par famille" big /></div>
+              <div className="rv__facts rv__facts--chap">
+                <div><b className="num">{r.rate != null ? pctRaw(r.rate) : "—"}</b><span>taux moyen de frais de gestion</span></div>
+                <div><b className="num">{r.concentration.n_for_80pct ?? "—"}</b><span>fonds font 80&nbsp;% des revenus, sur {r.concentration.n_funds}</span></div>
+              </div>
+            </div>
+          </article>
           {top.map((f, i) => (
             <article className="rv__chap" key={f.id} aria-label={`Fonds n° ${i + 1} par revenu de gestion`}>
               <div className="rv__cn num" aria-hidden="true">{String(i + 1).padStart(2, "0")}</div>
               <div className="rv__cbody">
-                <div className="eyebrow rv__cf"><i style={{ background: famVar(f.family, true) }} />{FAMILY_LABEL[f.family] ?? f.family} · n° {i + 1} des revenus</div>
+                <div className="eyebrow rv__cf"><i style={{ background: famVar(f.family, true) }} />{i === 0 ? "Le fonds qui rapporte le plus" : `N° ${i + 1} des revenus`} · {FAMILY_LABEL[f.family] ?? f.family}</div>
                 <h2 className="rv__ct">{f.name}</h2>
                 <i className="rv__crule" aria-hidden="true" />
                 <dl className="rv__cd">
                   <div><dt>Revenus / an</dt><dd className="num">{eur(f.revenue)}</dd></div>
+                  <div><dt>Part des revenus</dt><dd className="num">{pct(f.share, { signed: false })}</dd></div>
                   <div><dt>Encours</dt><dd className="num">{eur(f.aum)}</dd></div>
                   <div><dt>Taux de frais</dt><dd className="num">{pctRaw(f.rate)}</dd></div>
-                  <div><dt>Part des revenus</dt><dd className="num">{pct(f.share, { signed: false })}</dd></div>
                 </dl>
                 <Link className="rv__clink" to={`/fonds/${encodeURIComponent(f.id)}`}>Ouvrir la fiche <I.Arrow size={16} /></Link>
               </div>
             </article>
           ))}
-          <article className="rv__chap rv__chap--map" aria-labelledby="h-fams">
+          <article className="rv__chap rv__chap--map" aria-labelledby="h-wall">
             <div className="rv__cbody">
-              <div className="eyebrow rv__cf">Répartition des revenus</div>
-              <h2 className="rv__ct" id="h-fams">Empilées, les tours donnent le poids de chaque famille.</h2>
-              <p className="rv__cp">Chaque bloc est un fonds, à la même échelle que dans la ville&nbsp;: la hauteur d'une pile est la somme de ses revenus.</p>
+              <div className="eyebrow rv__cf">Le mur du classement</div>
+              <h2 className="rv__ct" id="h-wall">{top10 != null ? `Dix fonds font ${top10.toLocaleString("fr-FR")} % des revenus.` : "Le classement des fonds."}</h2>
+              <p className="rv__cp">Chaque faisceau frappe le mur à sa place, du fonds qui rapporte le plus au dixième. Son épaisseur est ses revenus, à la même échelle que la lumière qui entre dans le prisme.</p>
               <i className="rv__crule" aria-hidden="true" />
-              <div className="rv__cd"><FamilyList fams={fams} focus={focus} setFocus={setFocus} label="Part des revenus par famille" big /></div>
               <a className="rv__clink" href="#h-rank">Le classement complet <I.Arrow size={16} /></a>
             </div>
           </article>
@@ -267,7 +273,6 @@ function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
           <span className="small muted">Cliquer pour ouvrir la fiche</span>
         </div>
       )}
-      <div className="rv__doors" aria-hidden="true"><i className="rv__door--l" /><i className="rv__door--r" /><b className="rv__seam" /></div>
     </section>
   );
 }
@@ -299,7 +304,7 @@ function Odometer({ total }: { total: number | null }) {
     const ctx = gsap.context(() => {
       el.querySelectorAll<HTMLElement>(".odo__col").forEach((c, i) => {
         const d = Number(c.dataset.d);
-        gsap.fromTo(c, { yPercent: 0 }, { yPercent: -((10 + d) / 20) * 100, duration: 2.2 + i * 0.18, delay: 1.1, ease: "expo.out" });
+        gsap.fromTo(c, { yPercent: 0 }, { yPercent: -((10 + d) / 20) * 100, duration: 2.2 + i * 0.18, delay: 2.2, ease: "expo.out" });
       });
     }, el);
     return () => ctx.revert();

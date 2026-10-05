@@ -376,6 +376,36 @@ class PandasReader:
                 "refs_multi_lines": int((distinct_lines > 1).sum()), "without_reference": int(ref.isna().sum())}
 
 
+    # -- vue nominative (à la demande, jamais mise en cache sur disque ni journalisée)
+    def holders(self, name: str, m: dict, isins: list[str], where=()) -> pd.DataFrame:
+        c = cols_of(m)
+        idx = self._index(name, m, where)
+        isin = self._of(name, c, "isin", "id", idx)
+        idx = idx[isin.isin(set(isins)).fillna(False).to_numpy()]
+        df = pd.DataFrame({"client": self._of(name, c, "nom_client", "text", idx).astype(object), "v": self._of(name, c, "montant_eur", "num", idx),
+                           "compte": self._of(name, c, "compte", "id", idx), "teneur": self._of(name, c, "teneur", "text", idx).astype(object),
+                           "pays": self._of(name, c, "pays", "text", idx).astype(object),
+                           "classification": self._of(name, c, "classification", "text", idx).astype(object)}, index=idx)
+        if df.empty:
+            return pd.DataFrame(columns=["client", "n", "v", "comptes", "teneur", "pays", "classification"])
+        df["client"] = df["client"].where(df["client"].notna(), None)
+        g = df.groupby("client", dropna=False).agg(n=("v", "size"), v=("v", "sum"), comptes=("compte", "nunique"), teneur=("teneur", "max"),
+                                                   pays=("pays", "max"), classification=("classification", "max")).reset_index()
+        return g
+
+    def client_funds(self, name: str, m: dict, q: str, where=()) -> pd.DataFrame:
+        c = cols_of(m)
+        idx = self._index(name, m, where)
+        cl = self._of(name, c, "nom_client", "text", idx)
+        hit = cl.fillna("").map(fold).str.contains(re.escape(fold(q)), regex=True)
+        idx = idx[hit.to_numpy()]
+        df = pd.DataFrame({"client": cl.loc[idx].astype(object), "isin": self._of(name, c, "isin", "id", idx).astype(object),
+                           "v": self._of(name, c, "montant_eur", "num", idx)}, index=idx)
+        if df.empty:
+            return pd.DataFrame(columns=["client", "isin", "n", "v"])
+        return df.groupby(["client", "isin"]).agg(n=("v", "size"), v=("v", "sum")).reset_index()
+
+
 def _concentration(v: np.ndarray) -> dict:
     n = len(v)
     if n < 20:
@@ -558,6 +588,32 @@ class SqlReader:
         r = self.src.query(sql, label=f"passif {name} (références)").iloc[0]
         return {"references": int(r["refs"] or 0), "refs_repeated": int(r["rep"] or 0), "exact_duplicates": int(r["exact"] or 0),
                 "refs_multi_lines": int(r["multi"] or 0), "without_reference": int(r["noref"] or 0)}
+
+
+    # -- vue nominative : requêtes paramétrées, agrégées par client dans Fabric
+    def holders(self, name: str, m: dict, isins: list[str], where=()) -> pd.DataFrame:
+        if not isins:
+            return pd.DataFrame(columns=["client", "n", "v", "comptes", "teneur", "pays", "classification"])
+        c = cols_of(m)
+        frm, cond = self._from(name, m, where)
+        cl = _sql_text(self._q(name, c["nom_client"]))
+        ph = ", ".join("?" for _ in isins)
+        sel = [f"{cl} AS [client]", "COUNT(*) AS [n]", f"SUM({_sql_num(self._q(name, c['montant_eur']))}) AS [v]",
+               f"COUNT(DISTINCT {_sql_id(self._q(name, c['compte']))}) AS [comptes]"]
+        for k in ("teneur", "pays", "classification"):
+            sel.append(f"MAX({_sql_text(self._q(name, c[k]))}) AS [{k}]" if k in c else f"CAST(NULL AS VARCHAR(10)) AS [{k}]")
+        sql = (f"SELECT {', '.join(sel)} FROM {frm} WHERE {cond} AND {_sql_id(self._q(name, c['isin']))} IN ({ph}) GROUP BY {cl}")
+        return self.src.query(sql, list(isins), label="passif porteurs d'un fonds")
+
+    def client_funds(self, name: str, m: dict, q: str, where=()) -> pd.DataFrame:
+        c = cols_of(m)
+        frm, cond = self._from(name, m, where)
+        cl = _sql_text(self._q(name, c["nom_client"]))
+        isin = _sql_id(self._q(name, c["isin"]))
+        like = "%" + q.lower().replace("[", "[[]").replace("%", "[%]").replace("_", "[_]") + "%"
+        sql = (f"SELECT TOP 2000 {cl} AS [client], {isin} AS [isin], COUNT(*) AS [n], SUM({_sql_num(self._q(name, c['montant_eur']))}) AS [v] "
+               f"FROM {frm} WHERE {cond} AND LOWER({cl}) LIKE ? GROUP BY {cl}, {isin}")
+        return self.src.query(sql, [like], label="passif recherche d'un client")
 
 
 # ------------------------------------------------------------------ vues (parts, tranches, libellés propres)
@@ -885,11 +941,12 @@ class Passif:
                          "amount_pct": _pct(float(ok["v"].sum()), tot), "rows_pct": _pct(float(ok["n"].sum()), float(isin["n"].sum()))}
         view["links"] = links
         bf = ok.groupby("fund").agg(n=("n", "sum"), v=("v", "sum"))
-        funds = {f: {"pct": _pct(float(x.v), tot), "positions": tranche(int(x.n))} for f, x in bf.iterrows() if x.n >= MIN_GROUP}
+        funds = {f: {"pct": _pct(float(x.v), tot), "positions": tranche(int(x.n)), "name": self.fund_names.get(f)} for f, x in bf.iterrows() if x.n >= MIN_GROUP}
         view["top_funds"] = sorted(({"fund": f, "name": self.fund_names.get(f), **v} for f, v in funds.items()), key=lambda z: -(z["pct"] or 0))[:8]
         view["top_funds_pct"] = round(sum(x["pct"] or 0 for x in view["top_funds"]), 1)
         view["funds_count"] = tranche(len(funds))
         view["_funds"] = funds
+        self._isin_v = {str(k): float(v) for k, v in zip(isin["isin"], isin["v"]) if k}
         return view
 
     def _transactions(self, mt: dict, st: dict, problems: list) -> dict:
@@ -950,6 +1007,74 @@ class Passif:
                 "period_desk_sens": _shares(g, ["desk", "sens"], "v", tot),
                 "late": late, "period_late_pct": late["pct"], "ops": tranche(int(g["n"].sum())),
                 "amount_valid_pct": _pct(float(g["ok"].sum()), float(g["n"].sum()))}
+
+    # ---------------------------------------------------------------- vue nominative (choix explicite de l'équipe)
+    def _ready(self) -> tuple[dict, dict, str] | None:
+        d = self.get()
+        if not d.get("available") or not d.get("positions_as_of"):
+            return None
+        maps = self.mappings()
+        return d, maps, d["positions_as_of"]
+
+    def holders(self, fund_id: str, limit: int = 200) -> dict:
+        """Clients porteurs d'un fonds à la date de la photo : part du fonds détenue (Montant EUR), sans montant."""
+        ready = self._ready()
+        if ready is None:
+            return {"available": False, "reason": "Positions non publiées."}
+        d, maps, iso = ready
+        mp = maps["position"]
+        if mp["fields"]["nom_client"]["col"] is None:
+            return {"available": False, "reason": "Colonne Nom client absente de la table Position."}
+        isins = sorted(k for k, f in self.isin_to_fund.items() if f == fund_id)
+        g = self.reader.holders("position", mp, isins, [("date_eq", "date", iso)])
+        if g is None or g.empty:
+            return {"available": True, "fund": fund_id, "name": self.fund_names.get(fund_id), "as_of": iso, "clients": [], "n_clients": 0}
+        g = g.copy()
+        g["v"] = pd.to_numeric(g["v"], errors="coerce").fillna(0.0)
+        tot = float(g["v"].sum())
+        g = g.sort_values("v", ascending=False)
+        rows = [{"client": _label(x.client), "pct": _pct(float(x.v), tot), "positions": int(x.n), "comptes": int(x.comptes or 0),
+                 "teneur": _label(x.teneur), "pays": _label(x.pays), "segment": SEGMENTS[segment_of(x.classification)]}
+                for x in g.head(limit).itertuples(index=False)]
+        rest = g.iloc[limit:]
+        return {"available": True, "nominatif": True, "fund": fund_id, "name": self.fund_names.get(fund_id), "as_of": iso, "n_clients": int(len(g)),
+                "clients": rows, "others_pct": _pct(float(rest["v"].sum()), tot) if len(rest) else None,
+                "top10_pct": _pct(float(g.head(10)["v"].sum()), tot), "isins": len(isins)}
+
+    def client_search(self, q: str, limit: int = 25) -> dict:
+        """Fonds détenus par les clients dont le nom contient `q` : part de chaque fonds détenue par le client."""
+        q = (q or "").strip()
+        if len(q) < 2:
+            return {"available": True, "clients": [], "reason": "Saisir au moins deux caractères."}
+        ready = self._ready()
+        if ready is None:
+            return {"available": False, "reason": "Positions non publiées."}
+        d, maps, iso = ready
+        mp = maps["position"]
+        if mp["fields"]["nom_client"]["col"] is None:
+            return {"available": False, "reason": "Colonne Nom client absente de la table Position."}
+        g = self.reader.client_funds("position", mp, q[:80], [("date_eq", "date", iso)])
+        if g is None or g.empty:
+            return {"available": True, "as_of": iso, "clients": []}
+        g = g.copy()
+        g["v"] = pd.to_numeric(g["v"], errors="coerce").fillna(0.0)
+        g["fund"] = g["isin"].map(lambda v: self.isin_to_fund.get(str(v)) if v else None)
+        fund_tot: dict[str, float] = {}
+        for isin, v in getattr(self, "_isin_v", {}).items():
+            f = self.isin_to_fund.get(isin)
+            if f:
+                fund_tot[f] = fund_tot.get(f, 0.0) + v
+        out = []
+        for cl, x in sorted(g.groupby("client"), key=lambda kv: -float(kv[1]["v"].sum()))[:limit]:
+            cv = float(x["v"].sum())
+            funds = []
+            for f, y in x.dropna(subset=["fund"]).groupby("fund"):
+                fv = float(y["v"].sum())
+                funds.append({"fund": f, "name": self.fund_names.get(f), "pct_of_fund": _pct(fv, fund_tot.get(f, 0.0)), "pct_of_client": _pct(fv, cv)})
+            unlinked = float(x.loc[x["fund"].isna(), "v"].sum())
+            out.append({"client": _label(cl), "funds": sorted(funds, key=lambda z: -(z["pct_of_client"] or 0)),
+                        "unlinked_pct": _pct(unlinked, cv) if unlinked else None, "positions": int(x["n"].sum())})
+        return {"available": True, "nominatif": True, "as_of": iso, "clients": out}
 
     def _synthese(self) -> dict:
         """Lecture d'analyste : segments de clientèle, teneurs, pays, classes d'actifs et desks, chacun en part de l'encours

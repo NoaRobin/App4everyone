@@ -4,7 +4,9 @@
  * positions ne sont jamais listées : tout est agrégé dans Fabric, en parts et en tranches (aucun nom, aucun montant).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { useApi } from "../lib/api";
+import { useApp } from "../lib/context";
 import { gsap, onVisible } from "../lib/gsap";
 import { prefersReducedMotion, useReducedMotion, webglAvailable } from "../lib/motion";
 import { Head } from "./Editorial";
@@ -343,7 +345,7 @@ export function LectureSection({ l, asOf, t, c }: { l: Lecture | null | undefine
   const a = l.links?.accounts, isin = l.links?.isin, dup = l.duplicates;
   return (
     <section className="section reveal pa-lec" aria-labelledby="h-lecture">
-      <Head id="lecture" eyebrow="07 · Transparence" title="Lecture des tables sources"
+      <Head id="lecture" eyebrow="08 · Transparence" title="Lecture des tables sources"
         lede={<>Correspondance exacte des colonnes (vrais noms, sinon _c0…_cN dans l'ordre fixe), type détecté, valeurs nulles, dates valides et invalides. Photo de l'encours au <b>{dFull(asOf)}</b>{t?.first ? <> · opérations du <b>{dFull(t.first)}</b> au <b>{dFull(t.last)}</b></> : null}. Uniquement des comptages de lignes, jamais une valeur.</>} />
       {l.problems.length > 0 && (
         <div className="pa-lec__pb" role="alert">
@@ -399,3 +401,95 @@ function LectureCard({ name, tb, env }: { name: "compte" | "position" | "transac
   );
 }
 
+
+// ================================================================== 07. clients et fonds (vue nominative)
+type Holder = { client: string; pct: number | null; positions: number; comptes: number; teneur: string; pays: string; segment: string };
+type HoldersResp = { available: boolean; reason?: string; fund?: string; name?: string | null; as_of?: string; n_clients?: number; clients?: Holder[];
+  others_pct?: number | null; top10_pct?: number | null };
+type ClientResp = { available: boolean; reason?: string; clients?: { client: string; positions: number; unlinked_pct: number | null;
+  funds: { fund: string; name?: string | null; pct_of_fund: number | null; pct_of_client: number | null }[] }[] };
+
+/**
+ * Qui est investi dans quel fonds : pour un fonds, ses clients porteurs (part du fonds détenue) ; pour un client, ses
+ * fonds. Calculé à la demande dans la source, jamais conservé ; parts uniquement (aucun montant).
+ */
+export function ClientsSection({ funds }: { funds: PassifResp["funds"] }) {
+  const { api } = useApp();
+  const [params, setParams] = useSearchParams();
+  const list = useMemo(() => Object.entries(funds ?? {}).map(([id, f]) => ({ id, name: f.name ?? id, pct: f.pct })).sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0)), [funds]);
+  const [fid, setFid] = useState<string | null>(() => params.get("fonds") ?? list[0]?.id ?? null);
+  const [ff, setFf] = useState("");
+  const [q, setQ] = useState("");
+  const [dq, setDq] = useState("");
+  useEffect(() => { const t = window.setTimeout(() => setDq(q.trim()), 300); return () => window.clearTimeout(t); }, [q]);
+  useEffect(() => { if (!fid && list[0]) setFid(list[0].id); }, [list, fid]);
+  const h = useApi<HoldersResp>(fid ? api(`/api/passif/fonds/${encodeURIComponent(fid)}/porteurs`) : null);
+  const c = useApi<ClientResp>(dq.length >= 2 ? api(`/api/passif/clients?q=${encodeURIComponent(dq)}`) : null);
+  const shown = list.filter((f) => !ff || f.name.toLowerCase().includes(ff.toLowerCase())).slice(0, 14);
+  const pick = (id: string) => { setFid(id); const p = new URLSearchParams(params); p.set("fonds", id); setParams(p, { replace: true }); };
+  const hd = h.data;
+  const max = Math.max(1, ...(hd?.clients ?? []).map((x) => x.pct ?? 0));
+  if (!list.length) return null;
+  return (
+    <section className="section reveal pa-cli" aria-labelledby="h-clients">
+      <Head id="clients" eyebrow="07 · Clients et fonds" title="Qui est investi dans quel fonds."
+        lede="Pour un fonds, ses clients porteurs et la part du fonds que chacun détient ; pour un client, les fonds qu'il détient. Parts calculées sur Montant EUR à la date de la photo, aucun montant." />
+      <p className="pa-cli__warn small"><I.Alert size={15} /> Données nominatives, usage interne : calculées à la demande dans la source, jamais conservées par l'application.</p>
+      <div className="pa-cli__g">
+        <aside className="pa-cli__pick">
+          <label className="eyebrow" htmlFor="pa-fund-f">Choisir un fonds</label>
+          <input id="pa-fund-f" className="pa-cli__in" placeholder="Filtrer les fonds détenus…" value={ff} onChange={(e) => setFf(e.target.value)} />
+          <ul role="listbox" aria-label="Fonds détenus au passif">
+            {shown.map((f) => (
+              <li key={f.id}><button type="button" role="option" aria-selected={fid === f.id} onClick={() => pick(f.id)}>
+                <span>{f.name}</span><b className="num">{fp(f.pct)}</b></button></li>
+            ))}
+          </ul>
+          <p className="small muted">Part de l'encours suivi au passif. {list.length > shown.length ? `${list.length} fonds détenus.` : ""}</p>
+        </aside>
+        <div className="pa-cli__main">
+          {!hd ? <p className="small muted">{h.loading ? "Calcul des porteurs…" : "Choisissez un fonds."}</p> : !hd.available ? <Missing what="Porteurs" reason={hd.reason} /> : (
+            <>
+              <div className="pa-cli__h">
+                <div><div className="eyebrow">Porteurs au {dFull(hd.as_of)}</div><h3 className="pa-cli__t">{hd.name ?? hd.fund}</h3></div>
+                <div className="pa-cli__k"><b className="num">{hd.n_clients ?? 0}</b><span>clients porteurs</span></div>
+                <div className="pa-cli__k"><b className="num">{fp(hd.top10_pct)}</b><span>du fonds détenu par les 10 premiers</span></div>
+                {hd.fund && <Link className="link small" to={`/fonds/${encodeURIComponent(hd.fund)}`}>Fiche du fonds</Link>}
+              </div>
+              <div className="table-wrap pa-cli__tw">
+                <table className="t t--mini">
+                  <caption className="sr-only">Clients porteurs du fonds</caption>
+                  <thead><tr><th>#</th><th>Client</th><th>Part du fonds</th><th className="n">Positions</th><th className="n">Comptes</th><th>Teneur</th><th>Pays</th><th>Segment</th></tr></thead>
+                  <tbody>{(hd.clients ?? []).map((x, i) => (
+                    <tr key={i}><td className="num muted">{i + 1}</td><td className="pa-cli__n">{x.client}</td>
+                      <td><div className="pa-ct__ew"><span className="pa-ct__bar" aria-hidden="true"><i className="pa-ct__fill" style={{ width: `${((x.pct ?? 0) / max) * 100}%` }} /></span><b className="num">{fp(x.pct)}</b></div></td>
+                      <td className="n num">{x.positions}</td><td className="n num">{x.comptes}</td><td>{x.teneur}</td><td>{x.pays}</td><td className="small">{x.segment}</td></tr>
+                  ))}</tbody>
+                </table>
+              </div>
+              {hd.others_pct != null && <p className="small muted">Autres porteurs (au-delà des {hd.clients?.length} premiers)&nbsp;: {fp(hd.others_pct)} du fonds.</p>}
+            </>
+          )}
+        </div>
+      </div>
+      <div className="pa-cli__s">
+        <label className="eyebrow" htmlFor="pa-cli-q">Rechercher un client</label>
+        <input id="pa-cli-q" className="pa-cli__in" placeholder="Nom du client (au moins deux caractères)…" value={q} onChange={(e) => setQ(e.target.value)} />
+        {dq.length >= 2 && (c.loading && !c.data ? <p className="small muted">Recherche…</p> : c.data && !c.data.available ? <Missing what="Clients" reason={c.data.reason} /> : (
+          <ul className="pa-cli__res">
+            {(c.data?.clients ?? []).length === 0 && <li className="small muted">Aucun client trouvé.</li>}
+            {(c.data?.clients ?? []).map((x) => (
+              <li key={x.client}>
+                <div className="pa-cli__rn"><b>{x.client}</b><span className="small muted">{x.positions} positions</span></div>
+                <ul>{x.funds.map((f) => (
+                  <li key={f.fund}><button type="button" className="link" onClick={() => pick(f.fund)}>{f.name ?? f.fund}</button>
+                    <span className="num small">{fp(f.pct_of_client)} de ses positions · {fp(f.pct_of_fund)} du fonds</span></li>
+                ))}{x.unlinked_pct ? <li className="small muted">{fp(x.unlinked_pct)} dans des parts non rattachées au référentiel</li> : null}</ul>
+              </li>
+            ))}
+          </ul>
+        ))}
+      </div>
+    </section>
+  );
+}

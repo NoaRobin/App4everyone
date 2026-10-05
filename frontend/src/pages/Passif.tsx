@@ -14,12 +14,12 @@ import { ErrorState, Loading, useReveal } from "../components/ui";
 import * as I from "../components/Icon";
 import { arr, dFull, fp, tr, type PassifResp } from "../components/PassifKit";
 import {
-  AssetsSection, ConcentrationSection, LectureSection, LoyaltySection, RhythmSection, SegmentsSection, WhereSection,
+  AssetsSection, ClientsSection, ConcentrationSection, LectureSection, LoyaltySection, RhythmSection, SegmentsSection, WhereSection,
 } from "../components/PassifSections";
 import "../styles/passif.css";
 
 const CHAPTERS = [["seg", "Segments"], ["ou", "Teneurs et pays"], ["conc", "Concentration"], ["loy", "Fidélité"], ["quoi", "Ce qui est détenu"],
-  ["flux", "Mouvements"], ["lecture", "Lecture des tables"]] as const;
+  ["flux", "Mouvements"], ["clients", "Clients et fonds"], ["lecture", "Lecture des tables"]] as const;
 
 export default function Passif() {
   const { hash } = useLocation();
@@ -52,6 +52,7 @@ export default function Passif() {
         <LoyaltySection p={d.positions} />
         <AssetsSection s={d.synthese} p={d.positions} />
         <RhythmSection s={d.synthese} t={d.transactions} />
+        <ClientsSection funds={d.funds} />
         <LectureSection l={d.lecture} asOf={d.positions_as_of} t={d.transactions} c={d.comptes} />
       </div>
     </div>

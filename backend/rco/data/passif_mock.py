@@ -84,6 +84,7 @@ class PassifMock:
         r, k, client = self.rng, 0, 0
         rows = [{c: None for c in CPT_COLS}]                          # premier enregistrement vide de l'export
         self._acc_class: dict[str, str] = {}
+        self._acc_client: dict[str, str] = {}
         for cls, (n0, parent_share) in TENEURS.items():
             n = max(5, int(n0 * r.uniform(0.7, 1.3))) * self.scale
             teneur = cls.split("/")[0].strip()
@@ -93,6 +94,7 @@ class PassifMock:
                     client += 1
                 acc = f"CPT-{k:06d}"
                 self._acc_class[acc] = cls
+                self._acc_client[acc] = f"Client synthétique {client}"
                 parent = f"CPT-{k - 1:06d}" if i and r.random() < parent_share else self._miss()
                 dissolved = r.random() < 0.02
                 rows.append({"_c0": teneur if r.random() > 0.01 else "nan", "_c1": acc, "_c2": f"Compte synthétique {k}", "_c3": parent,
@@ -113,7 +115,7 @@ class PassifMock:
     def _common(self, acc: str, desk: str, classe: str, isin: str) -> dict:
         cls = self._acc_class.get(acc, "TA/Client Actif")
         r = self.rng
-        return {"_c0": "Client synthétique", "_c1": self._pick(PAYS) if r.random() > 0.02 else "nan", "_c2": cls.split("/")[0].strip(),
+        return {"_c0": self._acc_client.get(acc, "Client synthétique"), "_c1": self._pick(PAYS) if r.random() > 0.02 else "nan", "_c2": cls.split("/")[0].strip(),
                 "_c3": acc, "_c4": f"Compte synthétique {acc[-4:]}", "_c5": cls, "_c6": "Commercial synthétique", "_c7": self._pick(SDG),
                 "_c8": self._pick(TYPES), "_c9": f"Fonds synthétique {isin[-3:]}", "_c10": isin, "_c11": classe, "_c12": desk}
 

@@ -210,6 +210,20 @@ def passif_fund(fid: str):
                 "fund": (d.get("funds") or {}).get(fid)})
 
 
+@app.get("/api/passif/fonds/{fid}/porteurs")
+def passif_holders(fid: str):
+    """Clients porteurs d'un fonds (vue nominative) : calcul à la demande dans la source, jamais mis en cache ni journalisé."""
+    _api_service()
+    return _ok(passif_obj().holders(fid))
+
+
+@app.get("/api/passif/clients")
+def passif_clients(q: str = ""):
+    """Fonds détenus par les clients dont le nom contient `q` (vue nominative, à la demande)."""
+    _api_service()
+    return _ok(passif_obj().client_search(q))
+
+
 # ---------------------------------------------------------------- erreurs JSON
 @app.exception_handler(ServiceUnavailable)
 def _unavailable(_: Request, e: ServiceUnavailable):
