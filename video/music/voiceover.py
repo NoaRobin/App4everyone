@@ -181,34 +181,39 @@ def main() -> None:
     ap.add_argument("--engine", choices=["azure", "kokoro"], default="azure" if os.environ.get("AZURE_SPEECH_KEY") else "kokoro")
     ap.add_argument("--voice", default=AZURE_VOICE)
     ap.add_argument("--compare", action="store_true", help="comparatif Rémy / Henri, sans toucher au film")
+    ap.add_argument("--force", action="store_true", help="écrire même si une phrase déborde de son plan")
     args = ap.parse_args()
     if args.compare:
         compare([AZURE_VOICE, "fr-FR-HenriNeural"])
         return
     tts = (lambda t: azure_tts(t, args.voice)) if args.engine == "azure" else kokoro_tts_factory()
     print(f"moteur : {args.engine}" + (f" · voix {args.voice}" if args.engine == "azure" else ""))
-    out = ROOT / "public" / "vo"
-    out.mkdir(parents=True, exist_ok=True)
-    for old in out.glob("*.wav"):
-        old.unlink()
-    meta = []
+    # Tout est synthétisé en mémoire d'abord : rien n'est remplacé si un appel échoue ou si une phrase déborde
+    ap_force = args.force
+    clips, meta = {}, []
     for shot, segs in SEGMENTS.items():
         t = 0
         for i, (at, text) in enumerate(segs):
             s, sr = tts(text)
             s = studio(s, sr)
             name = f"{shot}-{i}"
-            sf.write(out / f"{name}.wav", s, sr)
+            clips[name] = (s, sr)
             frames = int(np.ceil(len(s) / sr * 30))
             start = at if at is not None else t
             meta.append({"shot": shot, "i": i, "file": f"vo/{name}.wav", "at": start, "frames": frames, "text": text})
             t = start + frames + GAP
             print(f"{name:15s} @{start:4d} +{frames:3d}  {text}")
+    if not fit_check(meta) and not ap_force:
+        sys.exit("Des phrases ne tiennent pas dans leur plan : rien n'a été remplacé. Ajuster SEGMENTS ou les durées "
+                 "(timeline.ts, montage.py), ou relancer avec --force.")
+    out = ROOT / "public" / "vo"
+    out.mkdir(parents=True, exist_ok=True)
+    for old in out.glob("*.wav"):
+        old.unlink()
+    for name, (s, sr) in clips.items():
+        sf.write(out / f"{name}.wav", s, sr)
     (ROOT / "src" / "teaser" / "vo.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1) + "\n")
-    if not fit_check(meta):
-        sys.exit("Des phrases ne tiennent pas dans leur plan : ajuster SEGMENTS ou les durées (timeline.ts, montage.py).")
-    print("toutes les phrases tiennent dans leur plan")
-
+    print(f"{len(clips)} phrases écrites dans public/vo ; toutes tiennent dans leur plan")
 
 if __name__ == "__main__":
     main()
