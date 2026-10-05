@@ -29,6 +29,7 @@ python3 music/voiceover.py             # voix off Azure AI Speech si AZURE_SPEEC
                                        # dans les plans
 KOKORO_DIR=<modèle> WHISPER_DIR=<whisper> python3 music/affiner_voix.py   # affine la voix hors ligne (variantes jugées par Whisper, traitement studio)
 python3 music/teaser.py    # musique du teaser, effacée sous la voix (public/teaser.wav)
+python3 music/mixage.py out/mix.wav   # bande son finale (musique + voix, rééchantillonnage sans souffle), à remonter sur la vidéo
 python3 music/score.py     # musique du « Fil d'or » (public/music.wav)
 ```
 

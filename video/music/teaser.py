@@ -1,8 +1,9 @@
 """
 « Dix minutes » — partition originale du teaser (synthèse, libre de droits).
 
-Une musique douce et lumineuse, sans aucun bruit : pas de tic-tac, de rumeur, de souffle, d'impact ni de batterie.
-Piano feutré, nappes chaudes et basse ronde, en ré majeur, un accord toutes les 4 secondes (deux mesures à 120 battements
+Une musique douce et lumineuse, sans bruit ni bourdonnement : pas de rumeur, de souffle, d'impact, de batterie ni de basse
+continue ; seul le tic-tac de l'extraction JUMP bat pendant l'attente et pendant le compte. Piano feutré et nappes
+chaudes (grave coupé sous 110 Hz), en ré majeur, un accord toutes les 4 secondes (deux mesures à 120 battements
 par minute, donc les coupes du montage tombent toujours sur un temps).
 
 I.   L'attente : quelques notes de piano, posées, sur une nappe très légère. La rupture : la nappe se retire, une seule
@@ -20,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-from synth import SR, Mix, midi, pad, piano, rng
+from synth import SR, Mix, clock, midi, pad, piano, rng
 
 from montage import FPS, SHOTS
 START, _t = {}, 0
@@ -28,15 +29,17 @@ for _k, _d in SHOTS.items():
     START[_k] = _t / FPS
     _t += _d
 TOTAL = _t / FPS
+JUMP_START = 60 / FPS
 at = lambda shot, frame: START[shot] + frame / FPS
 mix = Mix(TOTAL)
 P = mix.place
 
 
 # ------------------------------------------------------------------ timbres doux
-def _lowpass(x: np.ndarray, cut: float) -> np.ndarray:
-    f = np.fft.rfftfreq(len(x), 1 / SR)
-    return np.fft.irfft(np.fft.rfft(x) / np.sqrt(1 + (f / cut) ** 4), len(x))
+def _lowpass(x: np.ndarray, cut: float, low: float = 110.0) -> np.ndarray:
+    """Passe-bas doux, et coupe-bas sous `low` : rien qui bourdonne dans le grave."""
+    f = np.maximum(np.fft.rfftfreq(len(x), 1 / SR), 1.0)
+    return np.fft.irfft(np.fft.rfft(x) / np.sqrt(1 + (f / cut) ** 4) / np.sqrt(1 + (low / f) ** 4), len(x))
 
 
 def felt(m: float, dur: float = 4.0, vel: float = 0.4) -> np.ndarray:
@@ -60,13 +63,6 @@ def warm(notes: list[int], dur: float, a: float = 2.0, r: float = 3.0) -> np.nda
     return _lowpass(pad(notes, dur, bright=0.12, a=a, r=r, det_c=3.5), 2400)
 
 
-def sub(m: int, dur: float) -> np.ndarray:
-    """Basse ronde, presque une sinusoïde."""
-    t = np.arange(int(dur * SR)) / SR
-    env = np.minimum(1, t / 0.4) * np.minimum(1, (dur - t) / 1.2)
-    return (np.sin(2 * np.pi * midi(m) * t) + 0.12 * np.sin(4 * np.pi * midi(m) * t)) * env
-
-
 # ------------------------------------------------------------------ harmonie
 CH = {  # (basse, voicing)
     "D":  (38, [50, 57, 62, 64, 66, 69]),    # ré majeur 9
@@ -81,8 +77,9 @@ chord_at = lambda t: PROG[int(max(0.0, t) // BAR) % 4]
 
 # ============================================================== I. l'attente
 T_R = START["rupture"]
+for s_ in np.arange(JUMP_START, T_R, 1.0):                                             # le tic-tac de l'extraction
+    P(clock(), s_, gain=0.18 + 0.1 * (s_ / T_R), pan=0.3, wet=0.2)
 P(warm([50, 57, 62, 66], T_R + 1.0, a=4.0, r=2.5), 0.0, gain=0.32, wet=0.55)
-P(sub(38, T_R + 0.5), 0.0, gain=0.10, wet=0.1)
 for f, m in ((18, 62), (77, 66), (142, 64)):                                           # lancement : trois notes posées
     P(felt(m, 4.5, 0.32), at("launch", f), gain=0.42, wet=0.6)
 for f, notes in ((18, [50, 62]), (66, [47, 66]), (126, [43, 62]), (174, [45, 64]), (240, [50, 66]), (306, [47, 69])):
@@ -96,10 +93,9 @@ P(warm(CH["D"][1], START["fabric"] - at("rupture", 110) + 2.0, a=4.5, r=2.0), at
 # ============================================================== II. tout, au même endroit
 T0, T1 = START["fabric"], START["count"]
 for k, t in enumerate(np.arange(T0, T1, BAR)):
-    root, notes = CH[PROG[k % 4]]
+    _, notes = CH[PROG[k % 4]]
     lift = 1.0 + 0.25 * (t >= START["manifesto"]) + 0.15 * (t >= START["wall"])
     P(warm(notes, BAR + 2.6, a=1.4, r=2.4), t - 0.4, gain=0.30 * lift, wet=0.55)
-    P(sub(root, BAR + 0.6), t, gain=0.11, wet=0.05)
 
 
 def flow(t0: float, t1: float, step: float, vel: float, octave: int = 12, pan: float = 0.3) -> None:
@@ -151,8 +147,9 @@ for f in (8, 38, 68, 98, 128, 164):
 
 # ============================================================== III. le compte
 TC, TS = START["count"], START["sign"]
+for s_ in np.arange(np.ceil(TC), TS, 1.0):                                             # seul le tic-tac revient
+    P(clock(), s_, gain=0.24, pan=0.3, wet=0.25)
 P(warm([50, 57, 62, 66], TS - TC + 1.5, a=2.0, r=2.5), TC, gain=0.3, wet=0.6)
-P(sub(38, TS - TC + 0.5), TC, gain=0.09, wet=0.05)
 P(felt(62, 5.0, 0.3), at("count", 40), gain=0.42, wet=0.7)
 P(felt(57, 5.0, 0.3), at("count", 76), gain=0.42, wet=0.7)
 P(warm(CH["D"][1], 6.5, a=1.2, r=2.0), at("count", 190), gain=0.38, wet=0.6)
@@ -161,7 +158,6 @@ bloom(at("count", 196), [50, 57, 62, 66, 69], 0.36, top=78)
 for j, m in enumerate([26, 38, 45, 50, 54, 57, 62, 66, 69, 76]):
     P(felt(m, 8.0, 0.4), TS + j * 0.06, gain=0.32, pan=-0.4 + j * 0.08, wet=0.65)
 P(warm(CH["Dfin"][1], TOTAL - TS + 1.0, a=2.0, r=3.5), TS, gain=0.36, wet=0.6)
-P(sub(26, TOTAL - TS), TS, gain=0.1, wet=0.05)
 P(bell(81, 5.0, 0.2), at("sign", 176), gain=0.4, pan=0.3, wet=0.75)
 
 VO = json.loads((Path(__file__).resolve().parents[1] / "src" / "teaser" / "vo.json").read_text())
