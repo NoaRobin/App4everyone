@@ -289,8 +289,8 @@ Aucun flou d'arrière-plan n'est appliqué sur ce qui est collant ou en mouvemen
 
 ## Système de design
 
-Établi avec le skill **UI/UX Pro Max** (Next Level Builder, installé dans `.claude/skills/ui-ux-pro-max`, licence MIT) et
-consigné dans `design-system/rothschild-am/MASTER.md` (surcharges par page dans `pages/`) : jetons d'espacement, de
+Établi avec le skill **UI/UX Pro Max** (Next Level Builder, licence MIT) et appliqué directement dans les styles
+(`frontend/src/styles/tokens.css` et feuilles par page) : jetons d'espacement, de
 mouvement et de calques, aucun texte sous 12 px, cibles tactiles de 44 px, bouton de pause des animations dans l'en-tête,
 alternatives clavier et boutons à toute rotation 3D, identité des séries jamais portée par la seule couleur, liens profonds.
 La palette et les polices proposées par le skill sont écartées au profit de la charte Rothschild & Co (aucun appel externe).
