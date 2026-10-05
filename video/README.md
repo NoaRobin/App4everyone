@@ -9,6 +9,13 @@ Deux films Remotion en 1920 × 1080, 30 i/s, qui partagent la charte de `src/the
   voix off est dans `VOIX_OFF.md`.
 - **« Le fil d'or »** (`FilDor`, 55,8 s) : le premier film, sans voix, sur les données fictives (`STORYBOARD.md`).
 
+## Les films rendus
+
+| Fichier | Contenu |
+|---|---|
+| `rendus/dix-minutes.mp4` | « Dix minutes », pleine qualité (1920 × 1080, H.264, son AAC 320 kb/s, 80 Mo), voix off provisoire |
+| `rendus/dix-minutes-leger.mp4` | La même vidéo allégée (23 Mo), pour l'envoyer par messagerie |
+
 ## Commandes
 
 ```console
