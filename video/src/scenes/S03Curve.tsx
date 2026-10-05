@@ -9,7 +9,7 @@ import { evolvePath, getLength, getPointAtLength } from "@remotion/paths";
 import { area, line } from "d3-shape";
 import { Ambient, ChapterMark, GoldPoint, Grain, Illustrative } from "../components/Chrome";
 import { mix, prog, sampleAt, enter } from "../lib/anim";
-import { BOX3, S3_POINTS, x3, y3, Y3_TICKS, zoomMatrix } from "../lib/chart";
+import { BOX3, BOX4, S3_POINTS, x3, y3, Y3_TICKS, zoomMatrix } from "../lib/chart";
 import { md, pct, tOf } from "../lib/format";
 import { SAMPLE } from "../data/sample";
 import { COLOR, EASE, LAYOUT, NUMERIC, TYPE, VIDEO } from "../theme";
@@ -53,7 +53,7 @@ export const S03Curve: React.FC = () => {
             <stop offset="100%" stopColor={COLOR.gold} stopOpacity={0} />
           </linearGradient>
           <clipPath id="s3draw"><rect x={0} y={0} width={head.x} height={VIDEO.height} /></clipPath>
-          <clipPath id="s3box"><rect x={BOX3.x0} y={0} width={BOX3.x1 - BOX3.x0} height={VIDEO.height} /></clipPath>
+          <clipPath id="s3box"><rect x={BOX3.x0} y={0} width={mix(BOX3.x1, BOX4.x1, z) - BOX3.x0} height={VIDEO.height} /></clipPath>
           <filter id="s3glow" x="-10%" y="-50%" width="120%" height="200%"><feGaussianBlur stdDeviation="6" /></filter>
         </defs>
         {/* graduations */}
