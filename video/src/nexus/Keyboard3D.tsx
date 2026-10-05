@@ -132,8 +132,9 @@ const Key: React.FC<{ k: KeyInfo; p: KeyPose; assets: Assets; accent: THREE.Colo
   const h = p.height ?? 1;
   const press = p.press ?? 0;
   const op = p.opacity ?? 1;
-  const color = useMemo(() => new THREE.Color(), []);
-  const emissive = useMemo(() => new THREE.Color(), []);
+  // nouvelles couleurs à chaque image : three.js ne voit pas une couleur modifiée sur place
+  const color = new THREE.Color();
+  const emissive = new THREE.Color();
   color.copy(BASE).lerp(accent, Math.min(0.32, glow * 0.22));
   emissive.copy(accent).multiplyScalar(Math.min(1.6, glow) * 0.3);
   const kw = k.width * U - GAP;
@@ -220,9 +221,9 @@ export const FloatKey: React.FC<{ pos: V3; rot?: V3; width: number; morph: numbe
   ({ pos, rot, width, morph, letter, label, glow, accent = "#c29343", scale = 1, opacity = 1 }) => {
   const assets = useKeyboardAssets();
   const acc = useMemo(() => new THREE.Color(accent), [accent]);
-  const color = useMemo(() => new THREE.Color(), []);
-  const emissive = useMemo(() => new THREE.Color(), []);
   if (!assets || opacity <= 0.001) return null;
+  const color = new THREE.Color();
+  const emissive = new THREE.Color();
   color.copy(BASE).lerp(acc, Math.min(0.4, glow * 0.28));
   emissive.copy(acc).multiplyScalar(Math.min(1.6, glow) * 0.3);
   const sx = (1 + (width - 1) * morph) / width;   // géométrie à la largeur finale, comprimée au départ
