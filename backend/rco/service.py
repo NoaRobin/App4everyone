@@ -202,6 +202,62 @@ class Service:
             "top_inflows": _records(flows.tail(5).iloc[::-1][cols]), "top_outflows": _records(flows.head(5)[cols]),
         }
 
+    @lru_cache(maxsize=64)
+    def aum_series(self, d: str | None, freq: str = "M", rng: str = "1A", fund: str | None = None, family: str | None = None) -> dict:
+        """Courbe des encours par période (jour → année) sur une fenêtre, avec collecte et effet marché de chaque période.
+
+        Périmètre : la maison (et sa décomposition par famille), une famille, ou un fonds. Les familles se somment
+        exactement au total : chaque fonds de la série d'encours appartient à une et une seule famille (sinon « nc »).
+        """
+        if freq not in A.FREQS:
+            raise ValueError(f"Granularité inconnue : {freq}")
+        if rng not in A.SERIES_RANGES:
+            raise ValueError(f"Période inconnue : {rng}")
+        m, end = self.m, self.end(d)
+        cols = list(m.fund_aum.columns)
+        fam = m.funds["family"].reindex(cols).fillna("nc") if "family" in m.funds else pd.Series("nc", index=cols)
+        if fund is not None:
+            if fund not in m.fund_aum.columns:
+                raise KeyError(fund)
+            ids, scope = [fund], {"kind": "fund", **self.fund_ref(fund)}
+        elif family is not None:
+            ids = fam[fam == family].index.tolist()
+            scope = {"kind": "family", "key": family, "label": self._family_label(family)}
+        else:
+            ids, scope = cols, {"kind": "house", "label": "Toute la maison"}
+        aum = m.fund_aum[ids].sum(axis=1, min_count=1)
+        fc = m.fund_flow_cum[ids].sum(axis=1)
+        start = None if rng == "Tout" else m.period_start(end, rng)
+        if rng != "Tout" and start is None:
+            start = m.dates[0]                        # historique plus court que la fenêtre : tout ce qui existe
+        df = A.period_points(aum, fc, freq, start, end)
+        out = {"date": end.date().isoformat(), "freq": freq, "range": rng, "scope": scope,
+               "start": df["d"].iloc[0].date().isoformat() if len(df) else None,
+               "points": [{"d": r.d.date().isoformat(), "p": r.p.date().isoformat(), "aum": _num(r.aum), "delta": _num(r.delta),
+                           "pct": _num(r.pct), "flows": _num(r.flows), "market": _num(r.market)} for r in df.itertuples()],
+               "families": []}
+        if len(df):
+            first, last = df.iloc[0], df.iloc[-1]
+            w = df.iloc[1:]                              # variations à l'intérieur de la fenêtre
+            hi, lo = df["aum"].idxmax(), df["aum"].idxmin()
+            out["summary"] = {
+                "aum_start": _num(first.aum), "aum_end": _num(last.aum), "delta": _num(last.aum - first.aum),
+                "pct": _num((last.aum - first.aum) / first.aum) if first.aum else None,
+                "flows": _num(w["flows"].sum()) if len(w) else None, "market": _num(w["market"].sum()) if len(w) else None,
+                "high": {"d": df.at[hi, "d"].date().isoformat(), "v": _num(df.at[hi, "aum"])},
+                "low": {"d": df.at[lo, "d"].date().isoformat(), "v": _num(df.at[lo, "aum"])},
+                "n": int(len(df)), "n_up": int((w["delta"] > 0).sum()), "n_down": int((w["delta"] < 0).sum()),
+            }
+        if fund is None and family is None and len(df):
+            g = m.fund_aum[cols].T.groupby(fam).sum(min_count=1).T.reindex(df["d"]).fillna(0.0)
+            order = [f["key"] for f in L.FAMILIES] + ["nc"]
+            for key in sorted(g.columns, key=lambda k: order.index(k) if k in order else len(order)):
+                vals = g[key].to_numpy(dtype=float)
+                if not np.any(vals > 0):
+                    continue
+                out["families"].append({"key": key, "label": self._family_label(key), "values": [round(float(x), 2) for x in vals]})
+        return out
+
     @lru_cache(maxsize=16)
     def city(self, d: str | None) -> dict:
         m, end = self.m, self.end(d)

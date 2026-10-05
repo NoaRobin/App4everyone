@@ -14,6 +14,7 @@ import { FicheSearch } from "../components/FicheSearch";
 import { fieldId, fundEntries } from "../lib/fiche";
 import * as I from "../components/Icon";
 import { recordVisit } from "../lib/desk";
+import { AumCurve } from "../components/AumCurve";
 
 const TOC = [
   ["synthese", "Synthèse"], ["encours", "Encours"], ["performance", "Performance"], ["parts", "Parts"], ["portefeuille", "Portefeuille"],
@@ -149,16 +150,12 @@ function SectionHead({ id, eyebrow, title, right }: { id: string; eyebrow: strin
 }
 
 function AumSection({ f }: { f: FundDetail }) {
-  const [range, setRange] = useState("3y");
   const [p, setP] = useState<"1M" | "YTD" | "1A">("YTD");
   if (!f.var) return null;
-  const pts = sliceRange(f.aum_series, range);
   return (
     <section className="section reveal" id="encours" aria-labelledby="h-encours">
-      <SectionHead id="encours" eyebrow="Encours" title="Évolution des encours" right={<RangeTabs value={range} onChange={setRange} options={[{ key: "1y", label: "1 an" }, { key: "3y", label: "3 ans" }, { key: "all", label: "Tout" }]} />} />
-      <div className="card card--flat">
-        <TimeChart series={[{ key: "aum", label: "Encours", color: "var(--fc)", points: pts, fill: true }]} height={300} ariaLabel={`Évolution des encours de ${f.name}`} />
-      </div>
+      <SectionHead id="encours" eyebrow="Encours" title="Évolution des encours" />
+      <AumCurve fonds={f.id} height={500} />
       <div className="grid grid-2" style={{ marginTop: 24 }}>
         <div className="card card--flat">
           <div className="spread" style={{ marginBottom: 16 }}>

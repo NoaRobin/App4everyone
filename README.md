@@ -11,11 +11,10 @@ dividendes, indices, inventaires) croisé avec **Product Info** (référentiel f
 
 Le site a **deux espaces**, commutés par le sélecteur de l'en-tête :
 
-- **Accueil** (`/`) — **ce qui rapporte** : le prisme des revenus. Dans le noir, un faisceau d'encours traverse un prisme
-  (les frais de gestion) et en ressort en revenus, séparés en quatre faisceaux de familles puis en faisceaux de fonds qui
-  frappent un mur de classement, du fonds qui rapporte le plus (en haut, le plus épais) au dixième, puis les autres fonds ;
-  l'épaisseur est linéaire en revenus et se conserve d'une étape à l'autre. Un plan-séquence au défilement suit les
-  familles, les trois premiers fonds et le mur (sommaire cliquable ; à plat si les animations sont réduites ou en pause). Suivent le classement des fonds qui rapportent le plus,
+- **Accueil** (`/`) — **ce qui rapporte** : la cité des revenus. Une tour par fonds, de hauteur proportionnelle à ses revenus
+  de gestion estimés (encours × frais), groupées en quatre quartiers de familles autour d'une place centrale, les fonds qui
+  rapportent le plus au plus près du centre ; les six premiers sont étiquetés, le survol ouvre la fiche du fonds, la légende
+  isole une famille, des boutons font tourner la vue (formes nettes, aucune particule ronde). Suivent le classement des fonds qui rapportent le plus,
   ce qui a fait bouger les revenus en un an (collecte ou marché), la répartition par famille, gamme et classe d'actifs, la
   trajectoire mois par mois, les encours, le tableau des départs (pays, drapeaux) et l'entrée vers l'espace métiers.
 - **Espace métiers** (`/metiers` et toutes les rubriques ci-dessous) — pour aller chercher une information vite.
@@ -24,8 +23,8 @@ Le site a **deux espaces**, commutés par le sélecteur de l'en-tête :
 |---|---|
 | **Accueil métiers** | Une grande barre de recherche, vos fiches épinglées et consultées récemment (mémorisées sur le poste, identifiants et libellés seulement), les questions de tous les jours, le répertoire de tous les fonds de A à Z, les contrôles à surveiller. |
 | **Fonds** | Un clavier 3D et une barre de recherche (nom, ISIN, gérant, gamme, pays… tolérante aux accents et aux fautes), puis les **risques** de tous les fonds (SRI, volatilité, drawdown, tracking error, concentration, carte risque/rendement) et les **contrôles** (conformité, qualité des données, rattachement JUMP ↔ Product Info). |
-| **Fiche fonds** | Tout sur un fonds : encours et leur décomposition (collecte / marché), performance vs indice, parts, portefeuille, ESG, distribution, caractéristiques, contrôles. |
-| **Encours** | En deux parties : **I. la ville des encours** (ville 3D, un immeuble par fonds, rejouable mois par mois, familles en surbrillance) ; **II. l'analyse** (l'équation de l'année, répartition par famille, gamme, classe d'actifs, expertise, gérant, SFDR, SRI, domicile, devise, type de part…). |
+| **Fiche fonds** | Tout sur un fonds : courbe 3D de ses encours (du jour à l'année, collecte de chaque période) et leur décomposition (collecte / marché), performance vs indice, parts, portefeuille, ESG, distribution, caractéristiques, contrôles. |
+| **Encours** | En deux parties : **I. la ville des encours** (ville 3D, un immeuble par fonds, rejouable mois par mois, familles en surbrillance) ; **II. l'analyse** (la **courbe 3D des encours** — un point par jour, semaine, mois, trimestre ou année, fenêtre de 1 mois à tout l'historique, total ou empilé par famille, collecte nette estimée de chaque période en dessous, vue de face 2D, lecture au curseur ou au clavier, tableau des données —, l'équation de l'année, répartition par famille, gamme, classe d'actifs, expertise, gérant, SFDR, SRI, domicile, devise, type de part…). |
 | **Sélection** | Toute combinaison de critères, avec agrégat en tête et détail en dessous, exportable. |
 | **Portefeuilles** | Ce que nous détenons (anneaux par classe d'actifs et par devise, ruban et classement des premières positions, lignes les plus partagées), et quels fonds détiennent une ligne donnée. |
 | **Distribution** | Où nos fonds sont commercialisés : le parcours d'une autorisation en Sankey 3D **clientèle → pays → famille de gestion**, les clients nommés (parts dédiées) d'abord, puis les pools de clientèle, un globe 3D interactif (rotation, survol, clic pour centrer un pays, filtre par clientèle, arcs depuis le pays de domiciliation), frise de l'ouverture des pays année après année, tableau des départs (drapeaux, palettes), teneurs de compte du passif, plateformes ; par pays, les fonds et parts autorisés. Un interrupteur retire les fonds **Rothschild Martin Maurel (RMM)** de toute la rubrique (chiffres, visuels, pays), et reste appliqué d'une page à l'autre (`?rmm=exclure`). |
@@ -183,6 +182,11 @@ vérifie les 11 / 21 / 28 colonnes, la correspondance, la lecture des dates et l
 toutes les 6 heures (`APP_PASSIF_TTL_HOURS`), les tables étant mises à jour chaque jour. Sans Fabric : données synthétiques.
 `GET /api/passif`, `GET /api/passif/fonds/{id}`, `GET /api/passif/fonds/{id}/porteurs`, `GET /api/passif/clients?q=`.
 
+Courbe des encours : `GET /api/encours/series?freq=J|S|M|T|A&range=1M|3M|YTD|1A|3A|Tout[&fonds=ID|&famille=clé]`. Chaque point
+est la dernière date disponible de sa période (semaine du lundi au dimanche) ; collecte d'une période = écart de collecte
+cumulée avec le point précédent (même antérieur à la fenêtre), effet marché = Δencours − collecte ; pour la maison, les
+familles se somment exactement au total.
+
 ### Volumétrie (des dizaines de millions de cellules)
 
 L'application est éprouvée sur des données fictives démultipliées à l'échelle réelle : `python run.py --scale 17`
@@ -306,6 +310,7 @@ les hausses et baisses portent toujours un signe et une flèche. Tout est dans `
 | Vue | Où | Ce qu'elle rend évident |
 |---|---|---|
 | Ville 3D | Encours | Le poids de chaque fonds et de chaque famille, et son évolution dans le temps |
+| Courbe 3D des encours | Encours, fiche fonds | L'encours période par période (jour → année) et, dessous, la collecte nette estimée de chaque période ; chaque point est la dernière valeur de sa période, jamais une moyenne ; vue de face = graphique 2D |
 | Équation de l'année | Encours | Encours au 31/12 + collecte + effet marché = encours du jour, barres proportionnelles |
 | Cité des revenus 3D | Accueil | Ce que chaque fonds rapporte (hauteur), son encours (emprise), sa famille (quartier) |
 | Tableau des départs | Accueil, Distribution | Les pays de commercialisation, avec drapeaux, par nombre de parts enregistrées |

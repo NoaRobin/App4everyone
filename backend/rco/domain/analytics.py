@@ -64,6 +64,49 @@ def daily_points(series: pd.Series, end: pd.Timestamp, start: pd.Timestamp | Non
     return [{"d": d.date().isoformat(), "v": round(float(v), 6)} for d, v in s.items()]
 
 
+# Granularités de la courbe des encours : code → alias de période pandas (None : chaque date de VL)
+FREQS = {"J": None, "S": "W", "M": "M", "T": "Q", "A": "Y"}
+SERIES_RANGES = ("1M", "3M", "YTD", "1A", "3A", "Tout")
+
+
+def period_points(aum: pd.Series, flow_cum: pd.Series, freq: str, start: pd.Timestamp | None, end: pd.Timestamp) -> pd.DataFrame:
+    """Encours par période, et sa variation décomposée en collecte nette estimée et effet marché.
+
+    Chaque point est la dernière date disponible de sa période (jour, semaine du lundi au dimanche, mois, trimestre,
+    année), jamais une moyenne. La collecte d'une période est l'écart de collecte cumulée entre ce point et le précédent,
+    ce point précédent pouvant être antérieur à la fenêtre : la somme des collectes de la fenêtre égale la collecte entre
+    la veille de la fenêtre et sa fin. Effet marché = Δencours − collecte. Le premier point de l'historique n'a pas de
+    variation (None). Colonnes : d (date du point), p (début de la période), aum, delta, pct, flows, market.
+    """
+    if freq not in FREQS:
+        raise ValueError(f"Granularité inconnue : {freq}")
+    s = aum[:end].dropna()
+    cols = ["d", "p", "aum", "delta", "pct", "flows", "market"]
+    if s.empty:
+        return pd.DataFrame(columns=cols)
+    idx = s.index
+    code = FREQS[freq]
+    if code is None:
+        last, p0 = idx, idx
+    else:
+        per = idx.to_period(code)
+        pos = pd.Series(np.arange(len(idx)), index=idx).groupby(per.asi8).last().to_numpy()
+        last, p0 = idx[pos], per[pos].start_time
+    v = s.loc[last].to_numpy(dtype=float)
+    # collecte cumulée : une date absente vaut la dernière valeur connue
+    fc = (flow_cum.sort_index().ffill().reindex(last, method="ffill").fillna(0.0).to_numpy(dtype=float)
+          if len(flow_cum) else np.zeros(len(last)))
+    delta = np.r_[np.nan, np.diff(v)]
+    flows = np.r_[np.nan, np.diff(fc)]
+    prev = np.r_[np.nan, v[:-1]]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        pct = np.where(prev > 0, delta / prev, np.nan)
+    df = pd.DataFrame({"d": last, "p": pd.DatetimeIndex(p0), "aum": v, "delta": delta, "pct": pct, "flows": flows, "market": delta - flows})
+    if start is not None:
+        df = df[df["d"] >= start]
+    return df.reset_index(drop=True)
+
+
 # ------------------------------------------------------------------ performance
 def nav_rows(m: Model, jump_part: str) -> pd.DataFrame:
     """Lignes JUMP d'une part : tranche contiguë de `aum_raw` (trié par part puis date), sans copie."""

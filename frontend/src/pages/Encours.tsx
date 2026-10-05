@@ -14,6 +14,7 @@ import { Delta, ErrorState, Loading, useReveal } from "../components/ui";
 import { Sparkline, StackedArea } from "../components/charts";
 import { Mosaic, divColor, DivLegend } from "../components/viz";
 import { Head, PageHero } from "../components/Editorial";
+import { AumCurve } from "../components/AumCurve";
 import * as I from "../components/Icon";
 
 const AXES: { key: string; label: string; group: "Fonds" | "Parts" }[] = [
@@ -68,6 +69,12 @@ export default function Encours() {
           { label: "Effet marché", ...signed(o.var.YTD?.market), sub: "VL et changes" },
         ] : undefined}
       />
+      <div className="page enc__curve">
+        <section className="section reveal" aria-labelledby="h-courbe">
+          <AumCurve families head={{ id: "courbe", eyebrow: "La courbe des encours", title: "L'encours, du jour à l'année",
+            lede: <>Un point par jour, semaine, mois, trimestre ou année&nbsp;: chaque point est la dernière valeur connue de sa période, jamais une moyenne. Sous la courbe, la <b className="gold-t">collecte nette estimée</b> de chaque période. En vue Total, l'axe des encours ne part pas de zéro&nbsp;: sa première graduation est indiquée en or.</> }} />
+        </section>
+      </div>
       <nav className="axbar" aria-label="Répartir les encours par">
         <div className="axbar__in" role="radiogroup" aria-label="Angle de lecture">
           {(["Fonds", "Parts"] as const).map((grp) => (

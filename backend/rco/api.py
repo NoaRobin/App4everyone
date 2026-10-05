@@ -344,6 +344,16 @@ def overview(date: str | None = None):
     return _ok(_api_service().overview(date))
 
 
+@app.get("/api/encours/series")
+def aum_series(freq: str = "M", range: str = "1A", fonds: str | None = None, famille: str | None = None, date: str | None = None):
+    try:
+        return _ok(_api_service().aum_series(date, freq, range, fonds or None, famille or None))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    except KeyError:
+        raise HTTPException(404, "Fonds inconnu") from None
+
+
 @app.get("/api/city")
 def city(date: str | None = None):
     return _ok(_api_service().city(date))
