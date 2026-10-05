@@ -1,15 +1,24 @@
-# « Le fil d'or » — vidéo de présentation
+# Vidéos de présentation — Rothschild & Co Asset Management
 
-Vidéo Remotion de **Rothschild & Co Asset Management** : 55,8 s, 1920 × 1080, 30 i/s. Le storyboard est dans
-`STORYBOARD.md` et la charte dans `src/theme.ts`.
+Deux films Remotion en 1920 × 1080, 30 i/s, qui partagent la charte de `src/theme.ts` :
+
+- **« Dix minutes »** (`DixMinutes`, 2 min 51) : le teaser avec voix off. Pendant qu'une extraction JUMP tourne, le film
+  explique comment ça marche : les outils d'aujourd'hui (Product Info, JUMP, Centaure, Doc Info, Adjuto), Fabric qui
+  réunit les données, l'application qui les lit sans les modifier et les met en forme. Il montre ensuite l'application
+  en direct. Le compteur d'extraction court pendant tout le film ; à la fin, il n'en est qu'à un quart. Le texte de la
+  voix off est dans `VOIX_OFF.md`.
+- **« Le fil d'or »** (`FilDor`, 55,8 s) : le premier film, sans voix, sur les données fictives (`STORYBOARD.md`).
 
 ## Commandes
 
 ```console
 npm i                      # dépendances
 npm run dev                # Remotion Studio : aperçu interactif, une composition par scène dans « Scenes »
-npx remotion render FilDor out/fil-dor.mp4 --codec=h264 --crf=16 --audio-codec=aac --audio-bitrate=320k
-python3 music/score.py     # régénère public/music.wav (numpy requis)
+npx remotion render DixMinutes out/dix-minutes.mp4 --codec=h264 --crf=17 --audio-codec=aac --audio-bitrate=320k
+node record/recorder.mjs   # réenregistre les prises de l'application (application lancée sur APP_URL, Playwright requis)
+KOKORO_DIR=<modèle> python3 music/voiceover.py   # voix off provisoire (public/vo/, src/teaser/vo.json)
+python3 music/teaser.py    # musique du teaser, effacée sous la voix (public/teaser.wav)
+python3 music/score.py     # musique du « Fil d'or » (public/music.wav)
 ```
 
 Dans un environnement sans Chrome téléchargeable, ajoutez `--browser-executable=<chemin de chrome-headless-shell>`.
@@ -26,11 +35,18 @@ Dans un environnement sans Chrome téléchargeable, ajoutez `--browser-executabl
 | `public/app/` | Captures de l'application sur ce même jeu fictif |
 | `public/fonts/` | Polices de l'application (Instrument Serif, Inter Tight, JetBrains Mono, licence OFL), servies en local |
 | `music/score.py` | Partition originale synthétisée, calée sur le montage, d'où `public/music.wav` |
+| `src/teaser/` | « Dix minutes » : minutage (`timeline.ts`), actes I à III, plan « Comment ça marche », voix off et sous-titres |
+| `record/` | Enregistreur de l'application en temps virtuel : 1/30 s exactement entre deux captures, donc des prises sans saccade |
+| `public/rec/` | Les prises de l'application, sur son jeu de données fictif |
+| `public/vo/`, `VOIX_OFF.md` | Voix off provisoire, et le texte minuté pour une voix professionnelle |
+| `music/synth.py`, `music/teaser.py` | Instruments de synthèse, et la partition du teaser |
 
 ## Règles
 
 - **Aucune donnée réelle.** Tous les chiffres viennent du jeu synthétique de l'application, et chaque scène chiffrée
   porte la mention « Données illustratives, issues d'un jeu fictif ». Ne remplacez jamais `sample.ts` par un export
-  Fabric.
+  Fabric. Seule exception, dans « Dix minutes » : l'encours (50,278 Md€) et R-co Valor (10 Md€), chiffres communiqués par
+  la direction et signalés à l'écran comme tels (`src/teaser/timeline.ts`, `FACTS`). Les images de l'application portent
+  la mention « jeu de données fictif ».
 - **Hors ligne.** Polices et musique sont locales, le rendu n'appelle aucun service externe.
 - **Si le montage change** (durées dans `src/Video.tsx`), reportez-les dans `music/score.py` puis régénérez la musique.

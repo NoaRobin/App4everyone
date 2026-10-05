@@ -1,0 +1,314 @@
+[
+ {
+  "shot": "launch",
+  "i": 0,
+  "file": "vo/launch-0.wav",
+  "at": 18,
+  "frames": 50,
+  "text": "Chaque matin, la même scène."
+ },
+ {
+  "shot": "launch",
+  "i": 1,
+  "file": "vo/launch-1.wav",
+  "at": 77,
+  "frames": 56,
+  "text": "On lance une extraction JUMP."
+ },
+ {
+  "shot": "launch",
+  "i": 2,
+  "file": "vo/launch-2.wav",
+  "at": 142,
+  "frames": 43,
+  "text": "Dix minutes d'attente."
+ },
+ {
+  "shot": "ritual",
+  "i": 0,
+  "file": "vo/ritual-0.wav",
+  "at": 24,
+  "frames": 48,
+  "text": "Pendant ce temps, on cherche."
+ },
+ {
+  "shot": "ritual",
+  "i": 1,
+  "file": "vo/ritual-1.wav",
+  "at": 81,
+  "frames": 52,
+  "text": "Une fiche dans Product Info."
+ },
+ {
+  "shot": "ritual",
+  "i": 2,
+  "file": "vo/ritual-2.wav",
+  "at": 142,
+  "frames": 50,
+  "text": "Un document dans Doc Info."
+ },
+ {
+  "shot": "ritual",
+  "i": 3,
+  "file": "vo/ritual-3.wav",
+  "at": 201,
+  "frames": 56,
+  "text": "Puis Centaure, puis Adjuto."
+ },
+ {
+  "shot": "ritual",
+  "i": 4,
+  "file": "vo/ritual-4.wav",
+  "at": 266,
+  "frames": 75,
+  "text": "Chaque outil détient une partie de la réponse."
+ },
+ {
+  "shot": "rupture",
+  "i": 0,
+  "file": "vo/rupture-0.wav",
+  "at": 56,
+  "frames": 49,
+  "text": "Et si tout était déjà là ?"
+ },
+ {
+  "shot": "fabric",
+  "i": 0,
+  "file": "vo/fabric-0.wav",
+  "at": 16,
+  "frames": 53,
+  "text": "Toutes ces données existent déjà."
+ },
+ {
+  "shot": "fabric",
+  "i": 1,
+  "file": "vo/fabric-1.wav",
+  "at": 78,
+  "frames": 122,
+  "text": "Elles sont réunies dans Fabric, la plateforme de données de Microsoft :"
+ },
+ {
+  "shot": "fabric",
+  "i": 2,
+  "file": "vo/fabric-2.wav",
+  "at": 209,
+  "frames": 71,
+  "text": "un seul endroit, mis à jour chaque jour."
+ },
+ {
+  "shot": "fabric",
+  "i": 3,
+  "file": "vo/fabric-3.wav",
+  "at": 300,
+  "frames": 98,
+  "text": "Notre application lit ces données, sans jamais les modifier."
+ },
+ {
+  "shot": "fabric",
+  "i": 4,
+  "file": "vo/fabric-4.wav",
+  "at": 407,
+  "frames": 82,
+  "text": "Elle les relie, les calcule, et les met en forme."
+ },
+ {
+  "shot": "manifesto",
+  "i": 0,
+  "file": "vo/manifesto-0.wav",
+  "at": 56,
+  "frames": 101,
+  "text": "Résultat : toutes les informations métiers, au même endroit."
+ },
+ {
+  "shot": "aum",
+  "i": 0,
+  "file": "vo/aum-0.wav",
+  "at": 150,
+  "frames": 107,
+  "text": "Plus de cinquante milliards d'euros d'encours, suivis au jour le jour."
+ },
+ {
+  "shot": "valor",
+  "i": 0,
+  "file": "vo/valor-0.wav",
+  "at": 64,
+  "frames": 85,
+  "text": "Notre plus gros fonds, R-co Valor : dix milliards."
+ },
+ {
+  "shot": "valor",
+  "i": 1,
+  "file": "vo/valor-1.wav",
+  "at": 158,
+  "frames": 47,
+  "text": "Près d'un euro sur cinq."
+ },
+ {
+  "shot": "courbe",
+  "i": 0,
+  "file": "vo/courbe-0.wav",
+  "at": 30,
+  "frames": 116,
+  "text": "L'encours de chaque fonds, par jour, par semaine, par mois ou par année."
+ },
+ {
+  "shot": "courbe",
+  "i": 1,
+  "file": "vo/courbe-1.wav",
+  "at": 155,
+  "frames": 32,
+  "text": "En un clic."
+ },
+ {
+  "shot": "revenus",
+  "i": 0,
+  "file": "vo/revenus-0.wav",
+  "at": 40,
+  "frames": 57,
+  "text": "Les fonds qui nous font gagner le plus,"
+ },
+ {
+  "shot": "revenus",
+  "i": 1,
+  "file": "vo/revenus-1.wav",
+  "at": 106,
+  "frames": 95,
+  "text": "estimés à partir des encours et des frais de gestion."
+ },
+ {
+  "shot": "distribution",
+  "i": 0,
+  "file": "vo/distribution-0.wav",
+  "at": 40,
+  "frames": 89,
+  "text": "Où chaque fonds est autorisé à la vente, pays par pays,"
+ },
+ {
+  "shot": "distribution",
+  "i": 1,
+  "file": "vo/distribution-1.wav",
+  "at": 138,
+  "frames": 36,
+  "text": "et pour quels clients."
+ },
+ {
+  "shot": "passif",
+  "i": 0,
+  "file": "vo/passif-0.wav",
+  "at": 24,
+  "frames": 118,
+  "text": "Qui détient nos fonds : par type de client, par teneur de compte, par pays."
+ },
+ {
+  "shot": "perf",
+  "i": 0,
+  "file": "vo/perf-0.wav",
+  "at": 60,
+  "frames": 112,
+  "text": "Les performances, comparées côte à côte, sur la même période."
+ },
+ {
+  "shot": "search",
+  "i": 0,
+  "file": "vo/search-0.wav",
+  "at": 22,
+  "frames": 71,
+  "text": "Plus besoin de chercher dans Product Info."
+ },
+ {
+  "shot": "search",
+  "i": 1,
+  "file": "vo/search-1.wav",
+  "at": 120,
+  "frames": 109,
+  "text": "Une question sur un fonds ? Les frais, le dépositaire, un pays ?"
+ },
+ {
+  "shot": "search",
+  "i": 2,
+  "file": "vo/search-2.wav",
+  "at": 272,
+  "frames": 86,
+  "text": "La réponse s'affiche, directement sur la fiche."
+ },
+ {
+  "shot": "wall",
+  "i": 0,
+  "file": "vo/wall-0.wav",
+  "at": 8,
+  "frames": 26,
+  "text": "Encours."
+ },
+ {
+  "shot": "wall",
+  "i": 1,
+  "file": "vo/wall-1.wav",
+  "at": 38,
+  "frames": 24,
+  "text": "Revenus."
+ },
+ {
+  "shot": "wall",
+  "i": 2,
+  "file": "vo/wall-2.wav",
+  "at": 68,
+  "frames": 36,
+  "text": "Distribution."
+ },
+ {
+  "shot": "wall",
+  "i": 3,
+  "file": "vo/wall-3.wav",
+  "at": 98,
+  "frames": 27,
+  "text": "Passif."
+ },
+ {
+  "shot": "wall",
+  "i": 4,
+  "file": "vo/wall-4.wav",
+  "at": 128,
+  "frames": 34,
+  "text": "Performance."
+ },
+ {
+  "shot": "wall",
+  "i": 5,
+  "file": "vo/wall-5.wav",
+  "at": 164,
+  "frames": 32,
+  "text": "Tout est relié."
+ },
+ {
+  "shot": "count",
+  "i": 0,
+  "file": "vo/count-0.wav",
+  "at": 40,
+  "frames": 97,
+  "text": "Pendant ce film, une extraction JUMP n'aurait pas fini."
+ },
+ {
+  "shot": "count",
+  "i": 1,
+  "file": "vo/count-1.wav",
+  "at": 196,
+  "frames": 70,
+  "text": "L'application, elle, vous a tout montré."
+ },
+ {
+  "shot": "sign",
+  "i": 0,
+  "file": "vo/sign-0.wav",
+  "at": 24,
+  "frames": 75,
+  "text": "Rothschild & Co Asset Management."
+ },
+ {
+  "shot": "sign",
+  "i": 1,
+  "file": "vo/sign-1.wav",
+  "at": 96,
+  "frames": 81,
+  "text": "Toutes les informations métiers, au même endroit."
+ }
+]

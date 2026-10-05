@@ -13,10 +13,13 @@ import { S08Holders } from "./scenes/S08Holders";
 import { S09App } from "./scenes/S09App";
 import { S10Signature } from "./scenes/S10Signature";
 import { VIDEO } from "./theme";
+import { Teaser } from "./teaser/Teaser";
+import { TEASER_TOTAL } from "./teaser/timeline";
 
 export const RemotionRoot: React.FC = () => {
   return (
     <>
+      <Composition id="DixMinutes" component={Teaser} durationInFrames={TEASER_TOTAL} {...VIDEO} />
       <Composition id="FilDor" component={FilDor} durationInFrames={TOTAL} {...VIDEO} />
       <Folder name="Scenes">
         <Composition id="S01-Point" component={S01Point} durationInFrames={SCENES.point} {...VIDEO} />
