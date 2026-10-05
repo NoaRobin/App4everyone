@@ -17,9 +17,7 @@ import numpy as np
 
 from synth import Mix, bass, boom, clock, drone, hat, kick, pad, piano, reverse_swell, riser, rng, tick, whoosh
 
-FPS = 30
-SHOTS = dict(launch=210, ritual=390, rupture=180, fabric=540, manifesto=240, aum=360, valor=330, courbe=360, revenus=330,
-             distribution=330, passif=270, perf=300, search=390, wall=240, count=360, sign=300)
+from montage import FPS, SHOTS
 START, _t = {}, 0
 for _k, _d in SHOTS.items():
     START[_k] = _t / FPS

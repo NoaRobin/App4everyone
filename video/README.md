@@ -16,7 +16,10 @@ npm i                      # dépendances
 npm run dev                # Remotion Studio : aperçu interactif, une composition par scène dans « Scenes »
 npx remotion render DixMinutes out/dix-minutes.mp4 --codec=h264 --crf=17 --audio-codec=aac --audio-bitrate=320k
 node record/recorder.mjs   # réenregistre les prises de l'application (application lancée sur APP_URL, Playwright requis)
-KOKORO_DIR=<modèle> python3 music/voiceover.py   # voix off provisoire (public/vo/, src/teaser/vo.json)
+python3 music/voiceover.py --compare   # comparatif de voix Azure (Rémy, Henri), sans toucher au film
+python3 music/voiceover.py             # voix off Azure AI Speech si AZURE_SPEECH_KEY et AZURE_SPEECH_REGION sont définies,
+                                       # sinon voix de travail hors ligne (KOKORO_DIR=<modèle>) ; vérifie que tout tient
+                                       # dans les plans
 python3 music/teaser.py    # musique du teaser, effacée sous la voix (public/teaser.wav)
 python3 music/score.py     # musique du « Fil d'or » (public/music.wav)
 ```
@@ -38,7 +41,7 @@ Dans un environnement sans Chrome téléchargeable, ajoutez `--browser-executabl
 | `src/teaser/` | « Dix minutes » : minutage (`timeline.ts`), actes I à III, plan « Comment ça marche », voix off et sous-titres |
 | `record/` | Enregistreur de l'application en temps virtuel : 1/30 s exactement entre deux captures, donc des prises sans saccade |
 | `public/rec/` | Les prises de l'application, sur son jeu de données fictif |
-| `public/vo/`, `VOIX_OFF.md` | Voix off provisoire, et le texte minuté pour une voix professionnelle |
+| `public/vo/`, `VOIX_OFF.md` | Voix off (Azure AI Speech, voix masculine fr-FR-RemyMultilingualNeural ; seul le texte de la voix off est envoyé au service) et texte minuté |
 | `music/synth.py`, `music/teaser.py` | Instruments de synthèse, et la partition du teaser |
 
 ## Règles

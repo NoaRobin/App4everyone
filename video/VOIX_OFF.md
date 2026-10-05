@@ -1,8 +1,9 @@
 # Voix off — « Dix minutes »
 
-Texte définitif de la voix off, avec le minutage du montage (`src/teaser/vo.json`). La voix du film est une synthèse
-provisoire (Kokoro, voix française hors ligne) : pour la diffusion, faire enregistrer ce texte par une voix
-professionnelle, phrase par phrase, puis déposer les fichiers dans `public/vo/` sous les mêmes noms.
+Texte définitif de la voix off, avec le minutage du montage (`src/teaser/vo.json`). Voix de diffusion : Azure AI Speech,
+voix masculine `fr-FR-RemyMultilingualNeural`, débit posé et registre grave (`python3 music/voiceover.py`, avec
+`AZURE_SPEECH_KEY` et `AZURE_SPEECH_REGION`). Sans clé, le script produit une voix de travail hors ligne. Un comédien peut
+aussi enregistrer ce texte phrase par phrase et déposer les fichiers dans `public/vo/` sous les mêmes noms.
 
 Ton : posé, chaleureux, sans emphase publicitaire ; un léger sourire sur « Et si tout était déjà là ? » et sur la dernière
 phrase du compte. Prononciations : JUMP « djeump », R-co « ère-co », Rothschild & Co « Rotchild and Co ».
