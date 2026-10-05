@@ -1,21 +1,26 @@
 """
 « Dix minutes » — partition originale du teaser (synthèse, libre de droits).
 
-I.   L'attente : pièce froide, tic-tac de l'extraction JUMP, nappe grave qui bat, une fenêtre qui passe = un souffle ;
-     la tension monte, puis coupe franche à la rupture. Une seule note, la question, un point d'or.
-II.  Toutes les informations métiers : 120 battements par minute, ré majeur, chaque plan a son accent (impacts sur
-     50,3 Md€ et R-co Valor, clics de l'application, frappe au clavier, mur final en double croches).
-III. Le compte : silence, seul le tic-tac revient ; accord chaud sur « L'application, elle, vous a tout montré. »
+Une musique douce et lumineuse, sans aucun bruit : pas de tic-tac, de rumeur, de souffle, d'impact ni de batterie.
+Piano feutré, nappes chaudes et basse ronde, en ré majeur, un accord toutes les 4 secondes (deux mesures à 120 battements
+par minute, donc les coupes du montage tombent toujours sur un temps).
+
+I.   L'attente : quelques notes de piano, posées, sur une nappe très légère. La rupture : la nappe se retire, une seule
+     note, la question, puis l'harmonie s'ouvre doucement.
+II.  Toutes les informations métiers : le piano se met à couler en croches, la nappe s'élargit ; un accord qui fleurit
+     sur 50,3 Md€ et sur R-co Valor, des clochettes pour la tour, un peu plus d'élan sur le mur.
+III. Le compte : retour au calme, puis l'accord chaud de la fin et la signature.
 
     python3 music/teaser.py          # écrit public/teaser.wav ; calage repris de src/teaser/timeline.ts
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
 
-from synth import Mix, bass, boom, clock, drone, hat, kick, pad, piano, reverse_swell, riser, rng, tick, whoosh
+from synth import SR, Mix, midi, pad, piano, rng
 
 from montage import FPS, SHOTS
 START, _t = {}, 0
@@ -23,148 +28,145 @@ for _k, _d in SHOTS.items():
     START[_k] = _t / FPS
     _t += _d
 TOTAL = _t / FPS
-JUMP_START = 60 / FPS
 at = lambda shot, frame: START[shot] + frame / FPS
 mix = Mix(TOTAL)
 P = mix.place
 
-CH = {"D": (38, [50, 57, 62, 66, 69]), "Bm": (35, [47, 54, 62, 66, 71]), "G": (31, [43, 50, 59, 62, 67]),
-      "A": (33, [45, 52, 61, 64, 69]), "Dfin": (26, [38, 50, 57, 62, 66, 69, 76])}
+
+# ------------------------------------------------------------------ timbres doux
+def _lowpass(x: np.ndarray, cut: float) -> np.ndarray:
+    f = np.fft.rfftfreq(len(x), 1 / SR)
+    return np.fft.irfft(np.fft.rfft(x) / np.sqrt(1 + (f / cut) ** 4), len(x))
+
+
+def felt(m: float, dur: float = 4.0, vel: float = 0.4) -> np.ndarray:
+    """Piano feutré : marteau adouci, aigus retirés."""
+    y = _lowpass(piano(m, dur, vel), 1800 + 900 * vel)
+    k = int(0.008 * SR)
+    y[:k] *= np.linspace(0, 1, k)
+    return y
+
+
+def bell(m: float, dur: float = 3.0, vel: float = 0.3) -> np.ndarray:
+    """Clochette ronde (sinus et une partielle), pour les accents."""
+    t = np.arange(int(dur * SR)) / SR
+    f = midi(m)
+    y = np.sin(2 * np.pi * f * t) + 0.25 * np.sin(2 * np.pi * 2.0 * f * t) * np.exp(-t * 3)
+    return y * np.exp(-t * 1.6) * (1 - np.exp(-t / 0.004)) * vel
+
+
+def warm(notes: list[int], dur: float, a: float = 2.0, r: float = 3.0) -> np.ndarray:
+    """Nappe chaude : peu d'harmoniques, désaccord léger, sans grain."""
+    return _lowpass(pad(notes, dur, bright=0.12, a=a, r=r, det_c=3.5), 2400)
+
+
+def sub(m: int, dur: float) -> np.ndarray:
+    """Basse ronde, presque une sinusoïde."""
+    t = np.arange(int(dur * SR)) / SR
+    env = np.minimum(1, t / 0.4) * np.minimum(1, (dur - t) / 1.2)
+    return (np.sin(2 * np.pi * midi(m) * t) + 0.12 * np.sin(4 * np.pi * midi(m) * t)) * env
+
+
+# ------------------------------------------------------------------ harmonie
+CH = {  # (basse, voicing)
+    "D":  (38, [50, 57, 62, 64, 66, 69]),    # ré majeur 9
+    "Bm": (35, [47, 54, 62, 66, 69]),        # si mineur 7
+    "G":  (31, [43, 50, 59, 62, 66]),        # sol majeur 7
+    "A":  (33, [45, 52, 59, 61, 64]),        # la, avec la neuvième
+    "Dfin": (26, [38, 50, 57, 62, 64, 66, 69, 74]),
+}
+PROG = ["D", "Bm", "G", "A"]
+BAR = 4.0
+chord_at = lambda t: PROG[int(max(0.0, t) // BAR) % 4]
 
 # ============================================================== I. l'attente
-P(drone([26, 33], START["rupture"] + 0.4), 0.0, gain=0.5, wet=0.3)                 # ré et la graves, battement lent
-room = np.convolve(rng.normal(0, 1, int(START["rupture"] * 44100)), np.ones(60) / 60, mode="same")
-P(room, 0.0, gain=0.04, wet=0.1)                                                      # rumeur de bureau
-for s in np.arange(JUMP_START, START["rupture"], 1.0):                                # le tic-tac de l'extraction
-    P(clock(), s, gain=0.18 + 0.1 * (s / START["rupture"]), pan=0.3, wet=0.2)
-for i, ch in enumerate("> extraction JUMP lancée"):                                   # frappe
-    if ch != " ":
-        P(tick(rng.uniform(2500, 4200), 0.025), at("launch", 34 + i * 1.2), gain=0.05, pan=-0.3, wet=0.15)
-# les fenêtres qui passent devant la caméra (même calendrier que act1.tsx)
-for i in range(30):
-    spawn = round(330 * (1 - (1 - i / 30) ** 1.9))
-    P(whoosh(0.7, bright=2200), at("ritual", spawn + 88), gain=0.05 + 0.02 * rng.random(), pan=rng.uniform(-0.7, 0.7), wet=0.3)
-for f, m in ((18, 38), (66, 41), (126, 38), (174, 43), (240, 45), (306, 50)):          # une note grave par phrase
-    P(piano(m, 3.0, 0.5), at("ritual", f), gain=0.45, wet=0.5)
-    P(piano(m + 12, 3.0, 0.35), at("ritual", f), gain=0.3, wet=0.5)
-for b in np.arange(START["ritual"] + 1.0, START["rupture"], 1.0):                      # pouls qui s'installe
-    P(kick(0.35 + 0.35 * (b - START["ritual"]) / 13), b, gain=0.28, wet=0.05)
-P(riser(3.0), START["rupture"] - 3.0, gain=0.16, wet=0.4)
-# la rupture : coupe franche, puis la question
-P(boom(4.0), at("rupture", 6), gain=0.25, wet=0.5)
-P(piano(74, 5.0, 0.4), at("rupture", 56), gain=0.5, pan=0.1, wet=0.75)
-P(piano(81, 5.0, 0.35), at("rupture", 118), gain=0.42, pan=-0.2, wet=0.8)
-P(reverse_swell(CH["D"][1], START["fabric"] - at("rupture", 120)), at("rupture", 120), gain=0.55, wet=0.6)
+T_R = START["rupture"]
+P(warm([50, 57, 62, 66], T_R + 1.0, a=4.0, r=2.5), 0.0, gain=0.32, wet=0.55)
+P(sub(38, T_R + 0.5), 0.0, gain=0.10, wet=0.1)
+for f, m in ((18, 62), (77, 66), (142, 64)):                                           # lancement : trois notes posées
+    P(felt(m, 4.5, 0.32), at("launch", f), gain=0.42, wet=0.6)
+for f, notes in ((18, [50, 62]), (66, [47, 66]), (126, [43, 62]), (174, [45, 64]), (240, [50, 66]), (306, [47, 69])):
+    for j, m in enumerate(notes):                                                      # le rituel : une note grave et sa réponse
+        P(felt(m, 5.0, 0.3 - 0.06 * j), at("ritual", f) + 0.35 * j, gain=0.4, pan=0.25 * (j - 0.5), wet=0.6)
+# la rupture : la nappe se retire, une seule note, la question, puis l'harmonie s'ouvre
+P(felt(74, 6.0, 0.34), at("rupture", 56), gain=0.45, pan=0.1, wet=0.75)
+P(felt(81, 6.0, 0.28), at("rupture", 118), gain=0.38, pan=-0.2, wet=0.8)
+P(warm(CH["D"][1], START["fabric"] - at("rupture", 110) + 2.0, a=4.5, r=2.0), at("rupture", 110), gain=0.35, wet=0.6)
 
-# ============================================================== II. tout, au même endroit (dès « Comment ça marche »)
+# ============================================================== II. tout, au même endroit
 T0, T1 = START["fabric"], START["count"]
-prog_ = ["D", "Bm", "G", "A"]
-for k, t in enumerate(np.arange(T0, T1, 4.0)):
-    name = prog_[k % 4]
-    root, notes = CH[name]
-    P(pad(notes, 4.0 + 1.8, bright=0.55 + 0.25 * (t > START["wall"] - 1)), t - 0.3, gain=0.5, wet=0.5)
-    for e in np.arange(t, min(t + 4.0, T1), 0.5):                                        # basse en croches
-        P(bass(root + (12 if (e - t) % 2 >= 1.5 else 0), 0.42), e, gain=0.15, wet=0.05)
+for k, t in enumerate(np.arange(T0, T1, BAR)):
+    root, notes = CH[PROG[k % 4]]
+    lift = 1.0 + 0.25 * (t >= START["manifesto"]) + 0.15 * (t >= START["wall"])
+    P(warm(notes, BAR + 2.6, a=1.4, r=2.4), t - 0.4, gain=0.30 * lift, wet=0.55)
+    P(sub(root, BAR + 0.6), t, gain=0.11, wet=0.05)
 
-def drums(t0: float, t1: float, kick_every: float = 1.0, hats: float = 0.25, vel: float = 0.5) -> None:
-    for b in np.arange(t0, t1 - 1e-6, kick_every):
-        P(kick(vel), b, gain=0.32, wet=0.04)
-    for h in np.arange(t0, t1 - 1e-6, hats):
-        P(hat(), h + (0.0 if hats >= 0.25 else 0), gain=0.12 if (h - t0) % 0.5 else 0.07, pan=0.35, wet=0.1)
 
-def arp(t0: float, t1: float, step: float, vel: float, octave: int = 12, pan: float = 0.3) -> None:
+def flow(t0: float, t1: float, step: float, vel: float, octave: int = 12, pan: float = 0.3) -> None:
+    """Le piano qui coule : arpège montant puis descendant sur l'accord du moment."""
     t, i = t0, 0
     while t < t1 - 1e-6:
-        k = int((t - T0) // 4.0)
-        notes = sorted(n + octave for n in CH[prog_[k % 4]][1][1:])
+        notes = sorted(n + octave for n in CH[chord_at(t - T0)][1][1:])
         seq = notes + notes[-2:0:-1]
-        P(piano(seq[i % len(seq)], 2.2, vel * (0.9 + 0.2 * rng.random())), t, gain=0.45, pan=pan * np.sin(i * 1.7), wet=0.42)
+        accent = 1.0 if i % 4 == 0 else 0.82
+        P(felt(seq[i % len(seq)], 2.6, vel * accent * (0.92 + 0.12 * rng.random())), t, gain=0.42, pan=pan * np.sin(i * 0.9), wet=0.5)
         t += step
         i += 1
 
-# comment ça marche : pulsation légère, scintillement quand les flux rejoignent Fabric, souffle du faisceau
-for m in (50, 57, 62):
-    P(piano(m, 5.0, 0.5), T0, gain=0.3, wet=0.6)
-arp(T0 + 1.0, START["manifesto"], 0.5, 0.22, octave=12)
-for j in range(10):
-    P(piano([74, 76, 78, 81, 83, 86, 88, 90, 93, 95][j], 1.6, 0.25), at("fabric", 80) + j * 0.11, gain=0.32, pan=-0.5 + j * 0.1, wet=0.6)
-P(whoosh(1.4, bright=3500), at("fabric", 330), gain=0.07, wet=0.5)
-for b in np.arange(at("fabric", 300), START["manifesto"] - 0.5, 1.0):
-    P(kick(0.3), b, gain=0.25, wet=0.05)
-P(riser(1.5), START["manifesto"] - 1.5, gain=0.1, wet=0.4)
+
+def bloom(t: float, notes: list[int], vel: float = 0.4, top: int | None = None) -> None:
+    """Un accord qui fleurit : arpégé lentement, avec une clochette au sommet."""
+    for j, m in enumerate(notes):
+        P(felt(m, 6.0, vel), t + j * 0.07, gain=0.3, pan=-0.3 + 0.12 * j, wet=0.65)
+    if top is not None:
+        P(bell(top, 4.0, 0.22), t + len(notes) * 0.07, gain=0.35, pan=0.3, wet=0.7)
+
+
+# comment ça marche : le piano se met en mouvement ; une pluie de clochettes quand les flux rejoignent Fabric
+flow(T0 + 1.0, START["manifesto"], 0.5, 0.2, octave=12)
+for j, m in enumerate([74, 76, 78, 81, 83, 86, 88, 90]):
+    P(bell(m, 2.5, 0.12), at("fabric", 80) + j * 0.16, gain=0.4, pan=-0.5 + j * 0.14, wet=0.7)
 # manifeste
-TM = START["manifesto"]
-P(boom(), TM, gain=0.42, wet=0.4)
-for m in (38, 50, 57, 62, 66):
-    P(piano(m, 5.0, 0.65), TM, gain=0.3, wet=0.5)
-arp(TM + 2.0, START["aum"], 0.5, 0.3)
-drums(TM + 4.0, START["aum"] - 1.5, 1.0, 0.5, 0.4)
-P(riser(1.5), START["aum"] - 1.5, gain=0.12, wet=0.4)
+bloom(START["manifesto"], [50, 57, 62, 66, 69], 0.38, top=78)
+flow(START["manifesto"] + 2.0, START["aum"], 0.5, 0.24)
 # 50,3 Md€
-P(boom(3.5), START["aum"], gain=0.5, wet=0.4)
-P(whoosh(4.5, bright=1800), START["aum"], gain=0.08, wet=0.5)                         # la traversée
-drums(START["aum"] + 1.0, START["valor"] - 0.5, 1.0, 0.25, 0.5)
-P(tick(2600, 0.06), at("aum", 150), gain=0.14, wet=0.3)
-for m in (62, 66, 69, 74):
-    P(piano(m, 4.0, 0.55), at("aum", 150), gain=0.32, wet=0.55)
-arp(at("aum", 150), START["valor"], 0.25, 0.22, octave=24)
-# R-co Valor
-P(boom(3.0), START["valor"], gain=0.4, wet=0.4)
-for j, m in enumerate([50, 52, 54, 57, 59, 62, 64, 66, 69, 71, 74, 76, 78, 81, 83, 86]):   # la tour monte
-    P(piano(m, 1.8, 0.3), at("valor", 60) + j * 0.14, gain=0.4, pan=-0.6 + j * 0.08, wet=0.55)
-P(piano(86, 4.0, 0.5), at("valor", 120), gain=0.45, pan=0.4, wet=0.65)
-for i in range(5):
-    P(tick(1800 + 300 * i, 0.04), at("valor", 158 + i * 3), gain=0.08, wet=0.25)
-drums(START["valor"] + 2.0, START["courbe"], 1.0, 0.25, 0.5)
+bloom(at("aum", 150), [62, 66, 69, 74], 0.36, top=81)
+flow(START["aum"], START["valor"], 0.5, 0.22, octave=24, pan=0.4)
+# R-co Valor : la tour monte en clochettes
+for j, m in enumerate([62, 64, 66, 69, 71, 74, 76, 78, 81, 83, 86]):
+    P(bell(m, 2.2, 0.13), at("valor", 60) + j * 0.16, gain=0.42, pan=-0.6 + j * 0.11, wet=0.65)
+P(bell(90, 4.0, 0.16), at("valor", 120), gain=0.4, pan=0.4, wet=0.75)
+flow(START["valor"] + 2.0, START["courbe"], 0.5, 0.22)
 # l'application : courbe, revenus, distribution, passif, performance, recherche
-drums(START["courbe"], START["passif"], 1.0, 0.25, 0.55)
-arp(START["courbe"], START["passif"], 0.25, 0.2, octave=12, pan=0.4)
-for f in (110, 170, 250):
-    P(tick(1900, 0.05), at("courbe", f), gain=0.12, pan=0.2, wet=0.2)                  # clics
-P(whoosh(1.6), at("revenus", 20), gain=0.08, wet=0.5)                                   # mise au point
-P(whoosh(1.0), START["distribution"], gain=0.07, pan=-0.5, wet=0.4)
-P(whoosh(1.0), at("distribution", 26), gain=0.07, pan=0.5, wet=0.4)
-# passif : respiration, sans batterie pendant 4 s
-arp(START["passif"], START["passif"] + 4.0, 0.5, 0.25, octave=24)
-drums(START["passif"] + 4.0, START["search"], 1.0, 0.25, 0.55)
-arp(START["passif"] + 4.0, START["search"], 0.25, 0.2, octave=12, pan=0.4)
-P(riser(3.5), at("perf", 10), gain=0.08, wet=0.4)                                       # la table se redresse
-# recherche : la rayure, puis la frappe dans l'application
-P(whoosh(0.5, bright=6000), at("search", 26), gain=0.14, wet=0.3)
-for k in range(14):
-    P(tick(rng.uniform(2600, 4200), 0.025), at("search", 118 + 3 * k), gain=0.07, pan=0.1, wet=0.15)
-for k in range(16):
-    P(tick(rng.uniform(2600, 4200), 0.025), at("search", 266 + 3 * k), gain=0.07, pan=0.1, wet=0.15)
-drums(START["search"], START["wall"], 1.0, 0.25, 0.5)
-arp(START["search"], START["wall"], 0.5, 0.22)
-# le mur : double croches, un accent par mot
-drums(START["wall"], at("wall", 214), 0.5, 0.125, 0.6)
-arp(START["wall"], at("wall", 214), 0.125, 0.2, octave=12, pan=0.5)
-for f in range(0, 214, 15):
-    root, notes = CH[prog_[int((at("wall", f) - T0) // 4) % 4]]
-    P(pad(notes, 0.45, bright=0.9, a=0.005, r=0.2), at("wall", f), gain=0.35, wet=0.3)
-P(reverse_swell(CH["A"][1], START["count"] - at("wall", 196)), at("wall", 196), gain=0.6, wet=0.5)
+flow(START["courbe"], START["passif"], 0.25, 0.17, octave=12, pan=0.4)
+flow(START["passif"], START["passif"] + 4.0, 0.5, 0.22, octave=24)                         # passif : respiration
+flow(START["passif"] + 4.0, START["search"], 0.25, 0.17, octave=12, pan=0.4)
+flow(START["search"], START["wall"], 0.5, 0.22)
+P(bell(81, 3.0, 0.16), at("search", 272), gain=0.38, pan=0.2, wet=0.7)                    # la réponse s'affiche
+# le mur : un peu plus d'élan, une clochette par mot
+flow(START["wall"], at("wall", 214), 0.25, 0.2, octave=12, pan=0.5)
+for f in (8, 38, 68, 98, 128, 164):
+    top = CH[chord_at(at("wall", f) - T0)][1][-1] + 12
+    P(bell(top, 2.0, 0.14), at("wall", f), gain=0.38, pan=0.2, wet=0.6)
 
 # ============================================================== III. le compte
-for s in np.arange(np.ceil(START["count"]), START["sign"], 1.0):
-    P(clock(), s, gain=0.24, pan=0.3, wet=0.25)
-P(drone([26, 33], START["sign"] - START["count"] + 0.5), START["count"], gain=0.35, wet=0.3)
-P(piano(62, 4.0, 0.35), at("count", 40), gain=0.4, wet=0.7)
-P(piano(57, 4.0, 0.35), at("count", 76), gain=0.4, wet=0.7)
-P(pad(CH["D"][1], 6.0, bright=0.7, a=1.2), at("count", 190), gain=0.6, wet=0.6)
-for m in (50, 57, 62, 66, 69):
-    P(piano(m, 5.0, 0.5), at("count", 196), gain=0.3, wet=0.6)
-P(whoosh(1.8, bright=4000), at("count", 300), gain=0.06, wet=0.6)
+TC, TS = START["count"], START["sign"]
+P(warm([50, 57, 62, 66], TS - TC + 1.5, a=2.0, r=2.5), TC, gain=0.3, wet=0.6)
+P(sub(38, TS - TC + 0.5), TC, gain=0.09, wet=0.05)
+P(felt(62, 5.0, 0.3), at("count", 40), gain=0.42, wet=0.7)
+P(felt(57, 5.0, 0.3), at("count", 76), gain=0.42, wet=0.7)
+P(warm(CH["D"][1], 6.5, a=1.2, r=2.0), at("count", 190), gain=0.38, wet=0.6)
+bloom(at("count", 196), [50, 57, 62, 66, 69], 0.36, top=78)
 # signature
 for j, m in enumerate([26, 38, 45, 50, 54, 57, 62, 66, 69, 76]):
-    P(piano(m, 7.0, 0.6), START["sign"] + j * 0.045, gain=0.34, pan=-0.4 + j * 0.08, wet=0.6)
-P(pad(CH["Dfin"][1], TOTAL - START["sign"] + 1.0, bright=0.6, a=2.0, r=3.0), START["sign"], gain=0.6, wet=0.6)
-P(piano(81, 5.0, 0.42), at("sign", 176), gain=0.42, pan=0.3, wet=0.7)
+    P(felt(m, 8.0, 0.4), TS + j * 0.06, gain=0.32, pan=-0.4 + j * 0.08, wet=0.65)
+P(warm(CH["Dfin"][1], TOTAL - TS + 1.0, a=2.0, r=3.5), TS, gain=0.36, wet=0.6)
+P(sub(26, TOTAL - TS), TS, gain=0.1, wet=0.05)
+P(bell(81, 5.0, 0.2), at("sign", 176), gain=0.4, pan=0.3, wet=0.75)
 
-import json
 VO = json.loads((Path(__file__).resolve().parents[1] / "src" / "teaser" / "vo.json").read_text())
 voice = [(START[v["shot"]] + v["at"] / FPS, START[v["shot"]] + (v["at"] + v["frames"]) / FPS) for v in VO]
 out = Path(__file__).resolve().parents[1] / "public" / "teaser.wav"
-# coupes franches : le silence de la rupture, et celui du compte
-mix.render(TOTAL, out, fade_out=2.2, duck=[(at("rupture", 6), at("rupture", 8), 0.25), (START["count"], START["count"] + 0.04, 0.0)], voice=voice)
+# à la rupture, la musique se retire un instant (sans coupe brutale)
+mix.render(TOTAL, out, fade_out=3.0, duck=[(at("rupture", 0), at("rupture", 50), 0.35)], voice=voice, voice_level=0.5)
 print(f"{out} · {TOTAL:.1f} s")
