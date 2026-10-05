@@ -28,7 +28,8 @@ python3 music/voiceover.py             # voix off Azure AI Speech si AZURE_SPEEC
                                        # sinon voix de travail hors ligne (KOKORO_DIR=<modèle>) ; vérifie que tout tient
                                        # dans les plans
 KOKORO_DIR=<modèle> WHISPER_DIR=<whisper> python3 music/affiner_voix.py   # affine la voix hors ligne (variantes jugées par Whisper, traitement studio)
-python3 music/teaser.py    # musique du teaser, effacée sous la voix (public/teaser.wav)
+python3 music/echantillons.py   # une fois : instruments réels de la partition (.cache/, non versionné)
+python3 music/teaser.py    # musique du teaser, jouée par ces instruments, effacée sous la voix (public/teaser.wav)
 python3 music/mixage.py out/mix.wav   # bande son finale (musique + voix, rééchantillonnage sans souffle), à remonter sur la vidéo
 python3 music/score.py     # musique du « Fil d'or » (public/music.wav)
 ```
@@ -51,7 +52,7 @@ Dans un environnement sans Chrome téléchargeable, ajoutez `--browser-executabl
 | `record/` | Enregistreur de l'application en temps virtuel : 1/30 s exactement entre deux captures, donc des prises sans saccade |
 | `public/rec/` | Les prises de l'application, sur son jeu de données fictif |
 | `public/vo/`, `VOIX_OFF.md` | Voix off (Azure AI Speech, voix masculine fr-FR-RemyMultilingualNeural ; seul le texte de la voix off est envoyé au service) et texte minuté |
-| `music/synth.py`, `music/teaser.py` | Instruments de synthèse, et la partition du teaser |
+| `music/synth.py`, `music/teaser.py` | Mixage et réverbération ; partition du teaser, jouée par de vrais instruments échantillonnés (piano à queue Salamander d'Alexander Holm ; violons, violoncelle, contrebasse, harpe et cor de tonejs-instruments, Nicholaus Brosowsky ; licence CC-BY 3.0) |
 
 ## Règles
 
