@@ -15,10 +15,13 @@ import { S10Signature } from "./scenes/S10Signature";
 import { VIDEO } from "./theme";
 import { Teaser } from "./teaser/Teaser";
 import { TEASER_TOTAL } from "./teaser/timeline";
+import { Nexus } from "./nexus/Nexus";
+import { NEXUS_TOTAL } from "./nexus/timeline";
 
 export const RemotionRoot: React.FC = () => {
   return (
     <>
+      <Composition id="Nexus" component={Nexus} durationInFrames={NEXUS_TOTAL} {...VIDEO} />
       <Composition id="DixMinutes" component={Teaser} durationInFrames={TEASER_TOTAL} {...VIDEO} />
       <Composition id="FilDor" component={FilDor} durationInFrames={TOTAL} {...VIDEO} />
       <Folder name="Scenes">

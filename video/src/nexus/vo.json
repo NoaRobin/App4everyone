@@ -1,0 +1,156 @@
+[
+ {
+  "id": "question",
+  "file": "nexus/vo/question.wav",
+  "at": 68,
+  "frames": 62,
+  "text": "Chaque jour, on pose les mêmes questions."
+ },
+ {
+  "id": "disperse",
+  "file": "nexus/vo/disperse.wav",
+  "at": 765,
+  "frames": 83,
+  "text": "Les réponses existent. Mais elles sont dispersées."
+ },
+ {
+  "id": "outil-1",
+  "file": "nexus/vo/outil-1.wav",
+  "at": 945,
+  "frames": 33,
+  "text": "Product Info."
+ },
+ {
+  "id": "outil-2",
+  "file": "nexus/vo/outil-2.wav",
+  "at": 990,
+  "frames": 25,
+  "text": "JUMP."
+ },
+ {
+  "id": "outil-3",
+  "file": "nexus/vo/outil-3.wav",
+  "at": 1035,
+  "frames": 29,
+  "text": "Centaure."
+ },
+ {
+  "id": "outil-4",
+  "file": "nexus/vo/outil-4.wav",
+  "at": 1080,
+  "frames": 32,
+  "text": "Doc Info."
+ },
+ {
+  "id": "outil-5",
+  "file": "nexus/vo/outil-5.wav",
+  "at": 1125,
+  "frames": 29,
+  "text": "Adjuto."
+ },
+ {
+  "id": "fabric",
+  "file": "nexus/vo/fabric.wav",
+  "at": 1215,
+  "frames": 54,
+  "text": "Fabric les réunit, chaque jour."
+ },
+ {
+  "id": "nexus-lit",
+  "file": "nexus/vo/nexus-lit.wav",
+  "at": 1350,
+  "frames": 98,
+  "text": "Nexus les lit, sans jamais les modifier, et les met en forme."
+ },
+ {
+  "id": "touche",
+  "file": "nexus/vo/touche.wav",
+  "at": 1598,
+  "frames": 43,
+  "text": "Il ne reste qu'une touche."
+ },
+ {
+  "id": "encours",
+  "file": "nexus/vo/encours.wav",
+  "at": 1868,
+  "frames": 57,
+  "text": "Cinquante milliards d'euros d'encours."
+ },
+ {
+  "id": "courbe",
+  "file": "nexus/vo/courbe.wav",
+  "at": 2025,
+  "frames": 38,
+  "text": "Jour après jour."
+ },
+ {
+  "id": "valor",
+  "file": "nexus/vo/valor.wav",
+  "at": 2182,
+  "frames": 49,
+  "text": "R-co Valor : dix milliards."
+ },
+ {
+  "id": "revenus",
+  "file": "nexus/vo/revenus.wav",
+  "at": 2362,
+  "frames": 50,
+  "text": "Ce qui nous fait gagner le plus."
+ },
+ {
+  "id": "pays",
+  "file": "nexus/vo/pays.wav",
+  "at": 2542,
+  "frames": 42,
+  "text": "Nos fonds, pays par pays."
+ },
+ {
+  "id": "passif",
+  "file": "nexus/vo/passif.wav",
+  "at": 2722,
+  "frames": 36,
+  "text": "Et qui les détient."
+ },
+ {
+  "id": "perf",
+  "file": "nexus/vo/perf.wav",
+  "at": 2902,
+  "frames": 59,
+  "text": "Leurs performances, côte à côte."
+ },
+ {
+  "id": "fiche",
+  "file": "nexus/vo/fiche.wav",
+  "at": 3082,
+  "frames": 54,
+  "text": "Et la réponse, sur chaque fiche."
+ },
+ {
+  "id": "compte",
+  "file": "nexus/vo/compte.wav",
+  "at": 3262,
+  "frames": 96,
+  "text": "Pendant ce film, une extraction JUMP n'aurait pas fini."
+ },
+ {
+  "id": "montre",
+  "file": "nexus/vo/montre.wav",
+  "at": 3398,
+  "frames": 66,
+  "text": "L'application, elle, vous a tout montré."
+ },
+ {
+  "id": "nom",
+  "file": "nexus/vo/nom.wav",
+  "at": 3690,
+  "frames": 25,
+  "text": "Nexus."
+ },
+ {
+  "id": "signature",
+  "file": "nexus/vo/signature.wav",
+  "at": 3758,
+  "frames": 79,
+  "text": "Toutes les informations métiers. Au même endroit."
+ }
+]

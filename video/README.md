@@ -1,6 +1,9 @@
 # Vidéos de présentation — Rothschild & Co Asset Management
 
-Deux films Remotion en 1920 × 1080, 30 i/s, qui partagent la charte de `src/theme.ts` :
+Trois films Remotion en 1920 × 1080, 30 i/s, qui partagent la charte de `src/theme.ts` :
+
+- **« Entrée »** (`Nexus`, 2 min 15) : la publicité. Le clavier 3D de l'application seul pendant une minute, la touche
+  Entrée sur l'explosion de la musique, puis l'application ; l'extraction JUMP tourne en parallèle. Voir `NEXUS.md`.
 
 - **« Dix minutes »** (`DixMinutes`, 2 min 56) : le teaser avec voix off. Pendant qu'une extraction JUMP tourne, le film
   explique comment ça marche : les outils d'aujourd'hui (Product Info, JUMP, Centaure, Doc Info, Adjuto), Fabric qui
@@ -13,6 +16,7 @@ Deux films Remotion en 1920 × 1080, 30 i/s, qui partagent la charte de `src/the
 
 | Fichier | Contenu |
 |---|---|
+| `rendus/nexus.mp4`, `rendus/nexus-leger.mp4` | « Entrée », la publicité Nexus, pleine qualité et allégée |
 | `rendus/dix-minutes.mp4` | « Dix minutes », pleine qualité (1920 × 1080, H.264, son AAC 320 kb/s, 71 Mo), voix off hors ligne affinée |
 | `rendus/dix-minutes-leger.mp4` | La même vidéo allégée (23 Mo), pour l'envoyer par messagerie |
 
@@ -48,6 +52,7 @@ Dans un environnement sans Chrome téléchargeable, ajoutez `--browser-executabl
 | `public/app/` | Captures de l'application sur ce même jeu fictif |
 | `public/fonts/` | Polices de l'application (Instrument Serif, Inter Tight, JetBrains Mono, licence OFL), servies en local |
 | `music/score.py` | Partition originale synthétisée, calée sur le montage, d'où `public/music.wav` |
+| `src/nexus/` | « Entrée » : clavier 3D (three.js), actes I à III, minutage sur la grille de la musique |
 | `src/teaser/` | « Dix minutes » : minutage (`timeline.ts`), actes I à III, plan « Comment ça marche », voix off et sous-titres |
 | `record/` | Enregistreur de l'application en temps virtuel : 1/30 s exactement entre deux captures, donc des prises sans saccade |
 | `public/rec/` | Les prises de l'application, sur son jeu de données fictif |
