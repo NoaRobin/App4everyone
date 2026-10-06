@@ -1,7 +1,8 @@
 /**
  * Passif — qui détient nos fonds, d'où, depuis quand, et comment l'encours bouge.
  * Comptes (référentiel des teneurs), positions (photo de l'encours à la dernière date valide), transactions (60 derniers
- * jours ouvrés). Uniquement des parts (%) et des tranches : aucun nom, aucun montant, aucun flux net, aucun groupe de moins de 5.
+ * jours ouvrés). Première vue : qui est investi dans quoi (clients par encours, leurs fonds et leurs parts), vue nominative
+ * à la demande de l'équipe. Ensuite, uniquement des parts (%) et des tranches : aucun montant, aucun flux net, aucun groupe de moins de 5.
  * Chaque titre énonce le fait principal, calculé sur les données publiées ; une donnée absente affiche sa raison.
  */
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
@@ -16,9 +17,10 @@ import { arr, dFull, fp, tr, type PassifResp } from "../components/PassifKit";
 import {
   AssetsSection, ClientsSection, ConcentrationSection, LectureSection, LoyaltySection, RhythmSection, SegmentsSection, WhereSection,
 } from "../components/PassifSections";
+import { BookSection } from "../components/PassifBook";
 import "../styles/passif.css";
 
-const CHAPTERS = [["seg", "Segments"], ["ou", "Teneurs et pays"], ["conc", "Concentration"], ["loy", "Fidélité"], ["quoi", "Ce qui est détenu"],
+const CHAPTERS = [["carnet", "Qui est investi dans quoi"], ["seg", "Segments"], ["ou", "Teneurs et pays"], ["conc", "Concentration"], ["loy", "Fidélité"], ["quoi", "Ce qui est détenu"],
   ["flux", "Mouvements"], ["clients", "Clients et fonds"], ["lecture", "Lecture des tables"]] as const;
 
 export default function Passif() {
@@ -44,6 +46,7 @@ export default function Passif() {
   const d = data;
   return (
     <div className="pa">
+      <BookSection asOf={d.positions_as_of} source={d.source} />
       <Hero d={d} />
       <div className="page pa__page">
         <SegmentsSection s={d.synthese} p={d.positions} t={d.transactions} />
@@ -102,11 +105,11 @@ function Hero({ d }: { d: PassifResp }) {
     return () => ctx.revert();
   }, []);
   return (
-    <header className="pa-h" ref={ref}>
+    <header className="pa-h pa-h--after" ref={ref}>
       <div className="pa-h__in">
         <div className="eyebrow pa-hero__eyebrow">Passif · photo de l'encours au {dFull(d.positions_as_of)}{d.source === "synthétique" ? " · données synthétiques" : " · Fabric"}</div>
         <i className="pa-h__rule" aria-hidden="true" />
-        <h1 className="pa-h__title"><span>Qui détient</span> <span>nos fonds.</span></h1>
+        <h2 className="pa-h__title"><span>Le passif</span> <span>en quatre faits.</span></h2>
         <p className="pa-h__lede">Les comptes de nos teneurs, leurs positions et soixante jours d'opérations, agrégés dans Fabric&nbsp;: uniquement des parts et des tranches, aucun nom ni montant ne quitte la source.</p>
         <p className="small muted pa-h__src">{tr(d.comptes?.total, "comptes")} · {tr(p?.total, "positions")} · {tr(t?.ops, "opérations")} · agrégats rafraîchis le {d.refreshed_at ? dFull(d.refreshed_at.slice(0, 10)) : "—"}</p>
         {facts.length > 0 && (

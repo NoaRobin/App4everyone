@@ -617,7 +617,7 @@ class Service:
         rmm_live = [f for f in self.rmm if f in m.funds.index]
         return {"date": end.date().isoformat(), "countries": out, "platforms": plat,
                 "n_shares_registered": int(act["pi_shareid"].nunique()), "n_funds_registered": int(act["fund_id"].nunique()),
-                "sankey": self._sankey(act), "clients": self._client_map(act), "routes": self._routes(act), "timeline": self._timeline(act), "exclude_rmm": exclude_rmm,
+                "sankey": self._sankey(act, share_aum), "clients": self._client_map(act), "routes": self._routes(act), "timeline": self._timeline(act), "exclude_rmm": exclude_rmm,
                 "rmm": {"n_funds": len(rmm_live), "funds": sorted(m.funds.loc[rmm_live, "name"].astype(str).tolist()),
                         "rule": {"columns": list(self.rmm_columns), "pattern": self.rmm_pattern}}}
 
@@ -673,11 +673,13 @@ class Service:
         label, _ = self._client_kind()
         return sids.map(label).fillna("Clientèle non renseignée")
 
-    def _sankey(self, act: pd.DataFrame, top: int = 7, top_named: int = 5) -> dict:
+    def _sankey(self, act: pd.DataFrame, share_aum: dict[str, float], top: int = 7, top_clients: int = 12) -> dict:
         """
-        Parcours d'une autorisation : type de client de la part → pays d'enregistrement → famille de gestion du fonds.
-        Unité : un enregistrement actif (une part autorisée dans un pays). Additive d'une colonne à l'autre,
+        Parcours d'une autorisation : clientèle de la part → pays d'enregistrement → famille de gestion du fonds.
+        Unité des flux : un enregistrement actif (une part autorisée dans un pays). Additive d'une colonne à l'autre,
         contrairement aux encours qui, eux, ne se répartissent pas par pays dans les données.
+        Seules les `top_clients` plus grosses clientèles (encours des parts enregistrées à la date) sont dessinées, par encours
+        décroissant ; les autres sont résumées dans `rest` (nombre, enregistrements, encours) et restent dans la matrice.
         """
         m = self.m
         if act.empty:
@@ -685,10 +687,6 @@ class Service:
         df = pd.DataFrame({"sid": act["pi_shareid"].values, "fid": act["fund_id"].values, "cty": act["country_fr"].values, "iso": act["iso"].values})
         df["fam"] = df["fid"].map(m.funds["family"]).fillna("nc")
         df["cli"] = self._clients(df["sid"]).values
-        counts = df.groupby("cty")["sid"].count().sort_values(ascending=False)
-        keep = set(counts.index[:top])
-        n_other = int(counts.index.size - len(keep))
-        df["dest"] = df["cty"].where(df["cty"].isin(keep), "Autres pays")
         iso = dict(zip(df["cty"], df["iso"]))
         nodes, index = [], {}
 
@@ -698,20 +696,30 @@ class Service:
                 nodes.append({"id": key, "label": label, "col": col, **kw})
             return index[key]
 
-        # Colonne 1 : les cinq clients nommés les plus présents (les autres regroupés), puis les pools de clientèle
+        # Colonne 1 : les clientèles, de la plus grosse (encours) à la plus petite ; les suivantes regroupées
         _, kind = self._client_kind()
         df["kind"] = df["sid"].map(kind).fillna("pool").values
-        named = df[df["kind"] == "nommé"].groupby("cli")["sid"].count().sort_values(ascending=False)
-        if len(named) > top_named + 1:
-            rest = set(named.index[top_named:])
-            df.loc[df["cli"].isin(rest) & (df["kind"] == "nommé"), "cli"] = f"{len(rest)} autres clients nommés"
-        pools = df[df["kind"] == "pool"].groupby("cli")["sid"].count().sort_values(ascending=False)
-        if len(pools) > 5:
-            rest = set(pools.index[4:])
-            df.loc[df["cli"].isin(rest) & (df["kind"] == "pool"), "cli"] = f"{len(rest)} autres pools de clientèle"
-        order = sorted(df.groupby(["kind", "cli"]), key=lambda kv: (kv[0][0] != "nommé", " autres " in f" {kv[0][1]}", -len(kv[1])))
-        for (k, cname), g in order:
-            node(f"k:{cname}", cname, 0, client=cname, kind=k, value=int(len(g)), n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()))
+
+        def aum_of(sids) -> float:
+            return float(sum(share_aum.get(s, 0.0) for s in set(sids)))
+
+        by_aum = sorted(((c, aum_of(g["sid"])) for c, g in df.groupby("cli")), key=lambda kv: (-kv[1], kv[0]))
+        keep_cli = {c for c, _ in by_aum[:top_clients]}
+        rest_df = df[~df["cli"].isin(keep_cli)]
+        rest = {"n_clients": int(len(by_aum) - len(keep_cli)), "value": int(len(rest_df)), "aum": aum_of(rest_df["sid"])}
+        df = df[df["cli"].isin(keep_cli)].copy()
+        # Pays : les plus présents parmi les clientèles montrées, les suivants regroupés
+        counts = df.groupby("cty")["sid"].count().sort_values(ascending=False)
+        keep = set(counts.index[:top])
+        n_other = int(counts.index.size - len(keep))
+        df["dest"] = df["cty"].where(df["cty"].isin(keep), "Autres pays")
+        groups = []
+        for cname, g in df.groupby("cli"):
+            groups.append((cname, "nommé" if (g["kind"] == "nommé").any() else "pool", g, aum_of(g["sid"])))
+        groups.sort(key=lambda t: (-t[3], t[0]))
+        for cname, k, g, aum in groups:
+            node(f"k:{cname}", cname, 0, client=cname, kind=k, aum=aum, value=int(len(g)), n_funds=int(g["fid"].nunique()),
+                 n_shares=int(g["sid"].nunique()), other=False)
         for cname in [*counts.index[:top], "Autres pays"]:
             g = df[df["dest"] == cname]
             if len(g):
@@ -731,7 +739,7 @@ class Service:
             links.append({"source": index[f"c:{a}"], "target": index[f"f:{b}"], "value": int(len(g)), "family": b,
                           "n_funds": int(g["fid"].nunique()), "n_shares": int(g["sid"].nunique())})
         return {"unit": "enregistrements", "nodes": nodes, "links": links, "order": ["clients", "pays", "familles"],
-                "named_column": self.NAMED_COL, "n_named": int(len(named))}
+                "sort": "encours", "rest": rest, "named_column": self.NAMED_COL}
 
     def _client_map(self, act: pd.DataFrame) -> list[dict]:
         """Par type de client : pays où ses parts sont autorisées (pour la carte), du plus large au plus étroit."""

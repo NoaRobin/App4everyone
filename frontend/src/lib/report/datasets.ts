@@ -45,7 +45,7 @@ const PERIOD: Record<string, (d: string) => string> = {
 type Rev = { funds: { id: string; rate: number | null; revenue: number | null; revenue_net: number | null; revenue_12m: number | null; d_revenue_1y: number | null; share: number | null }[] };
 type Risk = { funds: { id: string; sri_prev: string | null; vol: number | null; mdd: number | null; te: number | null; top10: number | null; cash: number | null; derivatives: number | null; n_lines: number | null; global_exposure: string | null; leverage: boolean | null; liquidity: boolean | null; credit: boolean | null; counterparty: boolean | null }[]; sri: { sri: string; aum: number; n: number }[] };
 type FundX = FundRow & Partial<Rev["funds"][number]> & Partial<Risk["funds"][number]>;
-const FUND_X: ExportCol<FundX>[] = [
+export const FUND_X: ExportCol<FundX>[] = [
   ...(FUND_COLS as ExportCol<FundX>[]),
   { key: "rate", label: "Taux de frais de gestion", kind: "pct", get: (r) => pts(r.rate), group: "Revenus estimés", desc: "Frais de gestion réels de la part, à défaut du fonds" },
   { key: "revenue", label: "Revenus annualisés (€)", kind: "eur", sum: true, group: "Revenus estimés", desc: "Encours × taux de frais de gestion (estimation)" },
@@ -68,7 +68,7 @@ const FUND_X: ExportCol<FundX>[] = [
   { key: "counterparty", label: "Risque de contrepartie", kind: "bool", group: "Risque" },
 ];
 
-async function loadFunds(ctx: Ctx) {
+export async function loadFunds(ctx: Ctx) {
   const [f, rev, risk] = await Promise.all([
     get<{ funds: FundRow[] }>(ctx.api("/api/funds")), get<Rev>(ctx.api("/api/revenue")).catch(() => ({ funds: [] }) as Rev), get<Risk>(ctx.api("/api/risk")).catch(() => ({ funds: [], sri: [] }) as Risk),
   ]);

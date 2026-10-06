@@ -47,17 +47,18 @@ def test_sankey_flux_conserves(svc, excl):
         else:
             assert entree[i] == n["value"]
     total = svc.distribution(None, excl)
-    # Unité : un enregistrement actif (part × pays) ; la somme des pays affichés égale le total des nœuds
-    assert sum(n["value"] for n in sk["nodes"] if n["col"] == 2) == sum(c["n_shares"] for c in total["countries"])
+    # Unité : un enregistrement actif (part × pays) ; clientèles dessinées + reste = tous les enregistrements actifs
+    shown = sum(n["value"] for n in sk["nodes"] if n["col"] == 2)
+    assert shown == sum(n["value"] for n in sk["nodes"] if n["col"] == 0)
+    assert shown + sk["rest"]["value"] == sum(c["n_shares"] for c in total["countries"])
 
 
-def test_sankey_clients_nommes_avant_les_pools(svc):
-    """Graphique 01 : d'abord les clients nommés (champ libre du type d'investisseur), puis les pools de clientèle."""
-    nodes = [n for n in svc.distribution(None)["sankey"]["nodes"] if n["col"] == 0]
-    kinds = [n["kind"] for n in nodes]
-    assert "nommé" in kinds and "pool" in kinds
-    assert kinds == sorted(kinds, key=lambda k: k != "nommé")                  # tous les nommés en tête
-    named = [n for n in nodes if n["kind"] == "nommé" and "autres" not in n["label"]]
-    assert len(named) <= 5                                                       # au-delà, regroupés
-    assert [n["value"] for n in named] == sorted((n["value"] for n in named), reverse=True)
-    assert all("Tous souscripteurs" != n["label"] for n in named)
+def test_sankey_clientes_par_encours_decroissant(svc):
+    """Les plus grosses clientèles d'abord (encours des parts enregistrées) ; les autres résumées à part."""
+    sk = svc.distribution(None)["sankey"]
+    nodes = [n for n in sk["nodes"] if n["col"] == 0]
+    assert 2 <= len(nodes) <= 12 and not any(n["other"] for n in nodes)
+    assert [n["aum"] for n in nodes] == sorted((n["aum"] for n in nodes), reverse=True)
+    assert {"nommé", "pool"} <= {n["kind"] for n in nodes}
+    assert sk["rest"]["n_clients"] > 0 and sk["rest"]["value"] > 0
+    assert sk["rest"]["aum"] >= 0

@@ -1,6 +1,7 @@
 /**
  * Passif — types de la réponse /api/passif, formats et petites pièces communes.
- * Règles d'affichage : uniquement des parts (%) et des tranches ; jamais de montant ; le rang d'une tranche ne sert qu'à
+ * Règles d'affichage des vues agrégées : uniquement des parts (%) et des tranches, jamais de montant ; seule exception, la
+ * première vue nominative (PassifBook, demandée par l'équipe) qui montre les encours par client. Le rang d'une tranche ne sert qu'à
  * des tailles visuelles ordinales ; un champ absent (null, tableau vide) donne un état vide propre, jamais un chiffre inventé.
  */
 import { useEffect, useRef, type ReactNode } from "react";

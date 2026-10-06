@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApi } from "../lib/api";
 import { useApp } from "../lib/context";
 import { date as fdate, eur, num, plural } from "../lib/format";
-import { FAMILY_LABEL, FAMILY_ORDER, famHex, famVar } from "../lib/families";
-import { useReducedMotion, webglAvailable } from "../lib/motion";
+import { FAMILY_LABEL, famVar } from "../lib/families";
 import { useRmm } from "../lib/rmm";
 import type { FamilyKey } from "../lib/types";
 import { ErrorState, Loading, useReveal } from "../components/ui";
@@ -12,11 +11,11 @@ import { BarList } from "../components/charts";
 import { Board } from "../components/Story";
 import { Head, PageHero } from "../components/Editorial";
 import * as I from "../components/Icon";
+import { Sankey2D, type SkData, type SkNode } from "../components/Sankey2D";
 import { GlobeSection, Timeline, type ClientMap, type TimelineData } from "../components/DistViz";
 import { CoverageSection, DistNav, MatrixSection, coverage } from "../components/DistAtlas";
 import "../styles/distribution.css";
 import type { MapRoute } from "../three/MapScene";
-import type { SankeyScene as SankeySceneT, SkData, SkHover, SkNode } from "../three/SankeyScene";
 
 type Resp = {
   date: string; n_shares_registered: number; n_funds_registered: number; exclude_rmm: boolean;
@@ -51,7 +50,7 @@ function DistributionView({ d, exclude, setExclude, withRmm }: { d: Resp; exclud
   const [client, setClient] = useState<string | null>(null);
   const clients = d.clients ?? [];
   const cov = coverage(clients);
-  const n = d.sankey.nodes.reduce((s, x) => s + (x.col === 0 ? x.value : 0), 0);
+  const n = d.countries.reduce((s, x) => s + x.n_shares, 0);
   return (
     <div className="dist">
       <PageHero
@@ -127,146 +126,38 @@ function RmmNote({ rmm, exclude }: { rmm: Resp["rmm"]; exclude: boolean }) {
 
 // ------------------------------------------------------------------ Sankey
 function FlowSection({ d, withRmm }: { d: Resp; withRmm: (u: string) => string }) {
-  const host = useRef<HTMLDivElement>(null);
-  const labels = useRef<HTMLDivElement>(null);
-  const scene = useRef<SankeySceneT | null>(null);
-  const reduced = useReducedMotion();
   const nav = useNavigate();
-  const [gl] = useState(() => webglAvailable());
-  const [table, setTable] = useState(!gl);
-  const [tip, setTip] = useState<{ h: SkHover; x: number; y: number } | null>(null);
-  const [focus, setFocus] = useState<string | null>(null);
-  const navRef = useRef(nav);
-  navRef.current = nav;
-  const hrefFor = (n: SkNode) => n.family ? `/selection?family=${n.family}` : n.col === 0 ? `/encours?axe=investor`
-    : n.other ? withRmm("/distribution") + "#h-pays" : withRmm(`/distribution/${encodeURIComponent(n.id.slice(2))}`);
-  const hrefRef = useRef(hrefFor);
-  hrefRef.current = hrefFor;
-
-  useEffect(() => {
-    if (!gl || table || !host.current || !labels.current) return;
-    let alive = true;
-    import("../three/SankeyScene").then(({ SankeyScene }) => {
-      if (!alive || !host.current || !labels.current) return;
-      const colors = Object.fromEntries((["aid", "ae", "fi", "ao", "nc"] as FamilyKey[]).map((k) => [k, famHex(k, true)]));
-      scene.current = new SankeyScene(host.current, d.sankey, {
-        reduced, colors, familyOrder: [...FAMILY_ORDER, "nc"], labelLayer: labels.current,
-        onHover: (h, x, y) => setTip(h ? { h, x, y } : null),
-        onSelect: (n) => navRef.current(hrefRef.current(n)),
-        formatLabel: (n) => ({ title: n.family ? shortFam(n) : n.label, sub: `${num(n.value)} · ${plural(n.n_funds, "fonds", "fonds")}` }),
-      });
-    });
-    return () => { alive = false; scene.current?.dispose(); scene.current = null; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gl, table, reduced]);
-  useEffect(() => { scene.current?.setData(d.sankey); }, [d.sankey]);
-  useEffect(() => { scene.current?.focus(focus); }, [focus]);
-
-  // Clients nommés d'abord (parts dédiées), puis pools de clientèle : l'ordre vient de l'API
-  const clients = d.sankey.nodes.filter((n) => n.col === 0);
-  const named = clients.filter((n) => n.kind === "nommé"), pools = clients.filter((n) => n.kind !== "nommé");
-  const fams = d.sankey.nodes.filter((n) => n.family).sort((a, b) => FAMILY_ORDER.indexOf(a.family as FamilyKey) - FAMILY_ORDER.indexOf(b.family as FamilyKey));
+  const [table, setTable] = useState(false);
+  const open = (n: SkNode) => {
+    if (n.col === 2 && n.family) nav(`/selection?family=${n.family}`);
+    else if (n.col === 1) nav(n.other ? "#pays" : withRmm(`/distribution/${encodeURIComponent(n.label)}`));
+  };
   return (
     <section id="parcours" className="flow reveal" aria-labelledby="h-flow">
       <div className="flow__head page">
-        <Head id="flow" eyebrow="Le parcours d'une autorisation" title="Des clients aux pays, puis aux familles"
-          lede={<>D'abord à qui s'adresse la part — le client nommé pour une part dédiée, sinon son pool de clientèle —, puis les pays où elle est autorisée, enfin la famille de gestion du fonds. Épaisseur d'un flux&nbsp;: nombre d'enregistrements actifs (une part autorisée dans un pays) ; couleur&nbsp;: la famille de gestion. Survolez pour isoler un parcours, cliquez un pays pour l'ouvrir.</>}
-          right={gl ? <button type="button" className="btn btn--ghost" onClick={() => setTable((t) => !t)} aria-pressed={table}>{table ? <><I.Cube size={16} /> Vue 3D</> : <><I.List size={16} /> Vue tableau</>}</button> : undefined} />
-        <div className="flow__legend" role="group" aria-label="Clients nommés puis pools de clientèle : survoler pour isoler leur parcours">
-          {[...(named.length ? [{ t: "Clients nommés", l: named }] : []), { t: named.length ? "Pools de clientèle" : "Clientèles", l: pools }].map((grp) => [
-            <span key={grp.t} className="flow__grp eyebrow">{grp.t}</span>,
-            ...grp.l.map((n) => (
-            <button key={n.id} type="button" className="flow__fam" aria-pressed={focus === n.id}
-              onMouseEnter={() => setFocus(n.id)} onMouseLeave={() => setFocus(null)} onFocus={() => setFocus(n.id)} onBlur={() => setFocus(null)}>
-              <span className="flow__fam-bar" style={{ background: n.kind === "nommé" ? "var(--gold)" : "var(--brand-stone)" }} />
-              <span className="flow__fam-l">{n.label}</span>
-              <span className="flow__fam-v num">{num(n.value)}</span>
-            </button>
-          ))])}
-        </div>
-        <div className="flow__legend flow__legend--fam" role="group" aria-label="Familles de gestion : survoler pour isoler leur parcours">
-          {fams.map((n) => (
-            <button key={n.id} type="button" className="flow__fam" aria-pressed={focus === n.id}
-              onMouseEnter={() => setFocus(n.id)} onMouseLeave={() => setFocus(null)} onFocus={() => setFocus(n.id)} onBlur={() => setFocus(null)}
-              onClick={() => nav(hrefFor(n))}>
-              <span className="flow__fam-bar" style={{ background: famVar(n.family, true) }} />
-              <span className="flow__fam-l">{FAMILY_LABEL[n.family as FamilyKey]}</span>
-              <span className="flow__fam-v num">{num(n.value)}</span>
-            </button>
-          ))}
-        </div>
+        <Head id="flow" eyebrow="Le parcours d'une autorisation" title="Des plus gros clients aux pays, puis aux familles"
+          lede={<>Les {d.sankey.nodes.filter((x) => x.col === 0).length} plus grosses clientèles, par encours décroissant. Épaisseur d'un flux&nbsp;: nombre d'enregistrements actifs (une part autorisée dans un pays)&nbsp;; couleur&nbsp;: or pour un client nommé, pierre pour un pool, puis la famille de gestion.</>}
+          right={<button type="button" className="btn btn--ghost" onClick={() => setTable((t) => !t)} aria-pressed={table}>{table ? <><I.Arrow size={16} /> Diagramme</> : <><I.List size={16} /> Vue tableau</>}</button>} />
       </div>
-      {!table ? (
-        <div className="flow__stage">
-          <div className="flow__canvas" ref={host} />
-          <div className="flow__labels" ref={labels} aria-hidden="true" />
-          {tip && <FlowTip tip={tip} />}
-          <FlowKeyboard d={d} onFocus={setFocus} href={hrefFor} />
-        </div>
-      ) : (
-        <div className="page"><FlowTable d={d} withRmm={withRmm} /></div>
-      )}
+      <div className="page">{table ? <FlowTable d={d} withRmm={withRmm} /> : <Sankey2D data={d.sankey} onOpen={open} />}</div>
     </section>
-  );
-}
-
-const shortFam = (n: SkNode) => (n.family === "aid" ? "Actions int. & diversifiée" : n.label);
-
-function FlowTip({ tip }: { tip: { h: SkHover; x: number; y: number } }) {
-  const h = tip.h;
-  const style = { transform: `translate(-50%, -100%) translate(${tip.x}px, ${tip.y - 16}px)` };
-  if (h.kind === "node") {
-    const n = h.node;
-    return (
-      <div className="city__tip flow__tip" style={style} role="status">
-        <div className="city__tip-f">{["Clientèle", "Pays d'enregistrement", "Famille de gestion"][n.col]}</div>
-        <div className="city__tip-n">{n.label}</div>
-        <div className="city__tip-v num">{plural(n.value, "enregistrement")}</div>
-        <div className="city__tip-s small">{plural(n.n_funds, "fonds", "fonds")} · {plural(n.n_shares, "part")}</div>
-        <div className="city__tip-go small">{n.other ? "Voir le classement complet" : "Cliquer pour ouvrir"}</div>
-      </div>
-    );
-  }
-  const l = h.link;
-  return (
-    <div className="city__tip flow__tip" style={style} role="status">
-      <div className="city__tip-f">{l.family === "all" ? "Toutes familles" : <><span className="dot" style={{ background: famVar(l.family, true) }} />{FAMILY_LABEL[l.family as FamilyKey]}</>}</div>
-      <div className="city__tip-n">{h.from.label} <span className="muted">→</span> {h.to.label}</div>
-      <div className="city__tip-v num">{plural(l.value, "enregistrement")}</div>
-      <div className="city__tip-s small">{plural(l.n_funds, "fonds", "fonds")} · {plural(l.n_shares, "part")}</div>
-    </div>
-  );
-}
-
-/** Accès clavier au diagramme : chaque nœud est un bouton qui isole son parcours et ouvre sa destination. */
-function FlowKeyboard({ d, onFocus, href }: { d: Resp; onFocus: (id: string | null) => void; href: (n: SkNode) => string }) {
-  const nav = useNavigate();
-  return (
-    <ul className="sr-only" aria-label="Nœuds du diagramme">
-      {d.sankey.nodes.map((n) => (
-        <li key={n.id}>
-          <button type="button" onFocus={() => onFocus(n.id)} onBlur={() => onFocus(null)} onClick={() => nav(href(n))}>
-            {n.label} : {plural(n.value, "enregistrement")}, {plural(n.n_funds, "fonds", "fonds")}
-          </button>
-        </li>
-      ))}
-    </ul>
   );
 }
 
 function FlowTable({ d, withRmm }: { d: Resp; withRmm: (u: string) => string }) {
   const { nodes, links } = d.sankey;
   const rows = useMemo(() => links.filter((l) => nodes[l.source].col === 0)
-    .sort((a, b) => nodes[b.source].value - nodes[a.source].value || b.value - a.value), [nodes, links]);
+    .sort((a, b) => a.source - b.source || b.value - a.value), [nodes, links]);
   return (
     <div className="table-wrap">
       <table className="t">
         <caption className="sr-only">Enregistrements actifs par clientèle, pays et famille de gestion</caption>
-        <thead><tr><th scope="col">Clientèle</th><th scope="col">Pays</th><th scope="col">Famille</th><th scope="col" className="n">Enregistrements</th><th scope="col" className="n">Fonds</th><th scope="col" className="n">Parts</th></tr></thead>
+        <thead><tr><th scope="col">Clientèle</th><th scope="col" className="n">Encours</th><th scope="col">Pays</th><th scope="col">Famille</th><th scope="col" className="n">Enregistrements</th><th scope="col" className="n">Fonds</th><th scope="col" className="n">Parts</th></tr></thead>
         <tbody>
           {rows.map((l, i) => (
             <tr key={i}>
               <td>{nodes[l.source].label}</td>
+              <td className="n">{eur(nodes[l.source].aum)}</td>
               <td>{nodes[l.target].other ? nodes[l.target].label : <Link className="link" to={withRmm(`/distribution/${encodeURIComponent(nodes[l.target].label)}`)}>{nodes[l.target].label}</Link>}</td>
               <td>{l.family === "all" ? <span className="muted">Toutes familles</span> : <><span className="dot" style={{ background: famVar(l.family, true) }} /> {FAMILY_LABEL[l.family as FamilyKey]}</>}</td>
               <td className="n">{num(l.value)}</td><td className="n">{l.n_funds}</td><td className="n">{l.n_shares}</td>

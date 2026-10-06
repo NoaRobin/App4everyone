@@ -140,6 +140,11 @@ function Bureau() {
 
 // ------------------------------------------------------------------ questions
 const QUESTIONS: { theme: string; items: { to: string; q: string }[] }[] = [
+  { theme: "Distribution", items: [
+    { to: "/distribution", q: "Où un fonds est-il commercialisé ?" },
+    { to: "/distribution", q: "Quelles parts sont autorisées dans un pays ?" },
+    { to: "/portefeuilles", q: "Quels fonds détiennent cette ligne ?" },
+  ] },
   { theme: "Caractéristiques", items: [
     { to: "/fonds", q: "Retrouver la fiche d'un fonds ou d'une part" },
     { to: "/comparateur", q: "Comparer les performances de plusieurs fonds" },
@@ -149,11 +154,6 @@ const QUESTIONS: { theme: string; items: { to: string; q: string }[] }[] = [
     { to: "/encours", q: "Encours par famille, gamme, classe d'actifs" },
     { to: "/encours?axe=manager", q: "Encours gérés par chaque gérant" },
     { to: "/encours?axe=sfdr", q: "Encours par classification SFDR" },
-  ] },
-  { theme: "Distribution", items: [
-    { to: "/distribution", q: "Où un fonds est-il commercialisé ?" },
-    { to: "/distribution", q: "Quelles parts sont autorisées dans un pays ?" },
-    { to: "/portefeuilles", q: "Quels fonds détiennent cette ligne ?" },
   ] },
   { theme: "Revenus & passif", items: [
     { to: "/", q: "Quels fonds rapportent le plus ?" },

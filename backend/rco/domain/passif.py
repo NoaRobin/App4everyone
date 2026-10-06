@@ -7,6 +7,9 @@ Règles de confidentialité (appliquées aux données réelles comme aux donnée
 - aucun montant absolu : l'encours est exprimé en part du total (pondération Montant EUR), les transactions en part du
   volume absolu ; les effectifs en tranches (« 5 à 19 », « 20 à 99 »…), jamais en nombres exacts ;
 - souscriptions et rachats sont montrés côte à côte, jamais soustraits (aucun flux net).
+Exception explicite de l'équipe : la vue nominative (porteurs d'un fonds, fonds d'un client, carnet « qui est investi dans
+quoi » avec les encours Montant EUR par client, fonds et part) est calculée à la demande dans la source, jamais mise en cache
+ni journalisée, et n'est jamais reconstruite à partir de parts en pourcentage.
 Les compteurs techniques de la lecture des tables (lignes, valeurs nulles, dates valides) sont des nombres de lignes,
 jamais des montants : ils servent à vérifier la qualité de la source.
 
@@ -405,6 +408,18 @@ class PandasReader:
             return pd.DataFrame(columns=["client", "isin", "n", "v"])
         return df.groupby(["client", "isin"]).agg(n=("v", "size"), v=("v", "sum")).reset_index()
 
+    def client_book(self, name: str, m: dict, top: int, where=()) -> pd.DataFrame:
+        c = cols_of(m)
+        idx = self._index(name, m, where)
+        df = pd.DataFrame({"client": self._of(name, c, "nom_client", "text", idx).astype(object), "isin": self._of(name, c, "isin", "id", idx).astype(object),
+                           "v": self._of(name, c, "montant_eur", "num", idx), "compte": self._of(name, c, "compte", "id", idx)}, index=idx)
+        df = df.dropna(subset=["client"])
+        if df.empty:
+            return pd.DataFrame(columns=["client", "isin", "n", "v", "comptes"])
+        keep = df.groupby("client")["v"].sum().sort_values(ascending=False).index[:top]
+        df = df[df["client"].isin(set(keep))]
+        return df.groupby(["client", "isin"], dropna=False).agg(n=("v", "size"), v=("v", "sum"), comptes=("compte", "nunique")).reset_index()
+
 
 def _concentration(v: np.ndarray) -> dict:
     n = len(v)
@@ -615,6 +630,20 @@ class SqlReader:
                f"FROM {frm} WHERE {cond} AND LOWER({cl}) LIKE ? GROUP BY {cl}, {isin}")
         return self.src.query(sql, [like], label="passif recherche d'un client")
 
+    def client_book(self, name: str, m: dict, top: int, where=()) -> pd.DataFrame:
+        """Premiers clients par encours (Montant EUR) puis, pour chacun, ses lignes par ISIN : tout est agrégé dans Fabric."""
+        c = cols_of(m)
+        frm, cond = self._from(name, m, where)
+        cl = _sql_text(self._q(name, c["nom_client"]))
+        isin = _sql_id(self._q(name, c["isin"]))
+        v = _sql_num(self._q(name, c["montant_eur"]))
+        cpt = _sql_id(self._q(name, c["compte"])) if "compte" in c else "NULL"
+        n = int(top)
+        sql = (f"SELECT {cl} AS [client], {isin} AS [isin], COUNT(*) AS [n], SUM({v}) AS [v], COUNT(DISTINCT {cpt}) AS [comptes] "
+               f"FROM {frm} JOIN (SELECT TOP {n} {cl} AS [k] FROM {frm} WHERE {cond} AND {cl} IS NOT NULL GROUP BY {cl} ORDER BY SUM({v}) DESC) t "
+               f"ON t.[k] = {cl} WHERE {cond} GROUP BY {cl}, {isin}")
+        return self.src.query(sql, [], label="passif carnet des clients")
+
 
 # ------------------------------------------------------------------ vues (parts, tranches, libellés propres)
 def _pct(x: float, tot: float) -> float | None:
@@ -792,9 +821,11 @@ def _years_view(g: pd.DataFrame, as_of: pd.Timestamp | None, tot: float) -> list
 
 # ------------------------------------------------------------------ calcul complet, mis en cache (rafraîchi chaque jour)
 class Passif:
-    def __init__(self, reader, isin_to_fund: dict[str, str] | None = None, ttl_hours: float = 6.0, fund_names: dict[str, str] | None = None):
+    def __init__(self, reader, isin_to_fund: dict[str, str] | None = None, ttl_hours: float = 6.0, fund_names: dict[str, str] | None = None,
+                 share_names: dict[str, str] | None = None):
         self.reader, self.isin_to_fund = reader, {str(k).strip().upper().replace(" ", ""): v for k, v in (isin_to_fund or {}).items()}
         self.fund_names = fund_names or {}
+        self.share_names = {str(k).strip().upper().replace(" ", ""): v for k, v in (share_names or {}).items()}
         self.ttl = ttl_hours * 3600
         self._data: dict | None = None
         self._at = 0.0
@@ -1075,6 +1106,40 @@ class Passif:
             out.append({"client": _label(cl), "funds": sorted(funds, key=lambda z: -(z["pct_of_client"] or 0)),
                         "unlinked_pct": _pct(unlinked, cv) if unlinked else None, "positions": int(x["n"].sum())})
         return {"available": True, "nominatif": True, "as_of": iso, "clients": out}
+
+    def client_book(self, top: int = 60) -> dict:
+        """Qui est investi dans quoi, à la date de la photo : les `top` premiers clients par encours, chacun avec ses fonds
+        et ses parts (Montant EUR), à la demande de l'équipe ; calculé dans la source, jamais conservé ni journalisé."""
+        ready = self._ready()
+        if ready is None:
+            return {"available": False, "reason": "Positions non publiées."}
+        d, maps, iso = ready
+        mp = maps["position"]
+        if mp["fields"]["nom_client"]["col"] is None:
+            return {"available": False, "reason": "Colonne Nom client absente de la table Position."}
+        g = self.reader.client_book("position", mp, top, [("date_eq", "date", iso)])
+        if g is None or g.empty:
+            return {"available": True, "nominatif": True, "as_of": iso, "clients": [], "total": None}
+        g = g.copy()
+        g["v"] = pd.to_numeric(g["v"], errors="coerce").fillna(0.0)
+        g["isin"] = g["isin"].map(lambda x: str(x).strip().upper().replace(" ", "") if x is not None and str(x).strip() else None)
+        g["fund"] = g["isin"].map(lambda x: self.isin_to_fund.get(x) if x else None)
+        tot_all = float(getattr(self, "_pos", {}).get("tot") or 0.0)
+        out = []
+        for cl, x in sorted(g.groupby("client"), key=lambda kv: -float(kv[1]["v"].sum())):
+            cv = float(x["v"].sum())
+            funds = []
+            for f, y in x.assign(fund=x["fund"].fillna("")).groupby("fund"):
+                fv = float(y["v"].sum())
+                shares = [{"isin": r.isin, "share": self.share_names.get(r.isin or "", None), "encours": float(r.v), "positions": int(r.n)}
+                          for r in y.sort_values("v", ascending=False).itertuples(index=False)]
+                funds.append({"fund": f or None, "name": self.fund_names.get(f) if f else None, "linked": bool(f),
+                              "encours": fv, "pct_of_client": _pct(fv, cv), "shares": shares})
+            funds.sort(key=lambda z: (not z["linked"], -z["encours"]))
+            out.append({"client": _label(cl), "encours": cv, "positions": int(x["n"].sum()),
+                        "n_funds": sum(1 for z in funds if z["linked"]), "funds": funds})
+        return {"available": True, "nominatif": True, "as_of": iso, "currency": "EUR", "top": top, "clients": out,
+                "shown_encours": float(g["v"].sum()), "total": tot_all or None}
 
     def _synthese(self) -> dict:
         """Lecture d'analyste : segments de clientèle, teneurs, pays, classes d'actifs et desks, chacun en part de l'encours

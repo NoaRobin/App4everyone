@@ -422,3 +422,34 @@ def test_vue_nominative_sql_parametree():
     r.client_funds("position", m, "Dupont'; DROP TABLE x --", [("date_eq", "date", "2026-09-30")])
     assert seen[-2][1] == ["FR0000000001"] and "FR0000000001" not in seen[-2][0]
     assert "Dupont" not in seen[-1][0] and seen[-1][1][0].startswith("%dupont")
+
+
+def test_carnet_des_clients(nominatif):
+    """Qui est investi dans quoi : clients par encours décroissant, fonds puis parts, sommes cohérentes."""
+    b = nominatif.client_book(12)
+    assert b["available"] and b["nominatif"] and 0 < len(b["clients"]) <= 12
+    enc = [c["encours"] for c in b["clients"]]
+    assert enc == sorted(enc, reverse=True)
+    for c in b["clients"]:
+        assert c["encours"] == pytest.approx(sum(f["encours"] for f in c["funds"]))
+        for f in c["funds"]:
+            assert f["encours"] == pytest.approx(sum(s["encours"] for s in f["shares"]))
+            assert f["linked"] == (f["fund"] is not None)
+    linked = [f for c in b["clients"] for f in c["funds"] if f["linked"]]
+    assert linked and {f["name"] for f in linked} <= {"Fonds Un", "Fonds Deux"}
+    assert b["shown_encours"] <= b["total"] + 1e-6
+
+
+def test_carnet_sql_lecture_seule():
+    seen: list[str] = []
+
+    class Fake:
+        def query(self, sql, params=(), **kw):
+            seen.append(assert_read_only(sql))
+            if "TOP 0 *" in sql:
+                return pd.DataFrame(columns=[f"_c{i}" for i in range(21)])
+            return pd.DataFrame(columns=["client", "isin", "n", "v", "comptes"])
+    r = P.SqlReader(Fake(), P.table_names())
+    m = P.resolve_mapping(r.columns("position"), "position")
+    r.client_book("position", m, 60, [("date_eq", "date", "2026-09-30")])
+    assert "TOP 60" in seen[-1] and "GROUP BY" in seen[-1]

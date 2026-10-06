@@ -25,6 +25,7 @@ from .data.fabric import FabricConfigError, FabricError
 from .data.sources import make_source
 from .domain.model import build_model
 from .domain.numeric import safe_float
+from . import exports as X
 from .service import FUND_DIMS, SHARE_DIMS, Service
 
 log = logging.getLogger("rco")
@@ -192,7 +193,9 @@ def passif_obj():
         reader = P.PandasReader(mock.table)
     ttl = float(__import__("os").environ.get("APP_PASSIF_TTL_HOURS") or 6)
     names = {fid: str(n) for fid, n in m.funds["name"].items()} if "name" in m.funds else {}
-    _S.passif = P.Passif(reader, isin_to_fund, ttl_hours=ttl, fund_names=names)
+    share_names = ({str(i).strip().upper(): str(n) for i, n in zip(m.shares["ISIN_Code"], m.shares["Share_Name"]) if isinstance(i, str) and isinstance(n, str)}
+                   if "ISIN_Code" in m.shares and "Share_Name" in m.shares else {})
+    _S.passif = P.Passif(reader, isin_to_fund, ttl_hours=ttl, fund_names=names, share_names=share_names)
     return _S.passif
 
 
@@ -215,6 +218,13 @@ def passif_holders(fid: str):
     """Clients porteurs d'un fonds (vue nominative) : calcul à la demande dans la source, jamais mis en cache ni journalisé."""
     _api_service()
     return _ok(passif_obj().holders(fid))
+
+
+@app.get("/api/passif/carnet")
+def passif_book(top: int = 60):
+    """Qui est investi dans quoi : premiers clients par encours, leurs fonds et leurs parts (vue nominative, à la demande)."""
+    _api_service()
+    return _ok(passif_obj().client_book(max(5, min(int(top), 300))))
 
 
 @app.get("/api/passif/clients")
@@ -408,6 +418,36 @@ def _no_rmm(v: str | None) -> bool:
 @app.get("/api/distribution")
 def distribution(date: str | None = None, rmm: str | None = None):
     return _ok(_api_service().distribution(date, _no_rmm(rmm)))
+
+
+# ---------------------------------------------------------------- extractions « une ligne par enregistrement » (onglet Export)
+def _list(v: str | None) -> list[str] | None:
+    xs = [x.strip() for x in (v or "").split(",") if x.strip()]
+    return xs or None
+
+
+@app.get("/api/export/encours")
+def export_encours(niveau: str = "fonds", pas: str = "M", debut: str | None = None, fin: str | None = None,
+                   fonds: str | None = None, familles: str | None = None, date: str | None = None):
+    try:
+        return _ok(X.encours(_api_service(), date, niveau, pas, debut, fin, _list(fonds), _list(familles)))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+
+
+@app.get("/api/export/parts")
+def export_parts(date: str | None = None):
+    return _ok(X.parts(_api_service(), date))
+
+
+@app.get("/api/export/enregistrements")
+def export_registrations(actifs: str = "1", rmm: str | None = None, date: str | None = None):
+    return _ok(X.enregistrements(_api_service(), date, actifs not in ("0", "non", "false"), _no_rmm(rmm)))
+
+
+@app.get("/api/export/inventaires")
+def export_holdings(fonds: str | None = None, date: str | None = None):
+    return _ok(X.inventaires(_api_service(), date, _list(fonds)))
 
 
 @app.get("/api/countries/{name}")

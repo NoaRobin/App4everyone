@@ -9,6 +9,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useApp } from "../lib/context";
 import { norm } from "../lib/search";
+import { Link } from "react-router-dom";
 import { buildWorkbook, cellValue, download, toCsv, type ExportCol } from "../lib/xlsx";
 import * as I from "./Icon";
 import "../styles/export.css";
@@ -52,7 +53,7 @@ function ExportDialog<R>({ id, title, subtitle, filename, rows, columns, shown, 
   };
   const [sel, setSel] = useState<string[]>(() => valid(store.get(id)).length ? valid(store.get(id)) : presets.shown);
   const [q, setQ] = useState("");
-  const [totals, setTotals] = useState(true);
+  const [totals, setTotals] = useState(false);
   const [about, setAbout] = useState(true);
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState<number | null>(null);
@@ -96,7 +97,7 @@ function ExportDialog<R>({ id, title, subtitle, filename, rows, columns, shown, 
       <div className="xd__in">
         <header className="xd__head">
           <div>
-            <div className="eyebrow">Exporter · classeur Excel</div>
+            <div className="eyebrow">Exporter · tableau Excel prêt à retravailler</div>
             <h2 id={`${searchId}-t`} className="xd__title">{title}</h2>
             <p className="small muted">{rows.length.toLocaleString("fr-FR")} lignes{ctx.length ? " · " + ctx.map((c) => `${c.label} : ${c.value}`).join(" · ") : ""}</p>
           </div>
@@ -147,7 +148,7 @@ function ExportDialog<R>({ id, title, subtitle, filename, rows, columns, shown, 
 
           <section className="xd__pane xd__pane--sel" aria-label="Colonnes du fichier, dans l'ordre">
             <div className="xd__ph"><span className="eyebrow">Votre fichier</span><span className="small muted num">{cols.length} colonne{cols.length > 1 ? "s" : ""}</span></div>
-            <p className="small muted xd__hint">Glissez pour réordonner — la première colonne reste figée dans Excel.</p>
+            <p className="small muted xd__hint">Glissez pour réordonner. Le fichier : un tableau Excel structuré en A1, une ligne par enregistrement.</p>
             <ol className="xd__sel">
               {cols.map((c, i) => (
                 <li key={c.key} draggable className={`xd__it${drag === i ? " is-drag" : ""}`}
@@ -184,8 +185,9 @@ function ExportDialog<R>({ id, title, subtitle, filename, rows, columns, shown, 
 
         <footer className="xd__foot">
           <div className="xd__opts">
-            <label><input type="checkbox" checked={totals} onChange={(e) => setTotals(e.target.checked)} /> Ligne de totaux (suit les filtres)</label>
-            <label><input type="checkbox" checked={about} onChange={(e) => setAbout(e.target.checked)} /> Onglet « À propos » : définitions et source</label>
+            <label><input type="checkbox" checked={totals} onChange={(e) => setTotals(e.target.checked)} /> Ligne de totaux du tableau</label>
+            <label><input type="checkbox" checked={about} onChange={(e) => setAbout(e.target.checked)} /> Onglets « Dictionnaire » et « Paramètres »</label>
+            <Link className="link small" to="/export" onClick={onClose}>Plus d'options : filtres, période, niveau de détail →</Link>
           </div>
           <div className="xd__go">
             <button type="button" className="btn btn--ghost" onClick={() => go("csv")} disabled={!cols.length || busy}>CSV</button>
