@@ -13,6 +13,7 @@ const NAV = [
   { to: "/distribution", label: "Distribution" },
   { to: "/passif", label: "Passif" },
   { to: "/comparateur", label: "Comparateur" },
+  { to: "/export", label: "Export" },
 ];
 
 export function Header() {

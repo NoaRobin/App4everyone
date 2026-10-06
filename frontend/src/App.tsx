@@ -19,6 +19,7 @@ const Distribution = lazy(() => import("./pages/Distribution"));
 const Country = lazy(() => import("./pages/Country"));
 const Passif = lazy(() => import("./pages/Passif"));
 const Compare = lazy(() => import("./pages/Compare"));
+const ExportStudio = lazy(() => import("./pages/Export"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const TITLES: [RegExp, string][] = [
@@ -57,6 +58,7 @@ export function App() {
             <Route path="/distribution/:pays" element={<Country />} />
             <Route path="/passif" element={<Passif />} />
             <Route path="/comparateur" element={<Compare />} />
+            <Route path="/export" element={<ExportStudio />} />
             <Route path="/risques" element={<Navigate to="/fonds#risques" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
