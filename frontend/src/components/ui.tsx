@@ -194,22 +194,6 @@ export function CopyCode({ code }: { code: string | null | undefined }) {
   );
 }
 
-/** Export CSV réalisé dans le navigateur de l'utilisateur (rien n'est écrit côté serveur). */
-export function ExportCsv({ rows, columns, filename }: { rows: Record<string, unknown>[]; columns: { key: string; label: string; fmt?: (v: unknown, r: Record<string, unknown>) => string }[]; filename: string }) {
-  const onClick = () => {
-    const esc = (s: string) => (/[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
-    const head = columns.map((c) => esc(c.label)).join(";");
-    const body = rows.map((r) => columns.map((c) => esc(c.fmt ? c.fmt(r[c.key], r) : r[c.key] == null ? "" : String(r[c.key]))).join(";")).join("\n");
-    const blob = new Blob(["﻿" + head + "\n" + body], { type: "text/csv;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  };
-  return <button type="button" className="btn btn--ghost" onClick={onClick}><I.Download size={16} /> Exporter</button>;
-}
-
 /** Étoile d'épinglage : la fiche rejoint « Votre bureau » dans l'espace métiers. */
 export function PinButton({ item }: { item: DeskItem }) {
   const on = useIsPinned(item.kind, item.id);

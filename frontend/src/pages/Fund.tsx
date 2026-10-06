@@ -5,7 +5,9 @@ import { useApp } from "../lib/context";
 import { date as fdate, eur, longDate, nav as fnav, num, pct, pctRaw, PERIOD_LABEL, PERIOD_SHORT, plural } from "../lib/format";
 import { FAMILY_LABEL, famVar } from "../lib/families";
 import type { FundDetail, Section as Sec } from "../lib/types";
-import { PinButton, BigMoney, Bool, CopyCode, Crumbs, Delta, ErrorState, ExportCsv, FamilyTag, Loading, SriScale, Stars, useReveal } from "../components/ui";
+import { PinButton, BigMoney, Bool, CopyCode, Crumbs, Delta, ErrorState, FamilyTag, Loading, SriScale, Stars, useReveal } from "../components/ui";
+import { ExportButton } from "../components/ExportDialog";
+import { SHARE_COLS, SHARE_ESSENTIAL, SHARE_SCREEN } from "../lib/exportCols";
 import { BarList, FlowBars, RangeTabs, TimeChart, fmtIndex, sliceRange } from "../components/charts";
 import { CountryTiles } from "../components/CountryTiles";
 import { Bridge, CalendarBars, DivLegend, Mosaic, divColor } from "../components/viz";
@@ -267,11 +269,6 @@ function PerfSection({ f }: { f: FundDetail }) {
 function SharesSection({ f }: { f: FundDetail }) {
   const nav = useNavigate();
   const [view, setView] = useState<"cards" | "table">("cards");
-  const cols = [
-    { key: "name", label: "Part" }, { key: "isin", label: "ISIN" }, { key: "ccy", label: "Devise" }, { key: "distribution", label: "Affectation" },
-    { key: "investor", label: "Souscripteurs" }, { key: "ongoing", label: "Frais courants (%)" }, { key: "min_sub", label: "Minimum" },
-    { key: "cutoff", label: "Cut-off" }, { key: "nav", label: "VL" }, { key: "aum", label: "Encours (€)" },
-  ];
   return (
     <section className="section reveal" id="parts" aria-labelledby="h-parts">
       <SectionHead id="parts" eyebrow="Parts" title={f.shares.length > 1 ? "Quelle part proposer ?" : "La part du fonds"} right={<div className="row">
@@ -279,7 +276,8 @@ function SharesSection({ f }: { f: FundDetail }) {
           <button type="button" role="radio" aria-checked={view === "cards"} className="seg__b" onClick={() => setView("cards")}>Comparateur</button>
           <button type="button" role="radio" aria-checked={view === "table"} className="seg__b" onClick={() => setView("table")}>Tableau</button>
         </div>
-        <ExportCsv rows={f.shares as never} columns={cols} filename={`parts-${f.name}.csv`} /></div>} />
+        <ExportButton id="parts" title={`${f.name} — parts`} filename={`parts-${f.name}.xlsx`} rows={f.shares} columns={SHARE_COLS}
+          shown={SHARE_SCREEN} essential={SHARE_ESSENTIAL} context={[{ label: "Fonds", value: f.name }]} /></div>} />
       {view === "cards" ? <ShareChooser shares={f.shares} fundAum={f.aum} /> : (
       <div className="table-wrap">
         <table className="t">

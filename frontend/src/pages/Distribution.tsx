@@ -13,6 +13,8 @@ import { Board } from "../components/Story";
 import { Head, PageHero } from "../components/Editorial";
 import * as I from "../components/Icon";
 import { GlobeSection, Timeline, type ClientMap, type TimelineData } from "../components/DistViz";
+import { CoverageSection, DistNav, MatrixSection, coverage } from "../components/DistAtlas";
+import "../styles/distribution.css";
 import type { MapRoute } from "../three/MapScene";
 import type { SankeyScene as SankeySceneT, SkData, SkHover, SkNode } from "../three/SankeyScene";
 
@@ -37,36 +39,56 @@ export default function Distribution() {
   useReveal(d ? 1 : null);
   if (error) return <div className="page"><ErrorState error={error} /></div>;
   if (!d) return <div className="page"><Loading h={520} /></div>;
+  return <DistributionView d={d} exclude={exclude} setExclude={setExclude} withRmm={withRmm} />;
+}
+
+const NAV = [
+  { id: "matrice", label: "Clients × pays" }, { id: "couverture", label: "Couverture" }, { id: "globe", label: "Le monde" },
+  { id: "parcours", label: "Parcours" }, { id: "pays", label: "Pays par pays" }, { id: "chronologie", label: "Depuis quand" }, { id: "annexes", label: "Plateformes & comptes" },
+];
+
+function DistributionView({ d, exclude, setExclude, withRmm }: { d: Resp; exclude: boolean; setExclude: (v: boolean) => void; withRmm: (u: string) => string }) {
+  const [client, setClient] = useState<string | null>(null);
+  const clients = d.clients ?? [];
+  const cov = coverage(clients);
   const n = d.sankey.nodes.reduce((s, x) => s + (x.col === 0 ? x.value : 0), 0);
   return (
     <div className="dist">
       <PageHero
         eyebrow={<>Distribution · au {fdate(d.date)}</>}
-        title="Où nos fonds sont‑ils commercialisés ?"
-        lede={<>Chaque part peut être enregistrée dans plusieurs pays. Suivez le parcours d'une autorisation&nbsp;: d'abord les clients à qui la part s'adresse, puis les pays où elle est autorisée, enfin la famille de gestion du fonds.</>}
+        title="Qui peut souscrire, et où ?"
+        lede={<>L'atlas de nos autorisations de commercialisation&nbsp;: {plural(cov.named || clients.length, cov.named ? "client nommé" : "clientèle")} et {plural(d.countries.length, "pays")}, croisés ligne à ligne. Une clientèle est le client d'une part dédiée, à défaut son pool de clientèle&nbsp;; un couple client-pays existe dès qu'une de ses parts est autorisée dans le pays.</>}
         aside={<RmmSwitch exclude={exclude} onChange={setExclude} rmm={d.rmm} />}
         figures={[
+          { label: cov.named ? "Clients nommés" : "Clientèles", value: num(cov.named || clients.length), sub: cov.pools ? `+ ${plural(cov.pools, "pool")} de clientèle` : undefined },
+          { label: "Couples client-pays", value: num(cov.pairs) },
+          { label: "Pays par client", value: num(cov.mean, 1), sub: "en moyenne" },
           { label: "Pays", value: String(d.countries.length) },
-          { label: "Fonds enregistrés", value: String(d.n_funds_registered) },
-          { label: "Parts enregistrées", value: String(d.n_shares_registered) },
-          { label: "Enregistrements actifs", value: num(n), sub: "une part autorisée dans un pays" },
+          { label: "Fonds · parts enregistrés", value: `${d.n_funds_registered} · ${d.n_shares_registered}`, sub: `${num(n)} enregistrements actifs` },
         ]}
       />
+      <DistNav items={NAV} />
+      <MatrixSection clients={clients} countries={d.countries} selected={client} onSelect={setClient} withRmm={withRmm} />
+      <CoverageSection clients={clients} countries={d.countries} withRmm={withRmm} />
+      <GlobeSection countries={d.countries} routes={d.routes} clients={clients} withRmm={withRmm} client={client} onClient={setClient} />
       <FlowSection d={d} withRmm={withRmm} />
-      <GlobeSection countries={d.countries} routes={d.routes} clients={d.clients ?? []} withRmm={withRmm} />
-      <Timeline t={d.timeline} />
       <div className="page dist__page">
-        <section className="section reveal" aria-labelledby="h-pays">
+        <section id="pays" className="section reveal" aria-labelledby="h-pays">
           <Head id="pays" eyebrow="Pays par pays" title="Le tableau des départs"
             lede="Chaque pays de commercialisation, comme un vol au départ : nombre de fonds et de parts autorisés. Cliquez sur une destination pour sa fiche pays." />
           <Board rows={[...d.countries].sort((a, b) => b.n_shares - a.n_shares)} subtitle={`${d.countries.length} pays de commercialisation`} />
         </section>
+      </div>
+      <div id="chronologie"><Timeline t={d.timeline} /></div>
+      <div id="annexes" className="page dist__page">
+        <div className="dist__annex">
+          <section className="section reveal" aria-labelledby="h-plat">
+            <Head id="plat" eyebrow="Plateformes" title="Référencement sur les plateformes" lede="Nombre de parts référencées et encours correspondant." />
+            <BarList items={d.platforms} value={(p) => p.n_shares} label={(p) => p.label} right={(p) => <span>{p.n_shares} parts <span className="muted">· {eur(p.aum)}</span></span>} color={() => "var(--gold)"} />
+          </section>
+          <RmmNote rmm={d.rmm} exclude={exclude} />
+        </div>
         <TeneursSection />
-        <section className="section reveal" aria-labelledby="h-plat">
-          <Head id="plat" eyebrow="Plateformes" title="Référencement sur les plateformes" lede="Nombre de parts référencées et encours correspondant." />
-          <BarList items={d.platforms} value={(p) => p.n_shares} label={(p) => p.label} right={(p) => <span>{p.n_shares} parts <span className="muted">· {eur(p.aum)}</span></span>} color={() => "var(--gold)"} />
-        </section>
-        <RmmNote rmm={d.rmm} exclude={exclude} />
       </div>
     </div>
   );
@@ -145,7 +167,7 @@ function FlowSection({ d, withRmm }: { d: Resp; withRmm: (u: string) => string }
   const named = clients.filter((n) => n.kind === "nommé"), pools = clients.filter((n) => n.kind !== "nommé");
   const fams = d.sankey.nodes.filter((n) => n.family).sort((a, b) => FAMILY_ORDER.indexOf(a.family as FamilyKey) - FAMILY_ORDER.indexOf(b.family as FamilyKey));
   return (
-    <section className="flow reveal" aria-labelledby="h-flow">
+    <section id="parcours" className="flow reveal" aria-labelledby="h-flow">
       <div className="flow__head page">
         <Head id="flow" eyebrow="Le parcours d'une autorisation" title="Des clients aux pays, puis aux familles"
           lede={<>D'abord à qui s'adresse la part — le client nommé pour une part dédiée, sinon son pool de clientèle —, puis les pays où elle est autorisée, enfin la famille de gestion du fonds. Épaisseur d'un flux&nbsp;: nombre d'enregistrements actifs (une part autorisée dans un pays) ; couleur&nbsp;: la famille de gestion. Survolez pour isoler un parcours, cliquez un pays pour l'ouvrir.</>}

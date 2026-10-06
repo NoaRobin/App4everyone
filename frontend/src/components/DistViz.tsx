@@ -5,6 +5,7 @@ import { prefersReducedMotion, useReducedMotion, webglAvailable } from "../lib/m
 import { ScrollTrigger } from "../lib/gsap";
 import { Head } from "./Editorial";
 import type { MapCountry, MapMetric, MapRoute, MapScene as MapSceneT, MapView } from "../three/MapScene";
+import { ClientPicker, type Clientele } from "./DistAtlas";
 
 /** Couleurs des arcs par pays de domiciliation (les deux domiciles de la maison, puis un neutre). */
 const DOM_COLORS: Record<string, string> = { FR: "#f3e6cc", LU: "#cc9f53" };
@@ -157,13 +158,13 @@ export function Timeline({ t }: { t: TimelineData }) {
 }
 
 // ------------------------------------------------------------------ globe 3D
-export type ClientMap = { client: string; n_shares: number; n_funds: number; countries: { country: string; iso: string; n_shares: number; n_funds: number }[] }[];
+export type ClientMap = Clientele[];
 
 /**
  * Le globe des autorisations : terres en points, pays autorisés en or, arcs depuis les pays de domiciliation.
  * Interactif : rotation à la souris, survol, clic pour centrer un pays et afficher son panneau, filtre par clientèle.
  */
-export function GlobeSection({ countries, routes, clients, withRmm }: { countries: MapCountry[]; routes: MapRoute[]; clients: ClientMap; withRmm: (u: string) => string }) {
+export function GlobeSection({ countries, routes, clients, withRmm, client: ctl, onClient }: { countries: MapCountry[]; routes: MapRoute[]; clients: ClientMap; withRmm: (u: string) => string; client?: string | null; onClient?: (c: string | null) => void }) {
   const host = useRef<HTMLDivElement>(null);
   const labels = useRef<HTMLDivElement>(null);
   const scene = useRef<import("../three/GlobeScene").GlobeScene | null>(null);
@@ -171,7 +172,9 @@ export function GlobeSection({ countries, routes, clients, withRmm }: { countrie
   const nav = useNavigate();
   const [gl] = useState(() => webglAvailable());
   const [metric, setMetric] = useState<MapMetric>("n_funds");
-  const [client, setClient] = useState<string | null>(null);
+  const [own, setOwn] = useState<string | null>(null);
+  const client = ctl !== undefined ? ctl : own;
+  const setClient = onClient ?? setOwn;
   const [tip, setTip] = useState<{ c: MapCountry; x: number; y: number } | null>(null);
   const [sel, setSel] = useState<MapCountry | null>(null);
   const [ready, setReady] = useState(false);
@@ -210,7 +213,7 @@ export function GlobeSection({ countries, routes, clients, withRmm }: { countrie
     .map((k) => ({ k, n: k.countries.find((x) => x.iso === sel.iso)!.n_shares })).sort((a, b) => b.n - a.n) : [];
   const doms = [...new Set(routes.filter((r) => r.domicile_iso !== r.iso).map((r) => `${r.domicile_iso}|${r.domicile}`))];
   return (
-    <section className="globe reveal" aria-labelledby="h-globe">
+    <section id="globe" className="globe reveal" aria-labelledby="h-globe">
       <div className="page globe__head">
         <Head id="globe" eyebrow="Le monde" title="Où nos parts sont autorisées"
           lede={<>Faites tourner le globe, survolez un pays, cliquez pour le centrer. Chaque colonne de lumière mesure {metric === "n_funds" ? "le nombre de fonds" : "le nombre de parts"} enregistrés dans le pays{client ? <> pour la clientèle <b>{client}</b></> : null}&nbsp;; les arcs partent du pays de domiciliation des fonds.</>}
@@ -218,14 +221,7 @@ export function GlobeSection({ countries, routes, clients, withRmm }: { countrie
             <div className="seg" role="radiogroup" aria-label="Mesure">
               {(["n_funds", "n_shares"] as MapMetric[]).map((m) => <button key={m} type="button" role="radio" aria-checked={metric === m} className="seg__b" onClick={() => setMetric(m)}>{m === "n_funds" ? "Fonds" : "Parts"}</button>)}
             </div>} />
-        <div className="globe__clients" role="group" aria-label="Filtrer par clientèle">
-          <button type="button" className="chip" aria-pressed={!client} onClick={() => setClient(null)}>Toutes les clientèles</button>
-          {clients.map((k) => (
-            <button key={k.client} type="button" className="chip" aria-pressed={client === k.client} onClick={() => setClient(client === k.client ? null : k.client)}>
-              {k.client} <span className="num muted">{k.countries.length} pays</span>
-            </button>
-          ))}
-        </div>
+        <div className="globe__clients"><ClientPicker clients={clients} value={client} onChange={setClient} /></div>
       </div>
       <div className="globe__stage">
         {gl ? <><div className="globe__canvas" ref={host} /><div className="globe__labels" ref={labels} aria-hidden="true" /></> : <div className="globe__fallback" />}

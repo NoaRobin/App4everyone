@@ -123,7 +123,7 @@ export default function Selection() {
               <p className="small muted" style={{ marginTop: 8 }}>Part de référence de chaque fonds, performance et volatilité réalisées sur 1 an. Les fonds de moins d'un an d'historique n'apparaissent pas.</p>
             </div>
           )}
-          {live.length && view === "tableau" ? <FundTable rows={live} caption={`Fonds : ${title}`} filename={`selection-${title}.csv`} /> : live.length ? null :
+          {live.length && view === "tableau" ? <FundTable rows={live} caption={`Fonds : ${title}`} title={`Sélection — ${title}`} filename={`selection-${title}.xlsx`} /> : live.length ? null :
             <div className="empty">Aucun fonds ne correspond à cette sélection. <Link className="link" to="/selection">Voir tous les fonds</Link></div>}
         </>
       )}

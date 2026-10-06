@@ -3,7 +3,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { eur, pct } from "../lib/format";
 import { FAMILY_LABEL, famVar } from "../lib/families";
 import type { FundRow } from "../lib/types";
-import { Delta, ExportCsv } from "./ui";
+import { Delta } from "./ui";
+import { ExportButton } from "./ExportDialog";
+import { FUND_COLS, FUND_ESSENTIAL, FUND_SCREEN } from "../lib/exportCols";
+import { useApp } from "../lib/context";
+import { date as fdate } from "../lib/format";
 
 type Col = { key: keyof FundRow | string; label: string; n?: boolean; render?: (r: FundRow) => ReactNode; sort?: (r: FundRow) => number | string | null; csv?: (r: FundRow) => string };
 
@@ -22,8 +26,9 @@ export const COLS: Record<string, Col> = {
   domicile: { key: "domicile", label: "Domicile" },
 };
 
-export function FundTable({ rows, cols = ["name", "family", "range", "manager", "sfdr", "sri", "aum", "var_1M", "var_YTD", "flows_YTD", "perf_YTD"], filename = "fonds.csv", caption }:
-  { rows: FundRow[]; cols?: string[]; filename?: string; caption: string }) {
+export function FundTable({ rows, cols = ["name", "family", "range", "manager", "sfdr", "sri", "aum", "var_1M", "var_YTD", "flows_YTD", "perf_YTD"], filename = "fonds.csv", caption, title }:
+  { rows: FundRow[]; cols?: string[]; filename?: string; caption: string; title?: string }) {
+  const { asOf } = useApp();
   const [sort, setSort] = useState<{ k: string; dir: 1 | -1 }>({ k: "aum", dir: -1 });
   const nav = useNavigate();
   const sorted = useMemo(() => {
@@ -42,7 +47,9 @@ export function FundTable({ rows, cols = ["name", "family", "range", "manager", 
     <div>
       <div className="spread" style={{ marginBottom: 12 }}>
         <span className="small muted">{rows.length} fonds · cliquez un en-tête pour trier</span>
-        <ExportCsv rows={sorted as never} filename={filename} columns={columns.map((c) => ({ key: String(c.key), label: c.label, fmt: c.csv ? (_v: unknown, r: Record<string, unknown>) => c.csv!(r as FundRow) : undefined }))} />
+        <ExportButton id="fonds" title={title ?? caption} filename={filename} rows={sorted} columns={FUND_COLS}
+          shown={cols.map((k) => FUND_SCREEN[k]).filter(Boolean)} essential={FUND_ESSENTIAL}
+          context={asOf ? [{ label: "Date de valeur", value: fdate(asOf) }] : undefined} />
       </div>
       <div className="table-wrap">
         <table className="t">

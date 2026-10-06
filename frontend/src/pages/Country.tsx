@@ -6,7 +6,9 @@ import { date as fdate, eur, eurParts } from "../lib/format";
 import { PageHero } from "../components/Editorial";
 import { FAMILY_LABEL, famVar } from "../lib/families";
 import type { FamilyKey } from "../lib/types";
-import { CopyCode, Crumbs, ErrorState, ExportCsv, Loading } from "../components/ui";
+import { CopyCode, Crumbs, ErrorState, Loading } from "../components/ui";
+import { ExportButton } from "../components/ExportDialog";
+import { REG_COLS, REG_ESSENTIAL, REG_SCREEN } from "../lib/exportCols";
 import * as I from "../components/Icon";
 import { useRmm } from "../lib/rmm";
 
@@ -42,10 +44,9 @@ export default function Country() {
           </button>
           <div className="row">
             <Link to={`/selection?country=${encodeURIComponent(data.country)}`} className="btn btn--ghost">Voir leurs encours <I.Arrow size={16} /></Link>
-            <ExportCsv rows={data.rows as never} filename={`enregistrements-${data.country}.csv`} columns={[
-              { key: "fund", label: "Fonds" }, { key: "share", label: "Part" }, { key: "isin", label: "ISIN" }, { key: "ccy", label: "Devise" },
-              { key: "active", label: "Actif", fmt: (v) => (v ? "Oui" : "Non") }, { key: "date", label: "Enregistrement", fmt: (v) => fdate(v as string) },
-            ]} />
+            <ExportButton id="enregistrements" title={`${data.country} — enregistrements`} filename={`enregistrements-${data.country}.xlsx`} rows={data.rows}
+              columns={REG_COLS} shown={REG_SCREEN} essential={REG_ESSENTIAL}
+              context={[{ label: "Pays", value: data.country }, { label: "Date de valeur", value: fdate(data.date) }, { label: "Fonds RMM", value: exclude ? "exclus" : "inclus" }]} />
           </div>
         </div>}
         figures={[

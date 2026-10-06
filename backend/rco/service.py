@@ -738,11 +738,17 @@ class Service:
         if act.empty:
             return []
         df = pd.DataFrame({"sid": act["pi_shareid"].values, "fid": act["fund_id"].values, "cty": act["country_fr"].values, "iso": act["iso"].values})
-        df["cli"] = self._clients(df["sid"]).values
+        label, kind = self._client_kind()
+        df["cli"] = df["sid"].map(label).fillna("Clientèle non renseignée").values
+        df["kind"] = df["sid"].map(kind).fillna("pool").values
+        df["fam"] = df["fid"].map(self.m.funds["family"]).fillna("nc").values if "family" in self.m.funds else "nc"
         out = []
         for cli, g in df.groupby("cli"):
             per = g.groupby(["cty", "iso"]).agg(n=("sid", "nunique"), f=("fid", "nunique")).reset_index().sort_values("n", ascending=False)
-            out.append({"client": cli, "n_shares": int(g["sid"].nunique()), "n_funds": int(g["fid"].nunique()),
+            fams = g.drop_duplicates("sid").groupby("fam")["sid"].nunique().sort_values(ascending=False)
+            out.append({"client": cli, "kind": "nommé" if (g["kind"] == "nommé").any() else "pool",
+                        "n_shares": int(g["sid"].nunique()), "n_funds": int(g["fid"].nunique()),
+                        "families": [{"family": str(f), "n_shares": int(n)} for f, n in fams.items()],
                         "countries": [{"country": r.cty, "iso": r.iso, "n_shares": int(r.n), "n_funds": int(r.f)} for r in per.itertuples()]})
         return sorted(out, key=lambda x: -x["n_shares"])
 

@@ -95,6 +95,14 @@ LAUNCHES = {"Obligations Vertes": date(2025, 6, 2), "Échéance 2030": date(2025
 LIQUIDATED = ("Échéance 2024", FAM_FI, date(2024, 12, 20))  # présent dans JUMP, absent du référentiel actif
 SPLIT = ("Europe Valeur", "C", date(2025, 3, 3), 10.0)
 
+# Clientèle nommée fictive : 140 clients (type d'investisseur × nom d'étoile, inventés), portés par les parts dédiées.
+# Volumétrie de travail de la rubrique Distribution : ~140 clients × ~2,5 pays ≈ 350 couples client-pays.
+CLIENT_KINDS = ["Mutuelle", "Caisse de retraite", "Fondation", "Banque privée", "Assureur", "Family office", "Fonds de pension",
+                "Gestion de fortune", "Plateforme", "Distributeur"]
+CLIENT_STARS = ["Altaïr", "Bételgeuse", "Capella", "Deneb", "Électra", "Fomalhaut", "Gemma", "Hadar", "Izar", "Mira",
+                "Nunki", "Orion", "Pollux", "Rigel"]
+CLIENTS_FICTIFS = [f"{k} {s}" for s in CLIENT_STARS for k in CLIENT_KINDS]   # 140, tous inventés
+
 COUNTRIES = ["France", "Luxembourg", "Belgium", "Germany", "Austria", "Italy", "Spain", "Portugal",
              "Netherlands", "Switzerland", "United Kingdom", "Sweden", "Finland", "Denmark", "Norway",
              "Ireland", "Singapore", "Chile"]
@@ -372,6 +380,12 @@ class MockLakehouse:
             df[col_tot] = df.groupby(["ID_JUMP_FONDS", "DATE_VL"])[col_part].transform("sum").round(2)
         return df.sort_values(["ID_JUMP_PART", "DATE_VL"]).reset_index(drop=True)
 
+    def _named_client(self, i: int) -> str | None:
+        """Client nommé (fictif) de la part n° i : quatre parts sur cinq sont dédiées, la cinquième reste dans un pool."""
+        if i % 5 == 4:
+            return None
+        return CLIENTS_FICTIFS[(i - i // 5) % len(CLIENTS_FICTIFS)]
+
     def shares_table(self) -> pd.DataFrame:
         prod = {p["name"]: p for p in self.products}
         rng = np.random.default_rng(7)
@@ -394,8 +408,7 @@ class MockLakehouse:
                 Income_Distribution="Distribution" if sp.distrib else "Capitalisation",
                 Distribution_Frequency="Annuelle" if sp.distrib else None,
                 Investor_Type="Investisseurs institutionnels" if sp.inst else ("Réservée aux distributeurs" if sp.code == "F" else "Tous souscripteurs"),
-                Investor_Type_free_field=(f"Mandat dédié {['Alpha', 'Bêta', 'Gamma', 'Delta', 'Epsilon', 'Zêta', 'Êta', 'Thêta'][sum(map(ord, sp.isin)) % 8]} (client fictif)"
-                                          if sp.inst and sum(map(ord, sp.isin)) % 3 == 0 else None),
+                Investor_Type_free_field=self._named_client(i),
                 Investor_Type_Retail=_yn(not sp.inst), Investor_Type_Professional="Yes", Investor_Type_Eligible_Counterparty="Yes",
                 Initial_Subscription_Minimum_Amount=(1_000_000.0 if sp.inst else None),
                 Initial_Subscription_Minimum_Quantity=(None if sp.inst else 1.0),
@@ -560,7 +573,8 @@ class MockLakehouse:
             if sp.code == "Z":
                 chosen = base
             else:
-                k = int(rng.integers(1, 12)) if not sp.inst else int(rng.integers(2, 7))
+                # 2 à 3 pays par part en moyenne (≈ 2,5 pays par client nommé)
+                k = max(0, int(rng.choice([2, 2, 2, 3, 3])) - len(base))
                 others = [c for c in COUNTRIES if c not in base]
                 chosen = base + list(rng.choice(others, size=min(k, len(others)), replace=False))
                 if sp.ccy == "CHF" and "Switzerland" not in chosen:
