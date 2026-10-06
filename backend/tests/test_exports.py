@@ -72,3 +72,19 @@ def test_parts_enregistrements_inventaires(svc):
     assert X.enregistrements(svc, None, exclude_rmm=True)["n"] < e["n"]
     i = X.inventaires(svc, None)
     assert i["n"] > 0 and all(len(r) == len(i["columns"]) for r in i["rows"][:50])
+
+
+@pytest.mark.parametrize("niveau,id_col", [("fonds", "id_fonds"), ("parts", "id_part")])
+def test_referentiel_product_info(svc, niveau, id_col):
+    r = X.referentiel(svc, niveau)
+    df = svc.m.products if niveau == "fonds" else svc.m.shares
+    assert r["n"] == len(df) and r["head"][0] == id_col
+    assert r["n_fields"] > 200 and len({c["key"] for c in r["columns"]}) == r["n_fields"]
+    assert all(len(row) == len(r["head"]) + r["n_fields"] for row in r["rows"])
+    groups = [c["group"] for c in r["columns"]]
+    assert groups[-1] == "Autres champs Product Info" and groups[0] != "Autres champs Product Info"   # catalogue d'abord
+    keys = {c["key"] for c in r["columns"]}
+    assert all(k in keys or not k.startswith("pi.") for p in r["packs"] for k in p["keys"])
+    pct = next(i for i, c in enumerate(r["columns"]) if c["kind"] == "pct")
+    vals = [row[len(r["head"]) + pct] for row in r["rows"] if isinstance(row[len(r["head"]) + pct], float)]
+    assert all(abs(v) <= 1.5 for v in vals)                                   # points de % → fraction

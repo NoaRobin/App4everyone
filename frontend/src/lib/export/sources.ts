@@ -19,13 +19,16 @@ export type SrcParams = {
 };
 export const DEFAULT_SRC: SrcParams = { level: "fonds", freq: "M", span: "1A", from: "", to: "", families: [], funds: [], rmm: true, actifs: true, dim: "family", top: 150 };
 export type Row = Record<string, unknown>;
-export type Loaded = { rows: Row[]; asOf?: string | null; period?: { from: string | null; to: string | null }; tooMany?: { n: number; limit: number } };
+export type Pack = { id: string; label: string; desc: string; keys: string[] };
+export type Loaded = { rows: Row[]; asOf?: string | null; period?: { from: string | null; to: string | null }; tooMany?: { n: number; limit: number };
+  columns?: ExportCol<Row>[]; packs?: Pack[] };
 export type Source = {
   id: string; label: string; group: "Gestion" | "Distribution" | "Portefeuilles" | "Passif";
   description: string; grain: (p: SrcParams) => string; controls: Control[];
   columns: ExportCol<Row>[]; defaults: (p: SrcParams) => string[];
   load: (api: (u: string) => string, p: SrcParams, asOf: string | null) => Promise<Loaded>;
   nominative?: boolean;
+  featured?: boolean;
 };
 
 export const LEVELS: { id: Level; label: string; grain: string }[] = [
@@ -69,6 +72,16 @@ const qs = (o: Record<string, string | number | boolean | null | undefined>) => 
 };
 const legacy = (p: SrcParams): Params => ({ ...DEFAULT_PARAMS, dim: p.dim, rmm: p.rmm, family: p.families });
 
+// ------------------------------------------------------------------ Product Info (référentiel complet)
+type Ref = { columns: { key: string; label: string; group: string; kind: ExportCol["kind"]; desc?: string }[]; head: string[]; rows: unknown[][]; packs: Pack[]; n_fields: number };
+async function loadRef(api: (u: string) => string, niveau: "fonds" | "parts") {
+  const r = await fetchJson<Ref>(api(`/api/export/referentiel?niveau=${niveau}`));
+  const keys = [...r.head, ...r.columns.map((c) => c.key)];
+  const byId = new Map<string, Row>(r.rows.map((row) => [String(row[0]), Object.fromEntries(keys.map((k, i) => [k, row[i]]))]));
+  const columns: ExportCol<Row>[] = r.columns.map((c) => ({ key: c.key, label: c.label, kind: c.kind, group: `Product Info · ${c.group}`, desc: c.desc }));
+  return { byId, columns, packs: r.packs };
+}
+
 // ------------------------------------------------------------------ encours dans le temps
 const ENC_COLS: ExportCol<Row>[] = [
   { key: "date", label: "Date", kind: "date", group: "Période", desc: "Dernière date de valeur disponible de la période (fin de période)" },
@@ -106,16 +119,17 @@ const ENCOURS: Source = {
   },
 };
 
-// ------------------------------------------------------------------ fonds
+// ------------------------------------------------------------------ fonds : Product Info + mesures de l'application
 const FONDS: Source = {
-  id: "fonds", label: "Fonds", group: "Gestion",
-  description: "Tous les fonds à la date de valeur : identité, encours, collecte, performance, revenus estimés, risque",
+  id: "fonds", label: "Fonds", group: "Gestion", featured: true,
+  description: "Tous les champs Product Info du référentiel, et les mesures de l'application : encours, collecte, performance, revenus, risque",
   grain: () => "une ligne par fonds", controls: ["families"],
-  columns: FUND_X as unknown as ExportCol<Row>[],
-  defaults: () => ["name", "id", "family", "range", "asset_class", "manager", "aum", "flows_YTD", "perf_YTD", "revenue", "sri", "sfdr"],
+  columns: (FUND_X as unknown as ExportCol<Row>[]).map((c) => ({ ...c, group: `Mesures · ${c.group ?? "Fonds"}` })),
+  defaults: () => ["name", "family", "pi.Fund_Range", "pi.Asset_Class", "pi.Portfolio_Manager", "aum", "flows_YTD", "perf_YTD", "sri", "sfdr"],
   async load(api, p) {
-    const { rows } = await loadFunds({ api, p: { ...legacy(p), sort: "aum" }, charts: [] });
-    return { rows: rows as unknown as Row[] };
+    const [{ rows }, ref] = await Promise.all([loadFunds({ api, p: { ...legacy(p), sort: "aum" }, charts: [] }), loadRef(api, "fonds")]);
+    const out = (rows as unknown as Row[]).map((r) => ({ ...(ref.byId.get(String(r.id)) ?? {}), ...r }));
+    return { rows: out, columns: ref.columns, packs: ref.packs };
   },
 };
 
@@ -140,11 +154,21 @@ const PART_COLS: ExportCol<Row>[] = [
   { key: "rattachement", label: "Rattachement au référentiel", group: "Qualité", desc: "Comment la part JUMP est rattachée au référentiel (identifiant, ISIN, référentiel seul)" },
 ];
 const PARTS: Source = {
-  id: "parts", label: "Parts", group: "Gestion",
-  description: "Toutes les parts : identité, souscription, frais, encours, collecte YTD, dernière VL, fonds",
-  grain: () => "une ligne par part", controls: [],
-  columns: PART_COLS, defaults: () => ["fonds", "part", "isin", "devise", "souscripteurs", "frais_courants", "encours", "collecte_ytd", "vl", "date_vl"],
-  async load(api) { const t = await fetchJson<Table>(api("/api/export/parts")); return { rows: toRows(t) }; },
+  id: "parts", label: "Parts", group: "Gestion", featured: true,
+  description: "Tous les champs Product Info des parts, et l'encours, la collecte YTD et la dernière VL de chaque part",
+  grain: () => "une ligne par part", controls: ["families"],
+  columns: PART_COLS.map((c) => ({ ...c, group: `Mesures · ${c.group ?? "Part"}` })),
+  defaults: () => ["fonds", "part", "isin", "devise", "souscripteurs", "frais_courants", "encours", "collecte_ytd", "vl", "date_vl"],
+  async load(api, p) {
+    const [t, ref, funds] = await Promise.all([fetchJson<Table>(api("/api/export/parts")), loadRef(api, "parts"),
+      p.families.length ? fetchJson<{ funds: { id: string; family: string }[] }>(api("/api/funds")) : Promise.resolve(null)]);
+    const m = toRows(t);
+    const seen = new Set(m.map((r) => String(r.id_part)));
+    const rows: Row[] = m.map((r) => ({ ...(ref.byId.get(String(r.id_part)) ?? {}), ...r }));
+    ref.byId.forEach((v, id) => { if (!seen.has(id)) rows.push({ ...v }); });     // parts du référentiel sans données JUMP
+    const keep = funds ? new Set(funds.funds.filter((f) => p.families.includes(f.family)).map((f) => f.id)) : null;
+    return { rows: keep ? rows.filter((r) => keep.has(String(r.id_fonds))) : rows, columns: ref.columns, packs: ref.packs };
+  },
 };
 
 // ------------------------------------------------------------------ agrégats existants (répartition, revenus)

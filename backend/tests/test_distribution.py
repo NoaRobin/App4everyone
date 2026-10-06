@@ -49,15 +49,18 @@ def test_sankey_flux_conserves(svc, excl):
     total = svc.distribution(None, excl)
     # Unité : un enregistrement actif (part × pays) ; clientèles dessinées + reste = tous les enregistrements actifs
     shown = sum(n["value"] for n in sk["nodes"] if n["col"] == 2)
-    assert shown == sum(n["value"] for n in sk["nodes"] if n["col"] == 0)
+    assert shown == sum(n["value"] for n in sk["nodes"] if n["col"] == 0) == sum(n["value"] for n in sk["nodes"] if n["col"] == 1)
     assert shown + sk["rest"]["value"] == sum(c["n_shares"] for c in total["countries"])
 
 
 def test_sankey_clientes_par_encours_decroissant(svc):
     """Les plus grosses clientèles d'abord (encours des parts enregistrées) ; les autres résumées à part."""
     sk = svc.distribution(None)["sankey"]
-    nodes = [n for n in sk["nodes"] if n["col"] == 0]
-    assert 2 <= len(nodes) <= 12 and not any(n["other"] for n in nodes)
+    assert sk["order"] == ["pays", "clients", "familles"]
+    nodes = [n for n in sk["nodes"] if n["col"] == 1]
+    assert 2 <= len(nodes) <= 20 and not any(n["other"] for n in nodes)
+    assert [n["rank"] for n in nodes] == list(range(1, len(nodes) + 1))
+    assert len([n for n in sk["nodes"] if n["col"] == 0]) <= 7
     assert [n["aum"] for n in nodes] == sorted((n["aum"] for n in nodes), reverse=True)
     assert {"nommé", "pool"} <= {n["kind"] for n in nodes}
     assert sk["rest"]["n_clients"] > 0 and sk["rest"]["value"] > 0

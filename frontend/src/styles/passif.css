@@ -687,3 +687,7 @@
   .pb__d { position: static; }
   .pb__t thead th:nth-child(2), .pb__t td:nth-child(2) { display: none; }
 }
+.pb__more { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 44px; margin-top: 8px; border: 1px dashed var(--line-2); background: none; color: var(--gold-ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: border-color .2s, background .2s; }
+.pb__more:hover { border-color: var(--gold); background: rgba(204, 159, 83, .06); }
+.pb__more .muted { font-weight: 400; }
+.pb__list { max-height: none; }

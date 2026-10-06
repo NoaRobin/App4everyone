@@ -26,7 +26,19 @@ export type ExportSpec<R> = {
   context?: { label: string; value: string }[];
   grain?: string;              // « une ligne par fonds et par date »
   mock?: boolean; totals?: boolean; about?: boolean;
+  style?: string;              // identifiant d'un style de XSTYLES
 };
+
+/** Styles du tableau : en-tête aux couleurs choisies, lignes alternées natives du tableau Excel (aucune cellule fusionnée). */
+export type XStyle = { id: string; label: string; note: string; head: string; ink: string; rule: string; zebra: string | null; theme: "TableStyleMedium2" | "TableStyleLight1" | "TableStyleLight8" | "TableStyleLight15"; stripes: boolean };
+export const XSTYLES: XStyle[] = [
+  { id: "rco", label: "Rothschild", note: "Bleu nuit, filet d'or", head: "1C355E", ink: "FFFFFF", rule: "CC9F53", zebra: "F2F2F2", theme: "TableStyleLight1", stripes: true },
+  { id: "epure", label: "Épuré", note: "Blanc, filet bleu, sans fond", head: "FFFFFF", ink: "1C355E", rule: "1C355E", zebra: null, theme: "TableStyleLight1", stripes: false },
+  { id: "bordeaux", label: "Bordeaux", note: "Rouge Rothschild, filet rose", head: "8A1E41", ink: "FFFFFF", rule: "E8C9BA", zebra: "F2F2F2", theme: "TableStyleLight1", stripes: true },
+  { id: "graphite", label: "Graphite", note: "Gris anthracite, filet d'or", head: "2B2F36", ink: "FFFFFF", rule: "CC9F53", zebra: "F2F2F2", theme: "TableStyleLight1", stripes: true },
+  { id: "excel", label: "Excel standard", note: "Le style bleu par défaut d'Excel", head: "4472C4", ink: "FFFFFF", rule: "4472C4", zebra: "D9E1F2", theme: "TableStyleMedium2", stripes: true },
+];
+export const xstyle = (id?: string) => XSTYLES.find((x) => x.id === id) ?? XSTYLES[0];
 
 const FMT: Record<ColKind, string | undefined> = {
   text: undefined, code: "@", int: "#,##0", num: "#,##0.00", eur: "#,##0.00", pct: "0.00%", date: "dd/mm/yyyy", bool: undefined,
@@ -69,7 +81,7 @@ export function tableName(s: string): string {
 }
 
 type Ws = import("exceljs").Worksheet;
-function addCleanTable(ws: Ws, name: string, headers: string[], kinds: (ColKind | undefined)[], rows: (string | number | Date | null)[][], totals?: boolean[]) {
+function addCleanTable(ws: Ws, name: string, headers: string[], kinds: (ColKind | undefined)[], rows: (string | number | Date | null)[][], totals?: boolean[], style: XStyle = XSTYLES[0]) {
   // Formats portés par les colonnes : chaque cellule créée ensuite les hérite (pas de boucle cellule par cellule)
   kinds.forEach((k, i) => {
     const col = ws.getColumn(i + 1);
@@ -82,13 +94,25 @@ function addCleanTable(ws: Ws, name: string, headers: string[], kinds: (ColKind 
   } else {
     ws.addTable({
       name, displayName: name, ref: "A1", headerRow: true, totalsRow: !!totals?.some(Boolean),
-      style: { theme: "TableStyleMedium2", showRowStripes: true },
+      style: { theme: style.theme, showRowStripes: style.stripes },
       columns: headers.map((h, i) => ({ name: h, filterButton: true, ...(totals?.some(Boolean)
         ? (i === 0 && !totals[0] ? { totalsRowLabel: "Total" } : totals[i] ? { totalsRowFunction: "sum" as const } : {}) : {}) })),
       rows,
     });
   }
   ws.views = [{ state: "frozen", xSplit: 0, ySplit: 1, activeCell: "A2" }];
+  // En-tête aux couleurs du style (une seule ligne : coût nul) ; le style natif du tableau garde filtres et lignes alternées
+  if (style.id !== "excel") {
+    const head = ws.getRow(1);
+    head.height = 22;
+    headers.forEach((_, i) => {
+      const c = head.getCell(i + 1);
+      c.font = { bold: true, color: { argb: `FF${style.ink}` } };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${style.head}` } };
+      c.border = { bottom: { style: "medium", color: { argb: `FF${style.rule}` } } };
+      c.alignment = { vertical: "middle", horizontal: kinds[i] && NUMERIC.has(kinds[i]!) ? "right" : "left" };
+    });
+  }
   // Largeurs selon le contenu (échantillon), bornées
   headers.forEach((h, i) => {
     const sample = rows.slice(0, 300).map((r) => { const v = r[i]; return v instanceof Date ? "00/00/0000" : typeof v === "number" ? v.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) + "   " : String(v ?? ""); });
@@ -110,12 +134,13 @@ export async function buildWorkbook<R>(spec: ExportSpec<R>): Promise<Blob> {
   const kinds = cols.map((c) => c.kind);
   const rows = spec.rows.map((r) => cols.map((c) => cellValue(c, r)));
   const ws = wb.addWorksheet((spec.sheet ?? "Données").replace(/[[\]:*?/\\]/g, " ").slice(0, 31) || "Données");
-  addCleanTable(ws, tableName(spec.sheet ?? spec.title), headers, kinds, rows, spec.totals ? cols.map((c) => !!c.sum) : undefined);
+  const st = xstyle(spec.style);
+  addCleanTable(ws, tableName(spec.sheet ?? spec.title), headers, kinds, rows, spec.totals ? cols.map((c) => !!c.sum) : undefined, st);
 
   if (spec.about !== false) {
     const dico = wb.addWorksheet("Dictionnaire");
     addCleanTable(dico, "T_Dictionnaire", ["Colonne", "Format", "Définition"], ["text", "text", "text"],
-      cols.map((c, i) => [headers[i], KIND_LABEL[c.kind ?? "text"], c.desc ?? ""]));
+      cols.map((c, i) => [headers[i], KIND_LABEL[c.kind ?? "text"], c.desc ?? ""]), undefined, st);
     const par = wb.addWorksheet("Paramètres");
     const kv: [string, string][] = [
       ["Contenu", spec.title],
@@ -128,7 +153,7 @@ export async function buildWorkbook<R>(spec: ExportSpec<R>): Promise<Blob> {
       ["Source", spec.mock ? "Données fictives au schéma exact du Lakehouse (aucune donnée réelle)" : "Microsoft Fabric — Lakehouse, lecture seule"],
       ["Diffusion", "Usage interne. Ne pas transmettre à l'extérieur sans validation."],
     ];
-    addCleanTable(par, "T_Parametres", ["Paramètre", "Valeur"], ["text", "text"], kv);
+    addCleanTable(par, "T_Parametres", ["Paramètre", "Valeur"], ["text", "text"], kv, undefined, st);
   }
   const buf = await wb.xlsx.writeBuffer();
   return new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });

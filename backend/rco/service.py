@@ -694,13 +694,14 @@ class Service:
         label, _ = self._client_kind()
         return sids.map(label).fillna("Clientèle non renseignée")
 
-    def _sankey(self, act: pd.DataFrame, share_aum: dict[str, float], top: int = 7, top_clients: int = 12) -> dict:
+    def _sankey(self, act: pd.DataFrame, share_aum: dict[str, float], top: int = 5, top_clients: int = 12) -> dict:
         """
-        Parcours d'une autorisation : clientèle de la part → pays d'enregistrement → famille de gestion du fonds.
-        Unité des flux : un enregistrement actif (une part autorisée dans un pays). Additive d'une colonne à l'autre,
-        contrairement aux encours qui, eux, ne se répartissent pas par pays dans les données.
-        Seules les `top_clients` plus grosses clientèles (encours des parts enregistrées à la date) sont dessinées, par encours
-        décroissant ; les autres sont résumées dans `rest` (nombre, enregistrements, encours) et restent dans la matrice.
+        Parcours des autorisations : pays d'enregistrement → clientèle de la part → famille de gestion du fonds.
+        Unité des flux : un enregistrement actif (une part autorisée dans un pays), additive d'une colonne à l'autre ;
+        les encours ne se répartissent pas par pays dans les données et ne sont jamais ventilés ainsi.
+        Détail volontairement réduit pour rester lisible : les `top_clients` plus grosses clientèles (encours des parts
+        enregistrées), de la plus grosse en haut à la plus petite en bas ; les autres sont résumées dans `rest`.
+        Pays : les `top` plus présents parmi ces clientèles, les suivants regroupés.
         """
         m = self.m
         if act.empty:
@@ -708,6 +709,8 @@ class Service:
         df = pd.DataFrame({"sid": act["pi_shareid"].values, "fid": act["fund_id"].values, "cty": act["country_fr"].values, "iso": act["iso"].values})
         df["fam"] = df["fid"].map(m.funds["family"]).fillna("nc")
         df["cli"] = self._clients(df["sid"]).values
+        _, kind = self._client_kind()
+        df["kind"] = df["sid"].map(kind).fillna("pool").values
         iso = dict(zip(df["cty"], df["iso"]))
         nodes, index = [], {}
 
@@ -717,49 +720,43 @@ class Service:
                 nodes.append({"id": key, "label": label, "col": col, **kw})
             return index[key]
 
-        # Colonne 1 : les clientèles, de la plus grosse (encours) à la plus petite ; les suivantes regroupées
-        _, kind = self._client_kind()
-        df["kind"] = df["sid"].map(kind).fillna("pool").values
-
         def aum_of(sids) -> float:
             return float(sum(share_aum.get(s, 0.0) for s in set(sids)))
 
         by_aum = sorted(((c, aum_of(g["sid"])) for c, g in df.groupby("cli")), key=lambda kv: (-kv[1], kv[0]))
-        keep_cli = {c for c, _ in by_aum[:top_clients]}
-        rest_df = df[~df["cli"].isin(keep_cli)]
+        keep_cli = [c for c, _ in by_aum[:top_clients]]
+        rest_df = df[~df["cli"].isin(set(keep_cli))]
         rest = {"n_clients": int(len(by_aum) - len(keep_cli)), "value": int(len(rest_df)), "aum": aum_of(rest_df["sid"])}
-        df = df[df["cli"].isin(keep_cli)].copy()
-        # Pays : les plus présents parmi les clientèles montrées, les suivants regroupés
+        df = df[df["cli"].isin(set(keep_cli))].copy()
         counts = df.groupby("cty")["sid"].count().sort_values(ascending=False)
-        keep = set(counts.index[:top])
+        keep = list(counts.index[:top])
         n_other = int(counts.index.size - len(keep))
-        df["dest"] = df["cty"].where(df["cty"].isin(keep), "Autres pays")
-        groups = []
-        for cname, g in df.groupby("cli"):
-            groups.append((cname, "nommé" if (g["kind"] == "nommé").any() else "pool", g, aum_of(g["sid"])))
-        groups.sort(key=lambda t: (-t[3], t[0]))
-        for cname, k, g, aum in groups:
-            node(f"k:{cname}", cname, 0, client=cname, kind=k, aum=aum, value=int(len(g)), n_funds=int(g["fid"].nunique()),
-                 n_shares=int(g["sid"].nunique()), other=False)
-        for cname in [*counts.index[:top], "Autres pays"]:
-            g = df[df["dest"] == cname]
+        df["src"] = df["cty"].where(df["cty"].isin(set(keep)), "Autres pays")
+        # Colonne 1 : les pays, du plus présent au moins présent, le regroupement en dernier
+        for cname in [*keep, "Autres pays"]:
+            g = df[df["src"] == cname]
             if len(g):
-                node(f"c:{cname}", cname if cname != "Autres pays" else f"{n_other} autres pays", 1, iso=iso.get(cname), value=int(len(g)),
+                node(f"c:{cname}", cname if cname != "Autres pays" else f"{n_other} autres pays", 0, iso=iso.get(cname), value=int(len(g)),
                      n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()), other=cname == "Autres pays")
-        fam_order = [f["key"] for f in L.FAMILIES] + ["nc"]
-        for k in fam_order:
+        # Colonne 2 : les clientèles, de la plus grosse (encours) en haut à la plus petite en bas
+        for rank, cname in enumerate(keep_cli, 1):
+            g = df[df["cli"] == cname]
+            node(f"k:{cname}", cname, 1, client=cname, kind="nommé" if (g["kind"] == "nommé").any() else "pool", aum=aum_of(g["sid"]), rank=rank,
+                 value=int(len(g)), n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()), other=False)
+        # Colonne 3 : les familles de gestion
+        for k in [f["key"] for f in L.FAMILIES] + ["nc"]:
             g = df[df["fam"] == k]
             if len(g):
                 node(f"f:{k}", self._family_label(k), 2, family=k, value=int(len(g)), n_funds=int(g["fid"].nunique()), n_shares=int(g["sid"].nunique()))
         links = []
-        # Clients → pays : un seul ruban neutre par couple (toutes familles) ; la couleur de famille n'apparaît qu'ensuite
-        for (a, b), g in df.groupby(["cli", "dest"]):
-            links.append({"source": index[f"k:{a}"], "target": index[f"c:{b}"], "value": int(len(g)), "family": "all",
+        # Pays → clientèles : ruban neutre ; la couleur de famille n'apparaît qu'ensuite
+        for (a, b), g in df.groupby(["src", "cli"]):
+            links.append({"source": index[f"c:{a}"], "target": index[f"k:{b}"], "value": int(len(g)), "family": "all",
                           "n_funds": int(g["fid"].nunique()), "n_shares": int(g["sid"].nunique())})
-        for (a, b), g in df.groupby(["dest", "fam"]):
-            links.append({"source": index[f"c:{a}"], "target": index[f"f:{b}"], "value": int(len(g)), "family": b,
+        for (a, b), g in df.groupby(["cli", "fam"]):
+            links.append({"source": index[f"k:{a}"], "target": index[f"f:{b}"], "value": int(len(g)), "family": b,
                           "n_funds": int(g["fid"].nunique()), "n_shares": int(g["sid"].nunique())})
-        return {"unit": "enregistrements", "nodes": nodes, "links": links, "order": ["clients", "pays", "familles"],
+        return {"unit": "enregistrements", "nodes": nodes, "links": links, "order": ["pays", "clients", "familles"],
                 "sort": "encours", "rest": rest, "named_column": self.NAMED_COL}
 
     def _client_map(self, act: pd.DataFrame) -> list[dict]:

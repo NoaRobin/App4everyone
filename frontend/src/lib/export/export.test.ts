@@ -16,7 +16,7 @@ describe("export de données", () => {
     for (const s of SOURCES) {
       const keys = s.columns.map((c) => c.key);
       expect(new Set(keys).size, s.id).toBe(keys.length);
-      for (const lvl of ["maison", "famille", "fonds", "part"] as const) s.defaults({ ...DEFAULT_SRC, level: lvl }).forEach((k) => expect(keys, `${s.id} → ${k}`).toContain(k));
+      for (const lvl of ["maison", "famille", "fonds", "part"] as const) s.defaults({ ...DEFAULT_SRC, level: lvl }).filter((k) => !k.startsWith("pi.")).forEach((k) => expect(keys, `${s.id} → ${k}`).toContain(k));
     }
   });
 
@@ -52,7 +52,7 @@ describe("export de données", () => {
   });
 
   it("classeur propre : tableau structuré en A1, vrais types, aucune fusion, dictionnaire et paramètres", async () => {
-    const blob = await buildWorkbook({ title: "Test", filename: "t", sheet: "Encours", rows, columns: cols, grain: "Une ligne par fonds et par date", context: [{ label: "Période", value: "2026" }], totals: true });
+    const blob = await buildWorkbook({ title: "Test", filename: "t", sheet: "Encours", rows, columns: cols, grain: "Une ligne par fonds et par date", context: [{ label: "Période", value: "2026" }], totals: true, style: "bordeaux" });
     const ExcelJS = (await import("exceljs")).default;
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(await blob.arrayBuffer());
@@ -66,5 +66,6 @@ describe("export de données", () => {
     expect(ws.getCell("D2").numFmt).toBe("0.00%");
     expect(Object.keys((ws as unknown as { _merges: object })._merges)).toHaveLength(0);
     expect(ws.getTables().length).toBe(1);
+    expect((ws.getCell("A1").fill as { fgColor?: { argb?: string } }).fgColor?.argb).toBe("FF8A1E41");
   });
 });

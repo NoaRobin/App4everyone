@@ -45,6 +45,7 @@ export function BookSection({ asOf, source }: { asOf?: string | null; source?: s
   const d = data ?? last;
   const [q, setQ] = useState("");
   const [sel, setSel] = useState<string | null>(null);
+  const [nList, setNList] = useState(10);
   const clients = d?.clients ?? [];
   const shown = useMemo(() => {
     const f = q.trim().toLowerCase();
@@ -97,7 +98,7 @@ export function BookSection({ asOf, source }: { asOf?: string | null; source?: s
           : clients.length === 0 ? <div className="pb__empty small muted">Aucun client à la date de la photo.</div> : (
           <div className="pb__g">
             <ol className="pb__list" aria-label="Clients par encours décroissant">
-              {shown.map(({ c, rank }) => (
+              {shown.slice(0, q.trim() ? 60 : nList).map(({ c, rank }) => (
                 <li key={c.client}>
                   <button type="button" className={`pb__row${cur?.client === c.client ? " is-on" : ""}`} aria-pressed={cur?.client === c.client} onClick={() => setSel(c.client)}>
                     <span className="pb__rk num">{String(rank).padStart(2, "0")}</span>
@@ -108,6 +109,9 @@ export function BookSection({ asOf, source }: { asOf?: string | null; source?: s
                 </li>
               ))}
               {shown.length === 0 && <li className="small muted pb__none">Aucun client ne correspond.</li>}
+              {!q.trim() && shown.length > nList && (
+                <li><button type="button" className="pb__more" onClick={() => setNList((n) => n + 20)}>Afficher plus de clients <span className="muted">· {shown.length - nList} autres</span></button></li>
+              )}
             </ol>
             {cur && <ClientDetail c={cur} rank={clients.indexOf(cur) + 1} />}
           </div>
@@ -122,6 +126,8 @@ export function BookSection({ asOf, source }: { asOf?: string | null; source?: s
 
 function ClientDetail({ c, rank }: { c: BookClient; rank: number }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [nf, setNf] = useState(4);
+  useEffect(() => setNf(4), [c.client]);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || prefersReducedMotion()) return;
@@ -151,7 +157,7 @@ function ClientDetail({ c, rank }: { c: BookClient; rank: number }) {
       <table className="t pb__t">
         <caption className="sr-only">Fonds et parts de {c.client}</caption>
         <thead><tr><th scope="col">Fonds · part</th><th scope="col">ISIN</th><th scope="col" className="n">Encours</th><th scope="col" className="n">Part du client</th></tr></thead>
-        {c.funds.map((f, i) => (
+        {c.funds.slice(0, nf).map((f, i) => (
           <tbody key={i} className="pb__fund">
             <tr className="pb__fr">
               <th scope="rowgroup">
@@ -161,7 +167,7 @@ function ClientDetail({ c, rank }: { c: BookClient; rank: number }) {
               <td className="n num"><b>{eur(f.encours)}</b></td>
               <td className="n"><span className="pb__fbar" aria-hidden="true"><i style={{ width: `${f.pct_of_client ?? 0}%` }} /></span><span className="num">{fp(f.pct_of_client)}</span></td>
             </tr>
-            {f.shares.map((s, k) => (
+            {f.shares.slice(0, 3).map((s, k) => (
               <tr key={k} className="pb__sr">
                 <td>{s.share ?? <span className="muted">Part sans libellé</span>}</td>
                 <td><code>{s.isin ?? "—"}</code></td>
@@ -169,9 +175,13 @@ function ClientDetail({ c, rank }: { c: BookClient; rank: number }) {
                 <td className="n num small muted">{fp(c.encours ? (100 * s.encours) / c.encours : null)}</td>
               </tr>
             ))}
+            {f.shares.length > 3 && <tr className="pb__sr"><td colSpan={4} className="small muted">+ {f.shares.length - 3} autres parts · {eur(f.shares.slice(3).reduce((a, s) => a + s.encours, 0))}</td></tr>}
           </tbody>
         ))}
       </table>
+      {c.funds.length > nf && (
+        <button type="button" className="pb__more" onClick={() => setNf((n) => n + 6)}>Afficher plus de fonds <span className="muted">· {c.funds.length - nf} autres, {eur(c.funds.slice(nf).reduce((a, f) => a + f.encours, 0))}</span></button>
+      )}
     </div>
   );
 }

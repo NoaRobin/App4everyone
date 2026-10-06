@@ -7,7 +7,7 @@
  *   Rapport (second plan)     le studio de rapports mis en forme (graphiques, styles, page de garde) et sa version PDF.
  * Tout est généré dans le navigateur à partir des API de l'application (lecture seule) : rien n'est écrit côté serveur.
  */
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/context";
 import { useApi } from "../lib/api";
@@ -15,15 +15,15 @@ import { date as fdate } from "../lib/format";
 import { gsap } from "../lib/gsap";
 import { prefersReducedMotion } from "../lib/motion";
 import type { FundRow } from "../lib/types";
-import { buildWorkbook, cellValue, download, toCsv, toTsv, uniqueHeaders, KIND_LABEL, type ExportCol } from "../lib/xlsx";
-import { DEFAULT_SRC, FAMILY_CHOICES, FREQS, LEVELS, SOURCES, SPANS, periodBounds, sourceById, type Loaded, type Row, type SrcParams } from "../lib/export/sources";
+import { buildWorkbook, cellValue, download, toCsv, toTsv, uniqueHeaders, xstyle, KIND_LABEL, XSTYLES, type ExportCol } from "../lib/xlsx";
+import { DEFAULT_SRC, FAMILY_CHOICES, FREQS, LEVELS, SOURCES, SPANS, periodBounds, sourceById, type Loaded, type Pack, type Row, type SrcParams } from "../lib/export/sources";
 import { EMPTY, applyFilters, applySort, defaultFilter, describe, facet, isActive, type Filter, type Sort } from "../lib/export/filters";
 import { DIMS } from "../lib/report/datasets";
 import * as I from "../components/Icon";
 import { ReportStudio } from "./ExportReport";
 import "../styles/xport.css";
 
-type Cfg = { src: string; p: SrcParams; cols: string[]; names: Record<string, string>; filters: Filter[]; sort: Sort; format: "xlsx" | "csv"; dico: boolean; totals: boolean; file: string };
+type Cfg = { src: string; p: SrcParams; cols: string[]; names: Record<string, string>; filters: Filter[]; sort: Sort; format: "xlsx" | "csv"; dico: boolean; totals: boolean; file: string; style?: string };
 type Model = { id: string; name: string; cfg: Cfg; at: string };
 const KEY = "export-data", MODELS = "export-models";
 const store = {
@@ -51,7 +51,7 @@ export default function ExportPage() {
     return () => ctx.revert();
   }, []);
   return (
-    <div className="xp">
+    <div className="xpage">
       <header className="xp-h" ref={hero}>
         <div className="xp-h__in">
           <div>
@@ -78,7 +78,7 @@ export default function ExportPage() {
 // ================================================================== mode « Données »
 function DataExport() {
   const { api, asOf, meta } = useApp();
-  const [cfg, setCfg] = useState<Cfg>(() => { const c = store.get<Cfg | null>(KEY, null); return c && SOURCES.some((s) => s.id === c.src) ? { ...fresh(c.src), ...c, p: { ...DEFAULT_SRC, ...c.p } } : fresh("encours"); });
+  const [cfg, setCfg] = useState<Cfg>(() => { const c = store.get<Cfg | null>(KEY, null); return c && SOURCES.some((s) => s.id === c.src) ? { ...fresh(c.src), ...c, p: { ...DEFAULT_SRC, ...c.p } } : fresh("fonds"); });
   const [models, setModels] = useState<Model[]>(() => store.get<Model[]>(MODELS, []));
   const [res, setRes] = useState<{ key: string; data?: Loaded; error?: string } | null>(null);
   const [busy, setBusy] = useState<"" | "file" | "copy">("");
@@ -101,26 +101,31 @@ function DataExport() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadKey, api]);
   const loading = !res || res.key !== loadKey || (!res.data && !res.error);
-  const rows = res?.key === loadKey ? res.data?.rows ?? [] : [];
+  const data = res?.key === loadKey ? res.data : undefined;
+  const rows = data?.rows ?? [];
 
-  // colonnes disponibles : celles de la source présentes dans les lignes (le niveau de détail en ajoute ou en retire)
+  // Champs : Product Info d'abord (référentiel complet), puis les mesures de l'application présentes dans les lignes
   const avail = useMemo(() => {
-    if (!rows.length) return src.columns;
-    const keys = new Set(Object.keys(rows[0]));
-    return src.columns.filter((c) => c.get || keys.has(c.key));
-  }, [rows, src]);
+    const keys = rows.length ? new Set(Object.keys(rows[0])) : null;
+    const own = src.columns.filter((c) => !keys || c.get || keys.has(c.key));
+    return [...(data?.columns ?? []), ...own];
+  }, [rows, src, data]);
   const byKey = useMemo(() => new Map(avail.map((c) => [c.key, c])), [avail]);
+  const packs = data?.packs ?? [];
   const cols = cfg.cols.filter((k) => byKey.has(k)).map((k) => byKey.get(k)!);
   const headers = uniqueHeaders(cols.map((c) => cfg.names[c.key]?.trim() || c.label));
   const filtered = useMemo(() => applySort(applyFilters(rows, cfg.filters, byKey), cfg.sort, byKey), [rows, cfg.filters, cfg.sort, byKey]);
+  const setCols = (k: string[]) => set((c) => ({ ...c, cols: k }));
+  const toggleCol = (k: string) => setCols(cfg.cols.includes(k) ? cfg.cols.filter((x) => x !== k) : [...cfg.cols, k]);
 
   const bounds = periodBounds(cfg.p, asOf ?? null);
   const grain = src.grain(cfg.p);
+  const st = xstyle(cfg.style);
   const context = [
     ...(asOf ? [{ label: "Date de valeur", value: fdate(asOf) }] : []),
     ...(src.controls.includes("level") ? [{ label: "Niveau de détail", value: LEVELS.find((l) => l.id === cfg.p.level)!.label }] : []),
     ...(src.controls.includes("freq") ? [{ label: "Pas de temps", value: FREQS.find((f) => f.id === cfg.p.freq)!.label }] : []),
-    ...(src.controls.includes("period") ? [{ label: "Période", value: res?.data?.period?.from ? `du ${fdate(res.data.period.from)} au ${fdate(res.data.period.to ?? asOf ?? "")}` : SPANS.find((s) => s.id === cfg.p.span)!.label }] : []),
+    ...(src.controls.includes("period") ? [{ label: "Période", value: data?.period?.from ? `du ${fdate(data.period.from)} au ${fdate(data.period.to ?? asOf ?? "")}` : SPANS.find((x) => x.id === cfg.p.span)!.label }] : []),
     ...(src.controls.includes("families") && cfg.p.families.length ? [{ label: "Familles", value: cfg.p.families.map((f) => FAMILY_CHOICES.find((x) => x.id === f)?.label ?? f).join(", ") }] : []),
     ...(src.controls.includes("funds") && cfg.p.funds.length ? [{ label: "Fonds", value: `${cfg.p.funds.length} fonds choisis` }] : []),
     ...(src.controls.includes("rmm") ? [{ label: "Fonds RMM", value: cfg.p.rmm ? "inclus" : "exclus" }] : []),
@@ -130,7 +135,7 @@ function DataExport() {
     ...cfg.filters.filter(isActive).map((f) => ({ label: "Filtre", value: describe(f, byKey.get(f.col)) })),
     ...(cfg.sort && byKey.has(cfg.sort.col) ? [{ label: "Tri", value: `${byKey.get(cfg.sort.col)!.label} ${cfg.sort.dir === 1 ? "croissant" : "décroissant"}` }] : []),
   ];
-  const fname = (cfg.file.trim() || `${slug(src.label)}-${slug(grain.replace(/^une ligne par /, ""))}-${(asOf ?? new Date().toISOString()).slice(0, 10)}`).replace(/\.(xlsx|csv)$/i, "");
+  const fname = (cfg.file.trim() || `${slug(src.label)}-${(asOf ?? new Date().toISOString()).slice(0, 10)}`).replace(/\.(xlsx|csv)$/i, "");
   const exportCols: ExportCol<Row>[] = cols.map((c, i) => ({ ...c, label: headers[i] }));
 
   const go = async () => {
@@ -138,7 +143,7 @@ function DataExport() {
     try {
       if (cfg.format === "csv") download(toCsv(filtered, exportCols, headers), `${fname}.csv`);
       else download(await buildWorkbook({ title: src.label, subtitle: src.description, grain: cap(grain), filename: fname, sheet: src.label,
-        rows: filtered, columns: exportCols, context, mock: !!meta?.is_mock, totals: cfg.totals, about: cfg.dico }), `${fname}.xlsx`);
+        rows: filtered, columns: exportCols, context, mock: !!meta?.is_mock, totals: cfg.totals, about: cfg.dico, style: cfg.style }), `${fname}.xlsx`);
       setFlash(`${filtered.length.toLocaleString("fr-FR")} lignes exportées`);
     } finally { setBusy(""); }
   };
@@ -150,178 +155,236 @@ function DataExport() {
   };
   useEffect(() => { if (!flash) return; const t = window.setTimeout(() => setFlash(""), 3200); return () => window.clearTimeout(t); }, [flash]);
   const saveModel = () => {
-    const name = window.prompt("Nom de ce modèle d'export", `${src.label} · ${grain.replace(/^une ligne par /, "")}`);
+    const name = window.prompt("Nom de ce modèle d'export", `${src.label} · ${cols.length} champs`);
     if (!name) return;
     setModels((m) => [{ id: Math.random().toString(36).slice(2, 9), name, cfg, at: new Date().toISOString() }, ...m].slice(0, 24));
     setFlash("Modèle enregistré");
   };
-  const pickSource = (id: string) => set((c) => (c.src === id ? c : fresh(id, { ...c.p })));
+  const pickSource = (id: string) => set((c) => (c.src === id ? c : { ...fresh(id, { ...c.p }), style: c.style, format: c.format, dico: c.dico }));
   const levelChange = (l: SrcParams["level"]) => set((c) => ({ ...c, p: { ...c.p, level: l }, cols: sourceById(c.src).defaults({ ...c.p, level: l }) }));
+  const featured = SOURCES.filter((x) => x.featured);
+  const others = SOURCES.filter((x) => !x.featured);
 
   return (
-    <div className="xd2">
-      <div className="xd2__cfg">
-        {models.length > 0 && (
-          <section className="xs xs--models" aria-label="Mes modèles d'export">
-            <div className="xs__h"><span className="eyebrow">Mes modèles</span></div>
-            <ul className="xm">
-              {models.map((m) => (
-                <li key={m.id}>
-                  <button type="button" className="xm__b" onClick={() => setCfg({ ...fresh(m.cfg.src), ...m.cfg })}><b>{m.name}</b><span>{sourceById(m.cfg.src).label}</span></button>
-                  <button type="button" className="xm__x" aria-label={`Supprimer le modèle ${m.name}`} onClick={() => setModels((x) => x.filter((y) => y.id !== m.id))}><I.Close size={12} /></button>
-                </li>
+    <div className="xw">
+      {/* ------------------------------------------------ 1. la source */}
+      <section className="xw__src" aria-label="Que voulez-vous exporter ?">
+        <div className="xw__h"><span className="xw__n num">01</span><h2>Que voulez-vous exporter&nbsp;?</h2>
+          {models.length > 0 && (
+            <div className="xw__models" aria-label="Mes modèles">
+              <span className="small muted">Mes modèles</span>
+              {models.slice(0, 6).map((m) => (
+                <span key={m.id} className="xw__model">
+                  <button type="button" onClick={() => setCfg({ ...fresh(m.cfg.src), ...m.cfg })}>{m.name}</button>
+                  <button type="button" aria-label={`Supprimer le modèle ${m.name}`} onClick={() => setModels((x) => x.filter((y) => y.id !== m.id))}><I.Close size={11} /></button>
+                </span>
               ))}
-            </ul>
-          </section>
-        )}
-
-        <Step n="01" title="Source" sub={cap(grain)}>
-          <div className="xsrc">
-            {(["Gestion", "Distribution", "Portefeuilles", "Passif"] as const).map((g) => (
-              <div key={g} className="xsrc__g" role="radiogroup" aria-label={g}>
-                <div className="xsrc__gh">{g}</div>
-                {SOURCES.filter((s) => s.group === g).map((s) => (
-                  <button key={s.id} type="button" role="radio" aria-checked={cfg.src === s.id} className={`xsrc__b${cfg.src === s.id ? " is-on" : ""}`} onClick={() => pickSource(s.id)} title={s.description}>
-                    <b>{s.label}</b><i>{cap(s.grain(cfg.src === s.id ? cfg.p : DEFAULT_SRC))}</i>
-                  </button>
+            </div>
+          )}
+        </div>
+        <div className="xw__srcs" role="radiogroup" aria-label="Source">
+          {featured.map((x) => (
+            <button key={x.id} type="button" role="radio" aria-checked={cfg.src === x.id} className={`xf1${cfg.src === x.id ? " is-on" : ""}`} onClick={() => pickSource(x.id)}>
+              <span className="xf1__tag">Product Info{cfg.src === x.id && data?.columns ? ` · ${data.columns.length} champs` : " · tous les champs"}</span>
+              <b>{x.label}</b><span className="xf1__d">{x.description}</span><i>{cap(x.grain(DEFAULT_SRC))}</i>
+            </button>
+          ))}
+          <div className="xw__others">
+            {(["Gestion", "Distribution", "Portefeuilles", "Passif"] as const).map((g) => others.some((x) => x.group === g) && (
+              <div key={g} className="xw__og"><span>{g}</span>
+                {others.filter((x) => x.group === g).map((x) => (
+                  <button key={x.id} type="button" role="radio" aria-checked={cfg.src === x.id} className={`xf2${cfg.src === x.id ? " is-on" : ""}`} onClick={() => pickSource(x.id)} title={`${x.description} — ${x.grain(DEFAULT_SRC)}`}>{x.label}</button>
                 ))}
               </div>
             ))}
           </div>
-          <p className="xsrc__d small">{src.description}.</p>
-          {src.nominative && <p className="xs__warn small"><I.Alert size={14} /> Données nominatives, usage interne : calculées à la demande dans la source.</p>}
-        </Step>
+        </div>
+        {src.nominative && <p className="xs__warn small"><I.Alert size={14} /> Données nominatives, usage interne : calculées à la demande dans la source.</p>}
+      </section>
 
-        {src.controls.length > 0 && (
-          <Step n="02" title="Niveau de détail et période" sub={context.filter((c) => c.label !== "Filtre" && c.label !== "Tri" && c.label !== "Date de valeur").map((c) => c.value).join(" · ")}>
-            {src.controls.includes("level") && (
-              <Field label="Niveau de détail">
-                <Seg value={cfg.p.level} onChange={levelChange} options={LEVELS.map((l) => [l.id, l.label])} />
-              </Field>
-            )}
-            {src.controls.includes("freq") && <Field label="Pas de temps"><Seg value={cfg.p.freq} onChange={(v) => setP("freq", v)} options={FREQS.map((f) => [f.id, f.label])} /></Field>}
-            {src.controls.includes("period") && (
-              <Field label="Période">
-                <Seg value={cfg.p.span} onChange={(v) => setP("span", v)} options={SPANS.map((s) => [s.id, s.label])} wrap />
-                {cfg.p.span === "perso" && (
-                  <div className="xs__dates">
-                    <label>Du <input type="date" value={cfg.p.from} max={asOf ?? undefined} onChange={(e) => setP("from", e.target.value)} /></label>
-                    <label>au <input type="date" value={cfg.p.to} max={asOf ?? undefined} onChange={(e) => setP("to", e.target.value)} /></label>
-                  </div>
-                )}
-                {cfg.p.span !== "perso" && <p className="small muted xs__hint">{bounds.from ? `Du ${fdate(bounds.from)} au ${fdate(asOf ?? "")}` : "Tout l'historique disponible"}</p>}
-              </Field>
-            )}
-            {src.controls.includes("families") && (
-              <Field label="Familles de gestion">
-                <div className="xchips">
-                  {FAMILY_CHOICES.map((f) => {
-                    const on = cfg.p.families.includes(f.id);
-                    return <button key={f.id} type="button" aria-pressed={on} className={`chip${on ? " chip--on" : ""}`} onClick={() => setP("families", on ? cfg.p.families.filter((x) => x !== f.id) : [...cfg.p.families, f.id])}>{f.label}</button>;
-                  })}
-                  {cfg.p.families.length > 0 && <button type="button" className="link small" onClick={() => setP("families", [])}>Toutes</button>}
+      {/* ------------------------------------------------ 2. périmètre (seulement les réglages utiles à la source) */}
+      {src.controls.length > 0 && (
+        <section className="xw__scope" aria-label="Périmètre">
+          {src.controls.includes("level") && <Field label="Niveau de détail"><Seg value={cfg.p.level} onChange={levelChange} options={LEVELS.map((l) => [l.id, l.label])} /></Field>}
+          {src.controls.includes("freq") && <Field label="Pas de temps"><Seg value={cfg.p.freq} onChange={(v) => setP("freq", v)} options={FREQS.map((f) => [f.id, f.label])} /></Field>}
+          {src.controls.includes("period") && (
+            <Field label={`Période${cfg.p.span !== "perso" ? ` · ${bounds.from ? `du ${fdate(bounds.from)} au ${fdate(asOf ?? "")}` : "tout l'historique"}` : ""}`}>
+              <Seg value={cfg.p.span} onChange={(v) => setP("span", v)} options={SPANS.map((x) => [x.id, x.label])} wrap />
+              {cfg.p.span === "perso" && (
+                <div className="xs__dates">
+                  <label>Du <input type="date" value={cfg.p.from} max={asOf ?? undefined} onChange={(e) => setP("from", e.target.value)} /></label>
+                  <label>au <input type="date" value={cfg.p.to} max={asOf ?? undefined} onChange={(e) => setP("to", e.target.value)} /></label>
                 </div>
-              </Field>
-            )}
-            {src.controls.includes("funds") && <Field label="Fonds"><FundPicker value={cfg.p.funds} onChange={(v) => setP("funds", v)} /></Field>}
-            {src.controls.includes("dim") && (
-              <Field label="Axe de répartition">
-                <select className="xs__sel" value={cfg.p.dim} onChange={(e) => setP("dim", e.target.value)}>{DIMS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}</select>
-              </Field>
-            )}
-            {src.controls.includes("rmm") && <Toggle on={cfg.p.rmm} set={(v) => setP("rmm", v)} label="Inclure les fonds Rothschild Martin Maurel" />}
-            {src.controls.includes("actifs") && <Toggle on={!cfg.p.actifs} set={(v) => setP("actifs", !v)} label="Inclure les enregistrements inactifs" />}
-            {src.controls.includes("top") && <Field label="Clients"><Seg value={String(cfg.p.top)} onChange={(v) => setP("top", Number(v))} options={[["60", "60 premiers"], ["150", "150 premiers"], ["300", "300 premiers"]]} /></Field>}
-          </Step>
-        )}
-
-        <Step n={src.controls.length ? "03" : "02"} title="Filtres" sub={cfg.filters.filter(isActive).length ? `${cfg.filters.filter(isActive).length} actif(s) · ${filtered.length.toLocaleString("fr-FR")} lignes sur ${rows.length.toLocaleString("fr-FR")}` : "Aucun : toutes les lignes"}>
-          <Filters rows={rows} cols={avail} filters={cfg.filters} onChange={(f) => set((c) => ({ ...c, filters: f }))} />
-        </Step>
-
-        <Step n={src.controls.length ? "04" : "03"} title="Colonnes" sub={`${cols.length} sur ${avail.length} · glisser pour réordonner, cliquer un intitulé pour le renommer`}>
-          <Columns avail={avail} sel={cfg.cols.filter((k) => byKey.has(k))} names={cfg.names} defaults={src.defaults(cfg.p).filter((k) => byKey.has(k))}
-            onSel={(s) => set((c) => ({ ...c, cols: s }))} onName={(k, v) => set((c) => ({ ...c, names: { ...c.names, [k]: v } }))} />
-        </Step>
-
-        <Step n={src.controls.length ? "05" : "04"} title="Fichier" sub={cfg.format === "xlsx" ? "Classeur Excel · tableau structuré" : "CSV · séparateur point-virgule"}>
-          <Field label="Format">
-            <Seg value={cfg.format} onChange={(v) => set((c) => ({ ...c, format: v }))} options={[["xlsx", "Excel (.xlsx)"], ["csv", "CSV (.csv)"]]} />
-          </Field>
-          <Field label="Tri">
-            <div className="xs__sort">
-              <select className="xs__sel" value={cfg.sort?.col ?? ""} onChange={(e) => set((c) => ({ ...c, sort: e.target.value ? { col: e.target.value, dir: c.sort?.dir ?? -1 } : null }))}>
-                <option value="">Ordre de la source</option>
-                {cols.map((c, i) => <option key={c.key} value={c.key}>{headers[i]}</option>)}
-              </select>
-              {cfg.sort && <Seg value={String(cfg.sort.dir)} onChange={(v) => set((c) => ({ ...c, sort: c.sort && { ...c.sort, dir: Number(v) as 1 | -1 } }))} options={[["1", "Croissant"], ["-1", "Décroissant"]]} />}
-            </div>
-          </Field>
-          {cfg.format === "xlsx" && (
-            <>
-              <Toggle on={cfg.dico} set={(v) => set((c) => ({ ...c, dico: v }))} label="Onglets « Dictionnaire » et « Paramètres »" sub="Définition de chaque colonne ; source, période et filtres du fichier" />
-              <Toggle on={cfg.totals} set={(v) => set((c) => ({ ...c, totals: v }))} label="Ligne de totaux du tableau" sub="Reconnue comme telle par Excel : elle suit les filtres et n'est pas lue comme une donnée" />
-            </>
+              )}
+            </Field>
           )}
-          <Field label="Nom du fichier">
-            <input className="xs__in" value={cfg.file} placeholder={fname} onChange={(e) => set((c) => ({ ...c, file: e.target.value }))} />
-          </Field>
-        </Step>
-      </div>
+          {src.controls.includes("families") && (
+            <Field label="Familles de gestion">
+              <div className="xchips">
+                {FAMILY_CHOICES.map((f) => {
+                  const on = cfg.p.families.includes(f.id);
+                  return <button key={f.id} type="button" aria-pressed={on} className={`chip${on ? " chip--on" : ""}`} onClick={() => setP("families", on ? cfg.p.families.filter((x) => x !== f.id) : [...cfg.p.families, f.id])}>{f.label}</button>;
+                })}
+                {cfg.p.families.length > 0 && <button type="button" className="link small" onClick={() => setP("families", [])}>Toutes</button>}
+              </div>
+            </Field>
+          )}
+          {src.controls.includes("funds") && <Field label="Fonds"><FundPicker value={cfg.p.funds} onChange={(v) => setP("funds", v)} /></Field>}
+          {src.controls.includes("dim") && (
+            <Field label="Axe de répartition"><select className="xs__sel" value={cfg.p.dim} onChange={(e) => setP("dim", e.target.value)}>{DIMS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}</select></Field>
+          )}
+          {src.controls.includes("rmm") && <Toggle on={cfg.p.rmm} set={(v) => setP("rmm", v)} label="Fonds Rothschild Martin Maurel inclus" />}
+          {src.controls.includes("actifs") && <Toggle on={!cfg.p.actifs} set={(v) => setP("actifs", !v)} label="Enregistrements inactifs inclus" />}
+          {src.controls.includes("top") && <Field label="Clients"><Seg value={String(cfg.p.top)} onChange={(v) => setP("top", Number(v))} options={[["60", "60 premiers"], ["150", "150 premiers"], ["300", "300 premiers"]]} /></Field>}
+        </section>
+      )}
 
-      {/* ---------------------------------------------------------- aperçu et sortie */}
-      <div className="xd2__out">
-        <div className="xpv">
-          <div className="xpv__bar">
-            <span className="xpv__dots" aria-hidden="true"><i /><i /><i /></span>
-            <span className="xpv__file mono">{fname}.{cfg.format}</span>
-            <span className="xpv__meta small" aria-live="polite">{loading ? "Chargement…" : `${filtered.length.toLocaleString("fr-FR")} lignes × ${cols.length} colonnes`}</span>
+      {/* ------------------------------------------------ 3. les champs, la feuille, le fichier */}
+      <div className="xw__main">
+        <FieldLibrary avail={avail} packs={packs} sel={cfg.cols} loading={loading} onToggle={toggleCol} onSet={setCols} />
+        <div className="xw__stage">
+          <div className="xw__bar">
+            <span className="xw__n num">03</span>
+            <div className="xw__grain"><b>{cap(grain)}</b><span className="small muted">{loading ? "Chargement…" : `${filtered.length.toLocaleString("fr-FR")} lignes${filtered.length !== rows.length ? ` sur ${rows.length.toLocaleString("fr-FR")}` : ""} × ${cols.length} colonnes`}</span></div>
+            <Filters rows={rows} cols={avail} filters={cfg.filters} onChange={(f) => set((c) => ({ ...c, filters: f }))} />
           </div>
-          <div className="xpv__grain"><b>{cap(grain)}</b>{cfg.format === "xlsx" ? <> · tableau Excel <code>T_{slug(src.label).replace(/-/g, "_")}</code> en A1</> : null}</div>
-          <div className="xpv__sheet">
+          <div className="xw__sheet" style={{ ["--h-bg" as string]: `#${st.head}`, ["--h-ink" as string]: `#${st.ink}`, ["--h-rule" as string]: `#${st.rule}`, ["--z" as string]: st.zebra ? `#${st.zebra}` : "#fff" }}>
             {res?.error && res.key === loadKey ? <div className="xpv__msg"><I.Alert size={18} /> {res.error}</div>
-              : res?.data?.tooMany ? <div className="xpv__msg"><I.Info size={18} /> Cette extraction produirait {res.data.tooMany.n.toLocaleString("fr-FR")} lignes (limite&nbsp;: {res.data.tooMany.limit.toLocaleString("fr-FR")}). Choisissez un pas de temps plus large, une période plus courte ou moins de fonds.</div>
+              : data?.tooMany ? <div className="xpv__msg"><I.Info size={18} /> Cette extraction produirait {data.tooMany.n.toLocaleString("fr-FR")} lignes (limite&nbsp;: {data.tooMany.limit.toLocaleString("fr-FR")}). Choisissez un pas de temps plus large, une période plus courte ou moins de fonds.</div>
               : loading ? <div className="xpv__msg xpv__msg--load"><span className="xpv__spin" aria-hidden="true" /> Préparation des lignes…</div>
-              : !cols.length ? <div className="xpv__msg">Choisissez au moins une colonne.</div>
-              : <Preview rows={filtered} cols={cols} headers={headers} sort={cfg.sort} onSort={(k) => set((c) => ({ ...c, sort: c.sort?.col === k ? (c.sort.dir === -1 ? { col: k, dir: 1 } : null) : { col: k, dir: -1 } }))} />}
+              : !cols.length ? (
+                <div className="xw__empty">
+                  <b>Votre tableau est vide.</b>
+                  <span>Commencez par un pack de champs, ou cochez des champs à gauche.</span>
+                  <div className="xw__emptyp">{packs.slice(0, 6).map((p) => <button key={p.id} type="button" onClick={() => setCols(p.keys.filter((k) => byKey.has(k)))}>{p.label}</button>)}
+                    <button type="button" onClick={() => setCols(src.defaults(cfg.p).filter((k) => byKey.has(k)))}>Sélection conseillée</button></div>
+                </div>
+              ) : (
+                <Sheet rows={filtered} cols={cols} headers={headers} names={cfg.names} sort={cfg.sort} zebra={!!st.zebra}
+                  onSort={(k) => set((c) => ({ ...c, sort: c.sort?.col === k ? (c.sort.dir === -1 ? { col: k, dir: 1 } : null) : { col: k, dir: -1 } }))}
+                  onMove={(from, to) => { const t = cfg.cols.filter((k) => byKey.has(k)); const [x] = t.splice(from, 1); t.splice(to, 0, x); setCols(t); }}
+                  onRemove={(k) => toggleCol(k)} onRename={(k, v) => set((c) => ({ ...c, names: { ...c.names, [k]: v } }))} />
+              )}
           </div>
-          {!loading && filtered.length > 0 && (
-            <Totals rows={filtered} cols={cols} headers={headers} />
-          )}
-        </div>
-        <div className="xgo">
-          <div className="xgo__ctx small muted">{context.slice(0, 6).map((c) => `${c.label} : ${c.value}`).join(" · ")}{meta?.is_mock ? " · données fictives" : ""}</div>
-          <div className="xgo__b">
-            {flash && <span className="xgo__flash small" role="status"><I.Check size={14} /> {flash}</span>}
-            <button type="button" className="btn btn--ghost" onClick={saveModel} title="Retrouver ces réglages en un clic">Enregistrer le modèle</button>
-            <button type="button" className="btn btn--ghost" onClick={copy} disabled={loading || !filtered.length || !cols.length || !!busy} title="Copier les lignes (100 000 au plus) pour les coller dans Excel">{busy === "copy" ? "Copie…" : "Copier pour Excel"}</button>
-            <button type="button" className="btn btn--gold xgo__main" onClick={go} disabled={loading || !filtered.length || !cols.length || !!busy}>
-              <I.Download size={16} /> {busy === "file" ? "Génération…" : `Télécharger · ${filtered.length.toLocaleString("fr-FR")} lignes`}
-            </button>
+
+          {/* ---------------------------------------------- le fichier */}
+          <div className="xdock">
+            <div className="xdock__styles" role="radiogroup" aria-label="Style du tableau">
+              {XSTYLES.map((x) => (
+                <button key={x.id} type="button" role="radio" aria-checked={cfg.style === x.id || (!cfg.style && x.id === "rco")} className="xdock__st" onClick={() => set((c) => ({ ...c, style: x.id }))} title={x.note}>
+                  <span className="xdock__sw" aria-hidden="true"><i style={{ background: `#${x.head}`, borderBottomColor: `#${x.rule}` }} /><i style={{ background: x.zebra ? `#${x.zebra}` : "#fff" }} /><i /></span>
+                  <span>{x.label}</span>
+                </button>
+              ))}
+            </div>
+            <div className="xdock__opts">
+              <Seg value={cfg.format} onChange={(v) => set((c) => ({ ...c, format: v }))} options={[["xlsx", "Excel"], ["csv", "CSV"]]} />
+              {cfg.format === "xlsx" && <>
+                <Toggle on={cfg.dico} set={(v) => set((c) => ({ ...c, dico: v }))} label="Dictionnaire et paramètres" />
+                <Toggle on={cfg.totals} set={(v) => set((c) => ({ ...c, totals: v }))} label="Ligne de totaux" />
+              </>}
+              <label className="xdock__file"><span className="small muted">Fichier</span><input value={cfg.file} placeholder={fname} onChange={(e) => set((c) => ({ ...c, file: e.target.value }))} /><span className="small muted">.{cfg.format}</span></label>
+            </div>
+            <div className="xdock__go">
+              {flash && <span className="xgo__flash small" role="status"><I.Check size={14} /> {flash}</span>}
+              <button type="button" className="btn btn--ghost" onClick={saveModel} title="Retrouver ces réglages en un clic">Enregistrer le modèle</button>
+              <button type="button" className="btn btn--ghost" onClick={copy} disabled={loading || !filtered.length || !cols.length || !!busy}>{busy === "copy" ? "Copie…" : "Copier pour Excel"}</button>
+              <button type="button" className="btn btn--gold xgo__main" onClick={go} disabled={loading || !filtered.length || !cols.length || !!busy}>
+                <I.Download size={16} /> {busy === "file" ? "Génération…" : `Télécharger · ${filtered.length.toLocaleString("fr-FR")} lignes`}
+              </button>
+            </div>
           </div>
+          <p className="xtip small muted"><I.Info size={14} /> Glissez un en-tête pour déplacer une colonne, double-cliquez pour le renommer, cliquez pour trier. Le fichier contient un tableau Excel structuré en A1&nbsp;: filtres, tableaux croisés et Copilot l'utilisent tel quel.</p>
         </div>
-        <p className="xtip small muted"><I.Info size={14} /> Dans Excel, le tableau structuré se filtre, se trie et alimente un tableau croisé dynamique sans retouche ; Copilot l'utilise tel quel («&nbsp;Quels fonds ont la plus forte collecte cette année&nbsp;?&nbsp;»).</p>
       </div>
     </div>
   );
 }
 
-// ------------------------------------------------------------------ pièces
-function Step({ n, title, sub, children }: { n: string; title: string; sub?: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(true);
-  const id = useId();
+// ------------------------------------------------------------------ bibliothèque de champs
+function FieldLibrary({ avail, packs, sel, loading, onToggle, onSet }: {
+  avail: ExportCol<Row>[]; packs: Pack[]; sel: string[]; loading: boolean; onToggle: (k: string) => void; onSet: (k: string[]) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const keys = useMemo(() => new Set(avail.map((c) => c.key)), [avail]);
+  const fold = (x: string) => x.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const groups = useMemo(() => {
+    const g = new Map<string, ExportCol<Row>[]>();
+    const f = fold(q.trim());
+    avail.filter((c) => !f || fold(`${c.label} ${c.desc ?? ""} ${c.group ?? ""}`).includes(f)).forEach((c) => g.set(c.group ?? "Champs", [...(g.get(c.group ?? "Champs") ?? []), c]));
+    return [...g.entries()];
+  }, [avail, q]);
+  const nPi = avail.filter((c) => c.key.startsWith("pi.")).length;
+  const selSet = new Set(sel);
   return (
-    <section className={`xs${open ? " is-open" : ""}`} aria-labelledby={id}>
-      <button type="button" className="xs__h" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <span className="xs__n num">{n}</span>
-        <span className="xs__t" id={id}>{title}</span>
-        {sub && <span className="xs__s small">{sub}</span>}
-        <span className="xs__c" aria-hidden="true">{open ? <I.Up size={14} /> : <I.Down size={14} />}</span>
-      </button>
-      {open && <div className="xs__b">{children}</div>}
-    </section>
+    <aside className="xlib" aria-label="Champs">
+      <div className="xlib__h">
+        <span className="xw__n num">02</span>
+        <div><h2>Les champs</h2><span className="small muted">{loading ? "…" : `${avail.length} champs${nPi ? `, dont ${nPi} Product Info` : ""}`}</span></div>
+        {sel.length > 0 && <button type="button" className="link small" onClick={() => onSet([])}>Vider ({sel.filter((k) => keys.has(k)).length})</button>}
+      </div>
+      {packs.length > 0 && (
+        <div className="xlib__packs" aria-label="Packs de champs">
+          <div className="xlib__k">Packs prêts à l'emploi</div>
+          <div className="xpk">
+            {packs.map((p) => {
+              const ks = p.keys.filter((k) => keys.has(k));
+              const n = ks.filter((k) => selSet.has(k)).length;
+              const state = n === 0 ? "" : n === ks.length ? " is-on" : " is-part";
+              return (
+                <button key={p.id} type="button" className={`xpk__b${state}`} aria-pressed={n === ks.length && n > 0} title={p.desc}
+                  onClick={() => {
+                    if (n !== ks.length) { onSet([...sel, ...ks.filter((k) => !selSet.has(k))]); return; }
+                    // retirer le pack sans retirer les champs qu'un autre pack entièrement choisi utilise aussi
+                    const kept = new Set(packs.filter((o) => o.id !== p.id).map((o) => o.keys.filter((k) => keys.has(k))).filter((o) => o.length && o.every((k) => selSet.has(k))).flat());
+                    onSet(sel.filter((k) => !ks.includes(k) || kept.has(k)));
+                  }}>
+                  <span className="xpk__c" aria-hidden="true">{n === ks.length && n > 0 ? <I.Check size={12} /> : "+"}</span>
+                  <b>{p.label}</b><i className="num">{ks.length}</i>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <label className="xs__search xlib__search"><I.Search size={14} /><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Chercher un champ : frais, ISIN, SFDR, gérant…" aria-label="Chercher un champ" /></label>
+      <div className="xlib__groups">
+        {groups.map(([g, cs], gi) => {
+          const n = cs.filter((c) => selSet.has(c.key)).length;
+          const isPi = g.startsWith("Product Info");
+          const isOpen = q.trim() ? true : open[g] ?? (gi < 2 && !g.includes("Autres"));
+          return (
+            <section key={g} className={`xlg${isOpen ? " is-open" : ""}`}>
+              <button type="button" className="xlg__h" onClick={() => setOpen((o) => ({ ...o, [g]: !isOpen }))} aria-expanded={isOpen}>
+                {isPi && <span className="xlg__pi">PI</span>}
+                <span className="xlg__t">{g.replace(/^Product Info · |^Mesures · /, "")}</span>
+                <span className={`xlg__n num${n ? " is-on" : ""}`}>{n ? `${n}/` : ""}{cs.length}</span>
+                <span className="xlg__c" aria-hidden="true">{isOpen ? <I.Up size={12} /> : <I.Down size={12} />}</span>
+              </button>
+              {isOpen && (
+                <div className="xlg__b">
+                  <button type="button" className="xlg__all" onClick={() => onSet(n === cs.length ? sel.filter((k) => !cs.some((c) => c.key === k)) : [...sel, ...cs.map((c) => c.key).filter((k) => !selSet.has(k))])}>
+                    {n === cs.length ? "Tout retirer" : "Tout ajouter"}</button>
+                  {cs.slice(0, q.trim() ? 80 : 400).map((c) => (
+                    <label key={c.key} className={`xlf${selSet.has(c.key) ? " is-on" : ""}`} title={c.desc}>
+                      <input type="checkbox" checked={selSet.has(c.key)} onChange={() => onToggle(c.key)} />
+                      <span className="xlf__l">{c.label}</span>
+                      <span className="xlf__k">{KIND_SHORT[c.kind ?? "text"]}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })}
+        {!groups.length && <p className="small muted">Aucun champ ne correspond à « {q} ».</p>}
+      </div>
+    </aside>
   );
 }
+const KIND_SHORT: Record<string, string> = { text: "Aa", code: "#", int: "123", num: "1,2", eur: "€", pct: "%", date: "jj/mm", bool: "O/N" };
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="xf"><div className="xf__l">{label}</div><div className="xf__v">{children}</div></div>;
 }
@@ -436,76 +499,6 @@ function FilterEditor({ f, c, rows, onChange, onRemove }: { f: Filter; c: Export
   );
 }
 
-function Columns({ avail, sel, names, defaults, onSel, onName }: {
-  avail: ExportCol<Row>[]; sel: string[]; names: Record<string, string>; defaults: string[];
-  onSel: (s: string[]) => void; onName: (k: string, v: string) => void;
-}) {
-  const [q, setQ] = useState("");
-  const [drag, setDrag] = useState<number | null>(null);
-  const [edit, setEdit] = useState<string | null>(null);
-  const byKey = new Map(avail.map((c) => [c.key, c]));
-  const groups = useMemo(() => {
-    const g = new Map<string, ExportCol<Row>[]>();
-    avail.filter((c) => !q || `${c.label} ${c.desc ?? ""}`.toLowerCase().includes(q.toLowerCase())).forEach((c) => g.set(c.group ?? "Colonnes", [...(g.get(c.group ?? "Colonnes") ?? []), c]));
-    return [...g.entries()];
-  }, [avail, q]);
-  const toggle = (k: string) => onSel(sel.includes(k) ? sel.filter((x) => x !== k) : [...sel, k]);
-  const move = (i: number, d: number) => { const j = i + d; if (j < 0 || j >= sel.length) return; const t = [...sel]; [t[i], t[j]] = [t[j], t[i]]; onSel(t); };
-  return (
-    <div className="xc">
-      <div className="xchips xc__pre">
-        <button type="button" className="chip" onClick={() => onSel(defaults)}>Par défaut</button>
-        <button type="button" className="chip" onClick={() => onSel(avail.map((c) => c.key))}>Toutes · {avail.length}</button>
-        <button type="button" className="chip" onClick={() => onSel([])}>Aucune</button>
-      </div>
-      <ol className="xc__sel">
-        {sel.map((k, i) => {
-          const c = byKey.get(k)!;
-          const label = names[k]?.trim() || c.label;
-          return (
-            <li key={k} draggable={edit !== k} className={`xc__it${drag === i ? " is-drag" : ""}`}
-              onDragStart={(e) => { setDrag(i); e.dataTransfer.effectAllowed = "move"; }}
-              onDragOver={(e) => { e.preventDefault(); if (drag === null || drag === i) return; const t = [...sel]; const [x] = t.splice(drag, 1); t.splice(i, 0, x); onSel(t); setDrag(i); }}
-              onDragEnd={() => setDrag(null)}>
-              <span className="xc__grip" aria-hidden="true" />
-              <span className="xc__n num">{String(i + 1).padStart(2, "0")}</span>
-              {edit === k ? (
-                <input className="xc__edit" autoFocus defaultValue={label} aria-label={`Intitulé de la colonne ${c.label}`}
-                  onBlur={(e) => { onName(k, e.target.value === c.label ? "" : e.target.value); setEdit(null); }}
-                  onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEdit(null); }} />
-              ) : (
-                <button type="button" className="xc__l" onClick={() => setEdit(k)} title="Renommer l'en-tête">{label}{names[k]?.trim() && <span className="xc__orig small muted"> · {c.label}</span>}</button>
-              )}
-              <span className="xc__k small">{KIND_LABEL[c.kind ?? "text"].split(" (")[0]}</span>
-              <span className="xc__act">
-                <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Monter ${label}`}><I.Up size={12} /></button>
-                <button type="button" onClick={() => move(i, 1)} disabled={i === sel.length - 1} aria-label={`Descendre ${label}`}><I.Down size={12} /></button>
-                <button type="button" onClick={() => toggle(k)} aria-label={`Retirer ${label}`}><I.Close size={12} /></button>
-              </span>
-            </li>
-          );
-        })}
-        {!sel.length && <li className="small muted xc__none">Aucune colonne : ajoutez-en ci-dessous.</li>}
-      </ol>
-      <details className="xc__add" open={sel.length < 3}>
-        <summary>Ajouter ou retirer des colonnes</summary>
-        <label className="xs__search"><I.Search size={14} /><input type="search" placeholder="Chercher une colonne (frais, ISIN, collecte…)" value={q} onChange={(e) => setQ(e.target.value)} /></label>
-        {groups.map(([g, cs]) => (
-          <fieldset key={g} className="xc__grp">
-            <legend>{g}</legend>
-            {cs.map((c) => (
-              <label key={c.key} className={`xc__opt${sel.includes(c.key) ? " is-on" : ""}`} title={c.desc}>
-                <input type="checkbox" checked={sel.includes(c.key)} onChange={() => toggle(c.key)} />
-                <span>{c.label}</span>
-              </label>
-            ))}
-          </fieldset>
-        ))}
-      </details>
-    </div>
-  );
-}
-
 function fmtCell(c: ExportCol<Row>, r: Row): string {
   const v = cellValue(c, r);
   if (v == null) return "";
@@ -519,18 +512,42 @@ function fmtCell(c: ExportCol<Row>, r: Row): string {
   return v;
 }
 
-function Preview({ rows, cols, headers, sort, onSort }: { rows: Row[]; cols: ExportCol<Row>[]; headers: string[]; sort: Sort; onSort: (k: string) => void }) {
-  const N = 150;
+// ------------------------------------------------------------------ la feuille : les en-têtes se manipulent directement
+function Sheet({ rows, cols, headers, names, sort, zebra, onSort, onMove, onRemove, onRename }: {
+  rows: Row[]; cols: ExportCol<Row>[]; headers: string[]; names: Record<string, string>; sort: Sort; zebra: boolean;
+  onSort: (k: string) => void; onMove: (from: number, to: number) => void; onRemove: (k: string) => void; onRename: (k: string, v: string) => void;
+}) {
+  const N = 120;
+  const [drag, setDrag] = useState<number | null>(null);
+  const [over, setOver] = useState<number | null>(null);
+  const [edit, setEdit] = useState<string | null>(null);
+  const letter = (i: number) => { let s = ""; for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s; return s; };
   return (
-    <div className="xtab" role="region" aria-label="Aperçu des lignes exportées" tabIndex={0}>
+    <div className={`xtab xtab--live${zebra ? "" : " is-plain"}`} role="region" aria-label="Aperçu du tableau exporté" tabIndex={0}>
       <table>
         <thead>
-          <tr><th className="xtab__rn" aria-hidden="true" />{cols.map((c, i) => <th key={c.key} className="xtab__col" aria-hidden="true">{String.fromCharCode(65 + (i % 26))}{i >= 26 ? Math.floor(i / 26) : ""}</th>)}</tr>
+          <tr><th className="xtab__rn" aria-hidden="true" />{cols.map((c, i) => <th key={c.key} className="xtab__col" aria-hidden="true">{letter(i)}</th>)}</tr>
           <tr>
             <th className="xtab__rn">1</th>
             {cols.map((c, i) => (
-              <th key={c.key} className={NUMK.has(c.kind ?? "") ? "n" : ""} aria-sort={sort?.col === c.key ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>
-                <button type="button" onClick={() => onSort(c.key)} title="Trier">{headers[i]}{sort?.col === c.key && <span aria-hidden="true">{sort.dir === 1 ? " ↑" : " ↓"}</span>}</button>
+              <th key={c.key} className={`xh${NUMK.has(c.kind ?? "") ? " n" : ""}${drag === i ? " is-drag" : ""}${over === i && drag !== null && drag !== i ? " is-over" : ""}`}
+                draggable={edit !== c.key} aria-sort={sort?.col === c.key ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
+                onDragStart={(e) => { setDrag(i); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", c.key); }}
+                onDragOver={(e) => { e.preventDefault(); setOver(i); }} onDragLeave={() => setOver((o) => (o === i ? null : o))}
+                onDrop={(e) => { e.preventDefault(); if (drag !== null && drag !== i) onMove(drag, i); setDrag(null); setOver(null); }}
+                onDragEnd={() => { setDrag(null); setOver(null); }}>
+                {edit === c.key ? (
+                  <input className="xh__in" autoFocus defaultValue={headers[i]} aria-label={`Intitulé de la colonne ${c.label}`}
+                    onBlur={(e) => { onRename(c.key, e.target.value.trim() === c.label ? "" : e.target.value); setEdit(null); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEdit(null); }} />
+                ) : (
+                  <span className="xh__w">
+                    <button type="button" className="xh__l" onClick={() => onSort(c.key)} onDoubleClick={() => setEdit(c.key)} title={`${c.label}${names[c.key] ? ` (renommé)` : ""} — clic : trier · double-clic : renommer · glisser : déplacer`}>
+                      {headers[i]}{sort?.col === c.key && <span aria-hidden="true">{sort.dir === 1 ? " ↑" : " ↓"}</span>}
+                    </button>
+                    <button type="button" className="xh__x" onClick={() => onRemove(c.key)} aria-label={`Retirer la colonne ${headers[i]}`}>×</button>
+                  </span>
+                )}
               </th>
             ))}
           </tr>
@@ -542,19 +559,6 @@ function Preview({ rows, cols, headers, sort, onSort }: { rows: Row[]; cols: Exp
         </tbody>
       </table>
       {rows.length > N && <div className="xtab__more small muted">… et {(rows.length - N).toLocaleString("fr-FR")} lignes de plus dans le fichier</div>}
-    </div>
-  );
-}
-
-function Totals({ rows, cols, headers }: { rows: Row[]; cols: ExportCol<Row>[]; headers: string[] }) {
-  const sums = cols.map((c, i) => ({ c, h: headers[i] })).filter(({ c }) => c.sum && (c.kind === "eur" || c.kind === "int"));
-  if (!sums.length) return null;
-  return (
-    <div className="xsum small">
-      {sums.slice(0, 4).map(({ c, h }) => {
-        const s = rows.reduce((a, r) => { const v = cellValue(c, r); return a + (typeof v === "number" ? v : 0); }, 0);
-        return <span key={c.key}><i>Σ {h}</i> <b className="num">{c.kind === "eur" ? `${(s / 1e6).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} M€` : Math.round(s).toLocaleString("fr-FR")}</b></span>;
-      })}
     </div>
   );
 }

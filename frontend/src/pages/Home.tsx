@@ -35,7 +35,8 @@ export default function Home() {
   return (
     <div className="home rv">
       <Grain />
-      <HomeIntro ov={ov.data ?? null} dist={dist.data ?? null} revenue={r?.total ?? null} mock={!!meta?.is_mock} date={ov.data?.date ?? r?.date} />
+      <HomeIntro ov={ov.data ?? null} dist={dist.data ?? null} revenue={r?.total ?? null} mock={!!meta?.is_mock} date={ov.data?.date ?? r?.date}
+        afterOpening={r ? <RothschildCity funds={r.funds} total={r.total} date={r.date} mock={!!meta?.is_mock} /> : null} />
       <Paths />
       {r && <Ranking r={r} />}
       {r && <Breakdown r={r} />}
@@ -51,7 +52,6 @@ export default function Home() {
         </section>
       )}
       {r && <Drivers r={r} />}
-      {r && <RothschildCity funds={r.funds} total={r.total} date={r.date} mock={!!meta?.is_mock} />}
       <section className="home__close" aria-labelledby="h-close">
         <div className="home__close-in">
           <Rise><div className="eyebrow home__eyebrow">Espace métiers</div></Rise>

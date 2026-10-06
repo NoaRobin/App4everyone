@@ -13,7 +13,7 @@ import { Head, PageHero } from "../components/Editorial";
 import * as I from "../components/Icon";
 import { Sankey2D, type SkData, type SkNode } from "../components/Sankey2D";
 import { GlobeSection, Timeline, type ClientMap, type TimelineData } from "../components/DistViz";
-import { CoverageSection, DistNav, MatrixSection, coverage } from "../components/DistAtlas";
+import { CoverageSection, DistNav, coverage } from "../components/DistAtlas";
 import "../styles/distribution.css";
 import type { MapRoute } from "../three/MapScene";
 
@@ -42,7 +42,7 @@ export default function Distribution() {
 }
 
 const NAV = [
-  { id: "matrice", label: "Clients × pays" }, { id: "couverture", label: "Couverture" }, { id: "globe", label: "Le monde" },
+  { id: "couverture", label: "Couverture" }, { id: "globe", label: "Le monde" },
   { id: "parcours", label: "Parcours" }, { id: "pays", label: "Pays par pays" }, { id: "chronologie", label: "Depuis quand" }, { id: "annexes", label: "Plateformes & comptes" },
 ];
 
@@ -67,7 +67,6 @@ function DistributionView({ d, exclude, setExclude, withRmm }: { d: Resp; exclud
         ]}
       />
       <DistNav items={NAV} />
-      <MatrixSection clients={clients} countries={d.countries} selected={client} onSelect={setClient} withRmm={withRmm} />
       <CoverageSection clients={clients} countries={d.countries} withRmm={withRmm} />
       <GlobeSection countries={d.countries} routes={d.routes} clients={clients} withRmm={withRmm} client={client} onClient={setClient} />
       <FlowSection d={d} withRmm={withRmm} />

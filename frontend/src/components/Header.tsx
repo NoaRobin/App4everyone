@@ -7,11 +7,11 @@ import { date as fdate } from "../lib/format";
 import { motionPaused, setMotionPaused, useReducedMotion } from "../lib/motion";
 
 const NAV = [
-  { to: "/distribution", label: "Distribution" },
   { to: "/fonds", label: "Fonds" },
   { to: "/encours", label: "Encours" },
   { to: "/portefeuilles", label: "Portefeuilles" },
   { to: "/passif", label: "Passif" },
+  { to: "/distribution", label: "Distribution" },
   { to: "/comparateur", label: "Comparateur" },
   { to: "/export", label: "Export" },
 ];

@@ -255,3 +255,124 @@ def inventaires(svc, d: str | None, funds: list[str] | None = None) -> dict:
     })
     df = df.sort_values(["fonds", "montant_eur"], ascending=[True, False], na_position="last")
     return _table(cols, df[cols].to_numpy(dtype=object).tolist(), "une ligne par fonds et par instrument", date=end.date().isoformat())
+
+
+# ------------------------------------------------------------------ Product Info : tout le référentiel
+_KIND = {"text": "text", "long": "text", "date": "date", "pct": "pct", "pct_int": "pct", "bool": "bool", "int": "int", "num": "num",
+         "money": "num", "stars": "int", "code": "code"}
+_TECH = {"Id", "SinkCreatedOn", "SinkModifiedOn", "MlvLastModified", "statecodename", "statuscodename", "pi_productid", "pi_shareid", "ProductID"}
+
+
+def _guess_kind(name: str, s: pd.Series) -> str:
+    """Nature d'une colonne non cataloguée, déduite de ses valeurs (jamais d'une hypothèse sur son sens)."""
+    v = s.dropna()
+    v = v[v.map(lambda x: not (isinstance(x, str) and not x.strip()))]
+    if v.empty:
+        return "text"
+    if v.map(lambda x: isinstance(x, (bool, np.bool_))).all():
+        return "bool"
+    num = pd.to_numeric(v, errors="coerce")
+    if num.notna().all():
+        return "num"
+    if "date" in name.lower():
+        d = pd.to_datetime(v.astype(str), errors="coerce")
+        if d.notna().mean() > 0.9:
+            return "date"
+    return "text"
+
+
+def _cell(kind: str, x: Any) -> Any:
+    x = _v(x)
+    if x is None:
+        return None
+    if kind == "bool":
+        return L.to_bool(x)
+    if kind in ("pct",):
+        try:
+            return float(x) / 100.0                     # valeurs du référentiel en points de % → fraction
+        except (TypeError, ValueError):
+            return x
+    if kind in ("num", "int"):
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return x
+    if kind == "date":
+        t = pd.to_datetime(str(x), errors="coerce")
+        return None if pd.isna(t) else t.date().isoformat()
+    return x if isinstance(x, (int, float, bool)) else str(x)
+
+
+def referentiel(svc, niveau: str = "fonds") -> dict:
+    """Tous les champs Product Info du référentiel (fonds actifs ou parts), libellés du catalogue métier d'abord, puis
+    les autres colonnes sous leur nom d'origine. Une ligne par fonds (ou par part). Packs de champs proposés."""
+    from .domain import fields as F
+    m = svc.m
+    if niveau not in ("fonds", "parts"):
+        raise ValueError(f"Niveau inconnu : {niveau}")
+    df = m.products if niveau == "fonds" else m.shares
+    cat: list[tuple[str, str, str, str]] = []           # (colonne, libellé, groupe, nature d'origine)
+    if niveau == "fonds":
+        for _, sec, items in F.FUND_SECTIONS:
+            cat += [(c, lab, sec, k) for c, lab, k in items]
+        cat += [(c, lab, "ESG & durabilité", k) for c, lab, k in F.ESG_FIELDS]
+        cat += [(c, lab, "Exclusions ESG", "bool") for c, lab in F.EXCLUSIONS]
+        cat += [(c, lab, "Principales incidences négatives", "bool") for c, lab in F.PAI]
+        cat += [(c, f"Validation {lab}", "Validations", "bool") for c, lab in F.VALIDATIONS]
+    else:
+        for _, sec, items in F.SHARE_SECTIONS:
+            cat += [(c, lab, sec, k) for c, lab, k in items]
+    seen, cols = set(), []
+    for c, lab, grp, k in cat:
+        if c in df.columns and c not in seen:
+            seen.add(c)
+            cols.append({"key": f"pi.{c}", "col": c, "label": lab, "group": grp, "kind": _KIND.get(k, "text"), "desc": f"Product Info : {c}"})
+    for c in df.columns:
+        if c in seen or c in _TECH or str(c).startswith("_"):
+            continue
+        seen.add(c)
+        cols.append({"key": f"pi.{c}", "col": c, "label": str(c).replace("_", " ").strip(), "group": "Autres champs Product Info",
+                     "kind": _guess_kind(str(c), df[c]), "desc": f"Product Info : {c} (champ non catalogué, nom d'origine)"})
+    # Colonne par colonne (référentiel réel : des centaines de colonnes × des milliers de parts)
+    data = [[_cell(c["kind"], x) for x in df[c["col"]].tolist()] for c in cols]
+    ids = df.index.tolist()
+    if niveau == "fonds":
+        lead = [ids]
+        head = ["id_fonds"]
+    else:
+        pid = df["ProductID"].tolist() if "ProductID" in df else [None] * len(ids)
+        lead = [ids, [_v(x) for x in pid]]
+        head = ["id_part", "id_fonds"]
+    rows = [list(r) for r in zip(*lead, *data)]
+    by_group: dict[str, list[str]] = {}
+    for c in cols:
+        by_group.setdefault(c["group"], []).append(c["key"])
+    k = lambda *names: [f"pi.{n}" for n in names if f"pi.{n}" in {c["key"] for c in cols}]
+    if niveau == "fonds":
+        packs = [
+            {"id": "identite", "label": "Fiche d'identité", "desc": "Nom, gamme, classe d'actifs, forme, domicile, devise, création, gérant",
+             "keys": ["name", "id", "family", *k("Fund_Range", "Asset_Class", "Legal_Form", "Domiciliation", "Accounting_Currency", "Creation_Date", "Portfolio_Manager")]},
+            {"id": "encours", "label": "Encours & collecte", "desc": "Encours, variations et collecte nette estimée",
+             "keys": ["name", "aum", "delta_1M", "delta_YTD", "var_YTD", "var_1A", "flows_1M", "flows_YTD", "flows_1A"]},
+            {"id": "perf", "label": "Performance & risque", "desc": "Performances, volatilité, perte maximale, SRI",
+             "keys": ["name", "perf_YTD", "perf_1A", "vol_1A", "sri", "vol", "mdd", "te", *by_group.get("Risques", [])[:6]]},
+            {"id": "revenus", "label": "Revenus estimés", "desc": "Taux de frais, revenus annualisés, part des revenus",
+             "keys": ["name", "aum", "rate", "revenue", "revenue_net", "revenue_12m", "d_revenue_1y", "share"]},
+            {"id": "frais", "label": "Frais du fonds", "desc": "Tous les frais du référentiel", "keys": ["name", *by_group.get("Frais du fonds", [])]},
+            {"id": "esg", "label": "ESG & SFDR", "desc": "Classification SFDR, labels, investissements durables", "keys": ["name", *by_group.get("ESG & durabilité", [])]},
+            {"id": "regl", "label": "Réglementaire", "desc": "Réglementation, fiscalité, documents", "keys": ["name", *by_group.get("Réglementaire & fiscalité", [])]},
+            {"id": "codes", "label": "Codes", "desc": "Identifiants et codes du fonds", "keys": ["name", *by_group.get("Codes", [])]},
+        ]
+    else:
+        packs = [
+            {"id": "identite", "label": "Fiche de la part", "desc": "Nom, ISIN, catégorie, devise, couverture, affectation, souscripteurs",
+             "keys": ["fonds", *by_group.get("Identité de la part", [])[:8]]},
+            {"id": "encours", "label": "Encours & VL", "desc": "Encours, collecte YTD, dernière VL", "keys": ["fonds", "part", "isin", "encours", "collecte_ytd", "vl", "date_vl"]},
+            {"id": "frais", "label": "Frais de la part", "desc": "Frais courants, gestion, entrée, sortie, rétrocessions", "keys": ["fonds", "part", "isin", *by_group.get("Frais de la part", [])]},
+            {"id": "souscription", "label": "Souscriptions & rachats", "desc": "Minimums, cut-off, règlement, VL", "keys": ["fonds", "part", "isin", *by_group.get("Souscriptions & rachats", [])]},
+            {"id": "plateformes", "label": "Plateformes & diffusion", "desc": "Clearstream, Euroclear, Allfunds, diffusions", "keys": ["fonds", "part", "isin", *by_group.get("Plateformes & diffusion", [])]},
+            {"id": "codes", "label": "Codes", "desc": "ISIN, Bloomberg, RIC, WKN, SEDOL, Valor", "keys": ["fonds", "part", *by_group.get("Codes", [])]},
+            {"id": "fiscalite", "label": "Réglementaire & fiscalité", "desc": "MiFID II, PRIIPs, FATCA, transparences", "keys": ["fonds", "part", "isin", *by_group.get("Réglementaire & fiscalité", [])]},
+        ]
+    return {"niveau": niveau, "columns": [{k2: c[k2] for k2 in ("key", "label", "group", "kind", "desc")} for c in cols],
+            "head": head, "rows": rows, "n": len(rows), "packs": packs, "n_fields": len(cols)}

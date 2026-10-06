@@ -7,7 +7,7 @@
  *               un chiffre réel, une phrase, un petit mouvement qui dit ce que fait l'espace, un lien pour y entrer.
  * Écran étroit ou animations réduites : les espaces s'empilent, tout reste lisible, rien n'est épinglé.
  */
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { eur, num } from "../lib/format";
 import { gsap, ScrollTrigger } from "../lib/gsap";
@@ -16,11 +16,11 @@ import type { Overview } from "../lib/types";
 import * as I from "./Icon";
 
 type Dist = { countries: { country: string }[]; n_shares_registered: number; clients?: { kind?: string; countries: unknown[] }[] };
-type Props = { ov: Overview | null; dist: Dist | null; revenue: number | null; mock: boolean; date?: string };
+type Props = { ov: Overview | null; dist: Dist | null; revenue: number | null; mock: boolean; date?: string; afterOpening?: ReactNode };
 
 const WORD = "NEXUS";
 
-export function HomeIntro({ ov, dist, revenue, mock, date }: Props) {
+export function HomeIntro({ ov, dist, revenue, mock, date, afterOpening }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const named = dist?.clients?.filter((c) => c.kind === "nommé") ?? [];
   const pairs = (named.length ? named : dist?.clients ?? []).reduce((s, c) => s + c.countries.length, 0);
@@ -39,8 +39,6 @@ export function HomeIntro({ ov, dist, revenue, mock, date }: Props) {
   const ytd = ov?.var?.YTD;
 
   const SPACES = [
-    { to: "/distribution", n: "Distribution", t: "Qui peut souscrire, et où.", d: "La matrice des autorisations clients × pays, la couverture, le globe, le parcours des plus gros clients.",
-      stat: dist ? `${dist.countries.length} pays` : "—", sub: named.length ? `${named.length} clients nommés · ${num(pairs)} couples client-pays` : "autorisations actives", vis: "matrix" },
     { to: "/fonds", n: "Fonds", t: "Chaque fonds, dans le détail.", d: "Fiche, parts, performances, frais, ESG, risques et contrôles, pays d'enregistrement : à une recherche.",
       stat: ov ? `${ov.n_funds} fonds` : "—", sub: ov ? `${ov.n_parts} parts investies` : "", vis: "cards" },
     { to: "/encours", n: "Encours", t: "Ce qui grossit, ce qui décroche.", d: "La courbe des encours du jour à l'année, la collecte nette estimée et l'effet marché, par famille, gamme, gérant.",
@@ -49,6 +47,8 @@ export function HomeIntro({ ov, dist, revenue, mock, date }: Props) {
       stat: "Inventaires", sub: "par fonds et pour toute la maison", vis: "mosaic" },
     { to: "/passif", n: "Passif", t: "Qui est investi dans quoi.", d: "Les clients par encours, leurs fonds et leurs parts ; segments, teneurs, pays, fidélité, mouvements.",
       stat: "Client → fonds", sub: "encours par client, par fonds, par part", vis: "links" },
+    { to: "/distribution", n: "Distribution", t: "Qui peut souscrire, et où.", d: "Le parcours pays → clients → familles, la couverture, le globe, chaque pays de commercialisation.",
+      stat: dist ? `${dist.countries.length} pays` : "—", sub: named.length ? `${named.length} clients nommés · ${num(pairs)} couples client-pays` : "autorisations actives", vis: "matrix" },
     { to: "/comparateur", n: "Comparateur", t: "Mettre les fonds face à face.", d: "VL base 100, performance, volatilité, perte maximale, Sharpe : jusqu'à six fonds, sur la période de votre choix.",
       stat: "6 fonds", sub: "côte à côte, en 3D ou en 2D", vis: "duel" },
     { to: "/export", n: "Export", t: "Vos données, prêtes pour Excel.", d: "Une ligne par enregistrement, des en-têtes explicites, de vrais nombres : un tableau structuré que Copilot lit directement.",
@@ -140,10 +140,11 @@ export function HomeIntro({ ov, dist, revenue, mock, date }: Props) {
             ))}
           </dl>
         </div>
-        <div className="nx__cue" aria-hidden="true"><span>Sept espaces</span><i /></div>
+        <div className="nx__cue" aria-hidden="true"><span>Rothschild City</span><i /></div>
         <div className="nx__curtain" aria-hidden="true"><i className="nx__sweep" /></div>
       </section>
 
+      <div className="nxw__after">{afterOpening}</div>
       <section className="sp" aria-label="Les espaces de l'application">
         <div className="sp__hd"><span className="eyebrow">L'application</span><span className="sp__prog" aria-hidden="true"><i /></span><span className="sp__cnt small">7 espaces</span></div>
         <div className="sp__track">

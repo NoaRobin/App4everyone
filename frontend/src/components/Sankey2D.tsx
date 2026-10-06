@@ -11,7 +11,7 @@ import type { FamilyKey } from "../lib/types";
 
 export type SkNode = {
   id: string; label: string; col: number; value: number; n_funds: number; n_shares: number;
-  family?: string; iso?: string; other?: boolean; kind?: string; aum?: number; n_clients?: number;
+  family?: string; iso?: string; other?: boolean; kind?: string; aum?: number; n_clients?: number; rank?: number;
 };
 export type SkLink = { source: number; target: number; value: number; family: string; n_funds: number; n_shares: number };
 export type SkData = { nodes: SkNode[]; links: SkLink[]; rest?: { n_clients: number; value: number; aum: number } };
@@ -20,8 +20,9 @@ const W = 1200;
 const NODE_W = 12;
 const GAP = 12;
 const PAD_T = 46;
-const X = [300, 640, 940];          // abscisse gauche de chaque colonne de nœuds
-const HEADS = ["Clientèles · par encours", "Pays d'enregistrement", "Familles de gestion"];
+const X = [230, 560, 960];          // abscisse gauche de chaque colonne de nœuds
+const HEADS = ["Pays d'enregistrement", "Clientèles · par encours décroissant", "Familles de gestion"];
+const gapOf = (n: number) => (n > 10 ? 4 : GAP);
 
 type LNode = SkNode & { i: number; x: number; y: number; h: number };
 type LLink = SkLink & { i: number; w: number; sy: number; ty: number };
@@ -31,12 +32,13 @@ function layout(d: SkData, height: number) {
   const cols = [0, 1, 2].map((c) => d.nodes.map((n, i) => ({ ...n, i })).filter((n) => n.col === c));
   if (cols[2].length) cols[2].sort((a, b) => FAMILY_ORDER.indexOf(a.family as FamilyKey) - FAMILY_ORDER.indexOf(b.family as FamilyKey));
   const inner = height - PAD_T - 8;
-  const k = Math.min(...cols.filter((c) => c.length).map((c) => (inner - GAP * (c.length - 1)) / Math.max(1, c.reduce((s, n) => s + n.value, 0))));
+  const k = Math.min(...cols.filter((c) => c.length).map((c) => (inner - gapOf(c.length) * (c.length - 1)) / Math.max(1, c.reduce((s, n) => s + n.value, 0))));
   const nodes: LNode[] = new Array(d.nodes.length);
   cols.forEach((c, ci) => {
-    const used = c.reduce((s, n) => s + n.value * k, 0) + GAP * (c.length - 1);
+    const g = gapOf(c.length);
+    const used = c.reduce((s, n) => s + n.value * k, 0) + g * (c.length - 1);
     let y = PAD_T + (inner - used) / 2;
-    for (const n of c) { nodes[n.i] = { ...n, x: X[ci], y, h: Math.max(1.5, n.value * k) }; y += n.value * k + GAP; }
+    for (const n of c) { nodes[n.i] = { ...n, x: X[ci], y, h: Math.max(1.5, n.value * k) }; y += n.value * k + g; }
   });
   const links: LLink[] = d.links.map((l, i) => ({ ...l, i, w: Math.max(1, l.value * k), sy: 0, ty: 0 }));
   const famRank = (f: string) => (f === "all" ? -1 : FAMILY_ORDER.indexOf(f as FamilyKey) + (f === "nc" ? 9 : 0));
@@ -66,17 +68,17 @@ function ribbon(l: LLink, nodes: LNode[]) {
 }
 
 const clientColor = (n: SkNode) => (n.other ? "var(--ink-3)" : n.kind === "nommé" ? "var(--gold)" : "var(--brand-stone)");
-const nodeColor = (n: SkNode) => (n.col === 0 ? clientColor(n) : n.col === 1 ? "var(--ink-2)" : famVar(n.family));
+const nodeColor = (n: SkNode) => (n.col === 1 ? clientColor(n) : n.col === 0 ? "var(--ink-2)" : famVar(n.family));
 
 export function Sankey2D({ data, onOpen }: { data: SkData; onOpen?: (n: SkNode) => void }) {
-  const nClients = data.nodes.filter((n) => n.col === 0).length;
-  const height = Math.max(560, Math.min(860, PAD_T + nClients * 62));
+  const nClients = data.nodes.filter((n) => n.col === 1).length;
+  const height = Math.max(560, Math.min(820, PAD_T + nClients * 34));
   const { nodes, links } = useMemo(() => layout(data, height), [data, height]);
   const [hot, setHot] = useState<Hot>(null);
   const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const [lit, setLit] = useState(false);
-  const rank = useMemo(() => new Map(nodes.filter((n) => n.col === 0).sort((a, b) => a.y - b.y).map((n, k) => [n.i, k + 1])), [nodes]);
+  const rank = useMemo(() => new Map(nodes.filter((n) => n.col === 1).sort((a, b) => a.y - b.y).map((n, k) => [n.i, k + 1])), [nodes]);
 
   useEffect(() => {
     const el = wrap.current;
@@ -120,7 +122,7 @@ export function Sankey2D({ data, onOpen }: { data: SkData; onOpen?: (n: SkNode) 
         <g className="sk2__links">
           {links.map((l) => (
             <path key={l.i} d={ribbon(l, nodes)} className={`sk2__link${on && !on.ls.has(l.i) ? " is-dim" : ""}${on?.ls.has(l.i) ? " is-on" : ""}`}
-              style={{ fill: l.family === "all" ? clientColor(nodes[l.source]) : famVar(l.family), ["--d" as string]: `${(nodes[l.source].col * 0.35 + 0.1).toFixed(2)}s` }}
+              style={{ fill: l.family === "all" ? clientColor(nodes[l.target]) : famVar(l.family), ["--d" as string]: `${(nodes[l.source].col * 0.35 + 0.1).toFixed(2)}s` }}
               onMouseEnter={enter({ link: l.i })} onMouseMove={move} />
           ))}
         </g>
@@ -128,28 +130,29 @@ export function Sankey2D({ data, onOpen }: { data: SkData; onOpen?: (n: SkNode) 
           {nodes.map((n) => {
             const dim = on && !on.ns.has(n.i);
             const label = n.col === 2 ? FAMILY_LABEL[n.family as FamilyKey] ?? n.label : n.label;
-            const sub = n.col === 0 ? `${n.aum != null ? eur(n.aum) : "—"} · ${plural(n.value, "enreg.", "enreg.")}` : plural(n.value, "enregistrement");
+            const sub = n.col === 1 ? `${n.aum != null ? eur(n.aum) : "—"} · ${plural(n.value, "enreg.", "enreg.")}` : plural(n.value, "enregistrement");
             const cy = n.y + n.h / 2;
             const left = n.col === 0;
             const tx = left ? n.x - 12 : n.x + NODE_W + 10;
-            const thin = n.h < 26;
+            const thin = n.h < 36;
+            const named = n.col !== 1 || n.h >= 12;          // trop petit : pas de nom (survol pour le lire)
             return (
-              <g key={n.id} className={`sk2__node${dim ? " is-dim" : ""}${n.other ? " is-other" : ""}`} tabIndex={0} role="button"
-                aria-label={`${label} : ${n.col === 0 && n.aum != null ? `encours ${eur(n.aum)}, ` : ""}${plural(n.value, "enregistrement")}, ${plural(n.n_funds, "fonds", "fonds")}, ${plural(n.n_shares, "part")}`}
+              <g key={n.id} className={`sk2__node sk2__node--c${n.col}${dim ? " is-dim" : ""}${n.other ? " is-other" : ""}`} tabIndex={0} role="button"
+                aria-label={`${label} : ${n.col === 1 && n.aum != null ? `encours ${eur(n.aum)}, ` : ""}${plural(n.value, "enregistrement")}, ${plural(n.n_funds, "fonds", "fonds")}, ${plural(n.n_shares, "part")}`}
                 onMouseEnter={enter({ node: n.i })} onMouseMove={move} onFocus={() => focusNode(n)} onBlur={leave}
                 onClick={() => onOpen?.(n)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen?.(n); } }}>
                 <rect x={n.x - 4} y={n.y - 2} width={NODE_W + 8} height={n.h + 4} fill="transparent" />
                 <rect className="sk2__bar" x={n.x} y={n.y} width={NODE_W} height={n.h} style={{ fill: nodeColor(n) }} />
-                {left && !n.other && <text className="sk2__rank" x={24} y={cy} dominantBaseline="middle">{String(rank.get(n.i) ?? 0).padStart(2, "0")}</text>}
-                <text className="sk2__t" x={tx} y={thin ? cy : cy - 8} textAnchor={left ? "end" : "start"} dominantBaseline="middle">{label}</text>
-                {!thin && <text className="sk2__s" x={tx} y={cy + 11} textAnchor={left ? "end" : "start"} dominantBaseline="middle">{sub}</text>}
+                {named && <text className="sk2__t" x={tx} y={thin ? cy : cy - 8} textAnchor={left ? "end" : "start"} dominantBaseline="middle">
+                  {n.col === 1 && <tspan className="sk2__rank">{String(rank.get(n.i) ?? 0).padStart(2, "0")}  </tspan>}{label}</text>}
+                {named && !thin && <text className="sk2__s" x={tx} y={cy + 11} textAnchor={left ? "end" : "start"} dominantBaseline="middle">{sub}</text>}
               </g>
             );
           })}
         </g>
       </svg>
       {data.rest && data.rest.n_clients > 0 && (
-        <p className="sk2__rest small muted">Les {data.rest.n_clients} autres clientèles ({eur(data.rest.aum)} d'encours, {plural(data.rest.value, "enregistrement")}) ne sont pas dessinées : elles figurent dans la matrice clients × pays.</p>
+        <p className="sk2__rest small muted">Les {data.rest.n_clients} autres clientèles ({eur(data.rest.aum)} d'encours, {plural(data.rest.value, "enregistrement")}) ne sont pas dessinées : détail volontairement réduit pour rester lisible. Toutes figurent dans l'export « Autorisations de commercialisation ».</p>
       )}
       {hot && tip && <SkTip hot={hot} nodes={nodes} links={links} x={tip.x} y={tip.y} />}
     </div>
@@ -162,12 +165,11 @@ function SkTip({ hot, nodes, links, x, y }: { hot: NonNullable<Hot>; nodes: LNod
     const n = nodes[hot.node];
     return (
       <div className="city__tip sk2__tip" style={style} role="status">
-        <div className="city__tip-f">{["Clientèle", "Pays d'enregistrement", "Famille de gestion"][n.col]}{n.col === 0 && n.kind === "nommé" ? " · client nommé" : n.col === 0 && n.kind === "pool" ? " · pool" : ""}</div>
+        <div className="city__tip-f">{["Pays d'enregistrement", `Clientèle n° ${n.rank ?? ""}`, "Famille de gestion"][n.col]}{n.col === 1 && n.kind === "nommé" ? " · client nommé" : n.col === 1 && n.kind === "pool" ? " · pool" : ""}</div>
         <div className="city__tip-n">{n.col === 2 ? FAMILY_LABEL[n.family as FamilyKey] ?? n.label : n.label}</div>
-        {n.col === 0 && <div className="city__tip-v num">{eur(n.aum)}<span className="small muted"> d'encours</span></div>}
+        {n.col === 1 && <div className="city__tip-v num">{eur(n.aum)}<span className="small muted"> d'encours</span></div>}
         <div className="city__tip-s small">{plural(n.value, "enregistrement")} · {plural(n.n_funds, "fonds", "fonds")} · {plural(n.n_shares, "part")}</div>
-        {n.col === 0 && n.other && n.n_clients ? <div className="city__tip-go small">{plural(n.n_clients, "clientèle")} regroupées</div> : null}
-        {n.col > 0 && <div className="city__tip-go small">Cliquer pour ouvrir</div>}
+        {n.col !== 1 && <div className="city__tip-go small">Cliquer pour ouvrir</div>}
       </div>
     );
   }

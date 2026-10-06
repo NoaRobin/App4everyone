@@ -452,6 +452,14 @@ def export_registrations(actifs: str = "1", rmm: str | None = None, date: str | 
     return _ok(X.enregistrements(_api_service(), date, actifs not in ("0", "non", "false"), _no_rmm(rmm)))
 
 
+@app.get("/api/export/referentiel")
+def export_referential(niveau: str = "fonds"):
+    try:
+        return _ok(X.referentiel(_api_service(), niveau))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+
+
 @app.get("/api/export/inventaires")
 def export_holdings(fonds: str | None = None, date: str | None = None):
     return _ok(X.inventaires(_api_service(), date, _list(fonds)))
