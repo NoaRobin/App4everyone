@@ -220,6 +220,13 @@ def passif_holders(fid: str):
     return _ok(passif_obj().holders(fid))
 
 
+@app.get("/api/passif/fonds/{fid}/flux")
+def passif_fund_flows(fid: str):
+    """Souscriptions et rachats d'un fonds d'après le passif (collecte de remplacement)."""
+    _api_service()
+    return _ok(passif_obj().fund_flows(fid))
+
+
 @app.get("/api/passif/carnet")
 def passif_book(top: int = 60):
     """Qui est investi dans quoi : premiers clients par encours, leurs fonds et leurs parts (vue nominative, à la demande)."""

@@ -268,6 +268,13 @@ durées de lecture, de calcul et de chaque vue, et mémoire maximale ; aucune do
   `APP_RMM_COLUMNS` (liste de colonnes séparées par des virgules) et `APP_RMM_PATTERN` (expression régulière).
 - Sankey de la distribution : l'unité est l'**enregistrement actif** (une part autorisée dans un pays), additive d'une colonne
   à l'autre. Les encours, eux, ne se répartissent pas par pays dans les données : ils ne sont jamais ventilés ainsi.
+  Seules les 12 plus grosses clientèles (encours des parts enregistrées) sont dessinées, par encours décroissant.
+- **Collecte JUMP neutralisée** : pour des fonds ou parts dont la collecte JUMP est erronée (par défaut Mediobanca R-co Valor,
+  environ 2,5 Md€ de collecte fausse), la collecte estimée est mise à zéro dans les calculs, sans rien effacer : encours et
+  données sources inchangés. La fiche du fonds n'attribue alors la variation ni à la collecte ni à l'effet marché et affiche, à
+  la place, les souscriptions et rachats lus dans le passif (table Transaction, fenêtre du passif). Règle réglable :
+  `APP_FLOWS_DISABLED` (expression régulière, insensible à la casse et aux accents, appliquée aux noms de fonds, de parts et
+  au client nommé ; vide = aucune neutralisation). Le contrôle « Collecte JUMP neutralisée » liste les fonds concernés.
 
 ### Ce que les données ne permettent pas (et que l'application n'invente pas)
 

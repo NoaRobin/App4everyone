@@ -145,6 +145,13 @@ def encours(svc, d: str | None, level: str = "fonds", freq: str = "M", start: st
         pct = np.where(prev > 0, delta / prev, np.nan)
     market = delta - flows
     flows = np.where(np.isnan(delta), np.nan, flows)
+    # Collecte JUMP neutralisée : ni collecte ni effet marché pour les fonds ou parts concernés
+    fo = getattr(m, "flows_off", None) or {}
+    off = set(fo.get("parts", [])) if level == "part" else set(fo.get("funds", [])) if level == "fonds" else set()
+    if off:
+        idx_off = [j for j, c in enumerate(aum.columns) if c in off]
+        flows[:, idx_off] = np.nan
+        market[:, idx_off] = np.nan
     keep_t = np.ones(len(last), dtype=bool) if first_d is None else (last >= first_d)
     ti = np.flatnonzero(keep_t)
     present = ~np.isnan(a[ti])

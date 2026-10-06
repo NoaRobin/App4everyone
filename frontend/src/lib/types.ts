@@ -59,6 +59,7 @@ export type FundDetail = {
   esg: { fields: Field[]; exclusions: Flag[]; pai: Flag[] };
   distribution: { countries: { country_fr: string; iso: string; n: number }[]; matrix: { share_id: string; share: string; countries: string[] }[] };
   sections: Section[]; validations: Flag[]; controls: { title: string; severity: string; details: string[] }[];
+  flows_off?: { reason: string; rule: string } | null;
 };
 export type ShareDetail = ShareBrief & {
   fund: { id: string; name: string; family: FamilyKey } | null; date: string; var: Record<string, Variation> | null;

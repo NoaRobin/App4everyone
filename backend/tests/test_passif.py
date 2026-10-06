@@ -453,3 +453,11 @@ def test_carnet_sql_lecture_seule():
     m = P.resolve_mapping(r.columns("position"), "position")
     r.client_book("position", m, 60, [("date_eq", "date", "2026-09-30")])
     assert "TOP 60" in seen[-1] and "GROUP BY" in seen[-1]
+
+
+def test_collecte_de_remplacement_par_le_passif(nominatif):
+    f = nominatif.fund_flows("PR1")
+    assert f["available"] and f["subscriptions"] >= 0 and f["redemptions"] >= 0
+    assert f["net"] == pytest.approx(f["subscriptions"] - f["redemptions"])
+    assert f["subscriptions"] + f["redemptions"] > 0 and f["first"] <= f["last"]
+    assert nominatif.fund_flows("INCONNU")["available"] is False

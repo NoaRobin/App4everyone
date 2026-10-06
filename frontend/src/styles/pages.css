@@ -497,3 +497,9 @@
 .aum3d__legend i { width: 10px; height: 10px; flex: none; }
 @media (max-width: 900px) { .aum3d__legend { display: none; } }
 .sk2__rest { margin: 10px 0 0; }
+.flows-off { border-color: rgba(204, 159, 83, .45) !important; }
+.flows-off__p { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.flows-off__k { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.flows-off__k dt { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.flows-off__k dd { margin: 4px 0 0; font-family: var(--serif); font-size: 26px; }
+.flows-off .up-t { color: var(--up); } .flows-off .down-t { color: var(--down); }

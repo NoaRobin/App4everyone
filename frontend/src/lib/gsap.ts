@@ -32,6 +32,22 @@ export function onVisible(el: Element, play: () => void, rootMargin = "0px 0px -
   return () => io.disconnect();
 }
 
+/**
+ * Comme onVisible, avec un filet de sécurité : la position est aussi vérifiée au défilement et au redimensionnement,
+ * pour qu'une animation en attente ne laisse jamais un bloc vide si l'observateur ne se déclenche pas.
+ */
+export function whenSeen(el: Element, play: () => void, ratio = 0.85): () => void {
+  let done = false;
+  const go = () => { if (done) return; done = true; cleanup(); play(); };
+  const check = () => { const r = el.getBoundingClientRect(); if (r.top < window.innerHeight * ratio && r.bottom > 0) go(); };
+  const stopIo = onVisible(el, go, `0px 0px -${Math.round((1 - ratio) * 100)}% 0px`);
+  const cleanup = () => { stopIo(); window.removeEventListener("scroll", check); window.removeEventListener("resize", check); };
+  window.addEventListener("scroll", check, { passive: true });
+  window.addEventListener("resize", check);
+  requestAnimationFrame(check);
+  return cleanup;
+}
+
 /** Anime ce qui vient d'apparaître dans la page (appelé après chaque chargement de données). */
 export function animatePage(root: ParentNode = document): () => void {
   const ctx = gsap.context(() => {});

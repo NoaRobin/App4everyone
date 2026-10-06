@@ -266,6 +266,7 @@ class Model:
     stale_days: int
     is_mock: bool
     link_report: dict = field(default_factory=dict)
+    flows_off: dict = field(default_factory=dict)   # collecte JUMP neutralisée (parts, fonds, règle)
     # Mémos calculés à la demande (bornes de période, parts d'un fonds, positions des lignes d'une part…)
     memo: dict = field(default_factory=dict, repr=False)
 
@@ -502,6 +503,13 @@ def assemble(ref: date, products: pd.DataFrame, shares: pd.DataFrame, countries:
     col_fund = link.set_index("ID_JUMP_PART")["fund_id"]
     groups = col_fund.reindex(share_aum.columns)
     fund_aum = share_aum.T.groupby(groups).sum(min_count=1).T
+
+    # Collecte JUMP neutralisée sur décision métier (données JUMP erronées) : encours conservés, collecte mise à zéro
+    flows_off = flows_disabled(link, shares, fund_rows)
+    if flows_off["parts"]:
+        cols = [c for c in flows_off["parts"] if c in share_flow_cum.columns]
+        share_flow_cum[cols] = 0.0
+        log.warning("Collecte JUMP neutralisée pour %d part(s) de %d fonds (règle « %s »)", len(cols), len(flows_off["funds"]), flows_off["rule"])
     fund_flow_cum = share_flow_cum.T.groupby(groups).sum().T
 
     shares = shares.set_index("pi_shareid", drop=False)
@@ -509,7 +517,49 @@ def assemble(ref: date, products: pd.DataFrame, shares: pd.DataFrame, countries:
     return Model(reference_date=ref, products=products_ix, shares=shares, countries=countries, holdings=holdings,
                  dq=dq, link=link.set_index("ID_JUMP_PART", drop=False), dates=dates, aum_raw=aum,
                  share_aum=share_aum, share_flow_cum=share_flow_cum, funds=fund_rows, fund_aum=fund_aum,
-                 fund_flow_cum=fund_flow_cum, stale_days=stale_days, is_mock=is_mock, link_report=link_report)
+                 fund_flow_cum=fund_flow_cum, stale_days=stale_days, is_mock=is_mock, link_report=link_report, flows_off=flows_off)
+
+
+FLOWS_DISABLED_DEFAULT = r"mediobanca.*r-?co.*valor|r-?co.*valor.*mediobanca"
+
+
+def _fold(v: Any) -> str:
+    import unicodedata
+    s = unicodedata.normalize("NFKD", str(v)).encode("ascii", "ignore").decode().lower()
+    return " ".join(s.replace("_", " ").split())
+
+
+def flows_disabled(link: pd.DataFrame, shares: pd.DataFrame, fund_rows: pd.DataFrame, rule: str | None = None) -> dict:
+    """Parts dont la collecte JUMP est neutralisée : règle APP_FLOWS_DISABLED (expression régulière, insensible à la casse et
+    aux accents ; vide = aucune), appliquée au nom du fonds (toutes ses parts), au nom de la part JUMP ou du référentiel,
+    et au client nommé de la part. Défaut : Mediobanca R-co Valor (collecte JUMP erronée, environ 2,5 Md€)."""
+    import os
+    import re
+    rule = os.environ.get("APP_FLOWS_DISABLED", FLOWS_DISABLED_DEFAULT) if rule is None else rule
+    out = {"rule": rule, "parts": [], "funds": [], "reason": "Collecte JUMP erronée : neutralisée sur décision métier (encours conservés)."}
+    if not rule.strip():
+        return out
+    try:
+        rx = re.compile(rule, re.I)
+    except re.error:
+        log.warning("APP_FLOWS_DISABLED invalide : %r", rule)
+        return out
+    hit = lambda v: isinstance(v, str) and bool(v.strip()) and bool(rx.search(_fold(v)))
+    funds = {fid for fid, r in fund_rows.iterrows() if hit(r.get("name")) or hit(r.get("Product_Name"))}
+    sh = shares.set_index("pi_shareid") if "pi_shareid" in shares.columns else shares
+    parts = set()
+    for r in link.itertuples(index=False):
+        sid = getattr(r, "pi_shareid", None)
+        ref = sh.loc[sid] if isinstance(sid, str) and sid in sh.index else None
+        names = [getattr(r, "NOM_PART", None)]
+        if ref is not None:
+            names += [ref.get("Share_Name"), ref.get("Investor_Type_free_field")]
+        if getattr(r, "fund_id", None) in funds or any(hit(n) for n in names):
+            parts.add(r.ID_JUMP_PART)
+    out["parts"] = sorted(parts)
+    out["funds"] = sorted({f for f in link.set_index("ID_JUMP_PART").loc[sorted(parts), "fund_id"] if isinstance(f, str)}) if parts else []
+    out["fund_level"] = sorted(funds)
+    return out
 
 
 def _common_prefix(names: list[str]) -> str:

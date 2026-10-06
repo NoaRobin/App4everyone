@@ -169,7 +169,7 @@ function AumSection({ f }: { f: FundDetail }) {
           <div className="row" style={{ alignItems: "baseline", gap: 12, marginBottom: 6 }}>
             <span className="h2 num">{eur(f.var[p]?.delta, { signed: true })}</span><Delta v={f.var[p]?.pct} />
           </div>
-          <Bridge v={f.var[p]} end={f.date} height={250} />
+          {f.flows_off ? <div className="empty small">Collecte neutralisée : la variation n'est pas décomposée entre collecte et effet marché.</div> : <Bridge v={f.var[p]} end={f.date} height={250} />}
           <table className="t t--mini" style={{ marginTop: 18 }}>
             <thead><tr><th>Période</th><th className="n">Variation</th><th className="n">Collecte</th><th className="n">Marché</th></tr></thead>
             <tbody>{(["1J", "1S", "1M", "3M", "YTD", "1A", "3A"] as const).map((k) => (
@@ -177,13 +177,39 @@ function AumSection({ f }: { f: FundDetail }) {
             ))}</tbody>
           </table>
         </div>
+        {f.flows_off ? <FlowsOff f={f} /> : (
         <div className="card card--flat">
           <h3 className="h3" style={{ marginBottom: 16 }}>Collecte nette estimée, mois par mois</h3>
           <FlowBars points={f.flows_monthly} ariaLabel={`Collecte nette estimée mensuelle de ${f.name}`} />
           <p className="small muted" style={{ marginTop: 10 }}>Estimation : variation du nombre de parts × VL, toutes parts confondues, en euros.</p>
-        </div>
+        </div>)}
       </div>
     </section>
+  );
+}
+
+type PassifFlows = { available: boolean; reason?: string; first?: string; last?: string; n_days?: number; subscriptions?: number; redemptions?: number; net?: number; n?: number };
+
+/** Collecte JUMP neutralisée (données JUMP erronées) : à la place, souscriptions et rachats lus dans le passif. */
+function FlowsOff({ f }: { f: FundDetail }) {
+  const { api } = useApp();
+  const { data, loading } = useApi<PassifFlows>(api(`/api/passif/fonds/${encodeURIComponent(f.id)}/flux`));
+  return (
+    <div className="card card--flat flows-off">
+      <div className="eyebrow" style={{ color: "var(--gold-ink)" }}>Collecte JUMP neutralisée</div>
+      <h3 className="h3" style={{ margin: "8px 0 10px" }}>La collecte estimée de ce fonds est désactivée.</h3>
+      <p className="small">{f.flows_off?.reason} La variation d'encours n'est attribuée ni à la collecte ni à l'effet marché ; les données sources ne sont pas modifiées.</p>
+      <div className="flows-off__p">
+        <div className="small muted" style={{ marginBottom: 8 }}>D'après le passif (table Transaction, Montant EUR){data?.first ? ` · du ${fdate(data.first)} au ${fdate(data.last ?? "")}` : ""}</div>
+        {!data ? <p className="small muted">{loading ? "Lecture du passif…" : "—"}</p> : !data.available ? <p className="small muted">Passif indisponible : {data.reason}</p> : (
+          <dl className="flows-off__k">
+            <div><dt>Souscriptions</dt><dd className="num up-t">{eur(data.subscriptions)}</dd></div>
+            <div><dt>Rachats</dt><dd className="num down-t">{eur(data.redemptions)}</dd></div>
+            <div><dt>Collecte nette (passif)</dt><dd className="num">{eur(data.net, { signed: true })}</dd></div>
+          </dl>
+        )}
+      </div>
+    </div>
   );
 }
 

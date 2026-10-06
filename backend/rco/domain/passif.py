@@ -1107,6 +1107,33 @@ class Passif:
                         "unlinked_pct": _pct(unlinked, cv) if unlinked else None, "positions": int(x["n"].sum())})
         return {"available": True, "nominatif": True, "as_of": iso, "clients": out}
 
+    def fund_flows(self, fund_id: str) -> dict:
+        """Souscriptions et rachats d'un fonds d'après la table Transaction (Montant EUR, statuts autorisés, fenêtre du passif).
+        Sert de collecte de remplacement quand la collecte JUMP d'un fonds est neutralisée."""
+        d = self.get()
+        t = d.get("transactions") or {}
+        if not d.get("available") or not t.get("available"):
+            return {"available": False, "reason": t.get("reason") or "Transactions non publiées."}
+        isins = {k for k, f in self.isin_to_fund.items() if f == fund_id}
+        if not isins:
+            return {"available": False, "reason": "Aucun ISIN du fonds dans le référentiel."}
+        mt = self.mappings()["transaction"]
+        meas = {"n": ("count", None), "v": ("sumabs", "montant_eur")}
+        g = self.reader.group("transaction", mt, {"isin": ("id", "isin"), "sens": ("text", "sens"), "statut": ("text", "statut")}, meas,
+                              [("date_ge", "date_centralisation", t["first"])],
+                              dedup=["reference", "compte", "isin", "sens", "statut", "date_centralisation", "montant_eur"])
+        if g is None or g.empty:
+            return {"available": True, "fund": fund_id, "first": t["first"], "last": t["last"], "subscriptions": 0.0, "redemptions": 0.0, "net": 0.0, "n": 0}
+        allow = {fold(x) for x in allowed_statuts()}
+        g = g.loc[g["statut"].map(lambda v: fold(_label(v)) in allow).astype(bool)]
+        g = g.loc[g["isin"].map(lambda v: str(v).strip().upper().replace(" ", "") in isins if v is not None else False).astype(bool)]
+        g = g.assign(v=pd.to_numeric(g["v"], errors="coerce").fillna(0.0), sens=g["sens"].map(sens_label))
+        sub = float(g.loc[g["sens"] == "Souscription", "v"].sum())
+        red = float(g.loc[g["sens"] == "Rachat", "v"].sum())
+        return {"available": True, "fund": fund_id, "name": self.fund_names.get(fund_id), "first": t["first"], "last": t["last"],
+                "n_days": t.get("n_days"), "subscriptions": sub, "redemptions": red, "net": sub - red, "n": int(g["n"].sum()),
+                "source": "Transaction (Montant EUR), statuts autorisés"}
+
     def client_book(self, top: int = 60) -> dict:
         """Qui est investi dans quoi, à la date de la photo : les `top` premiers clients par encours, chacun avec ses fonds
         et ses parts (Montant EUR), à la demande de l'équipe ; calculé dans la source, jamais conservé ni journalisé."""

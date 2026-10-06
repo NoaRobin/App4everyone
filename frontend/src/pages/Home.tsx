@@ -1,15 +1,17 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { useApi } from "../lib/api";
 import { useApp } from "../lib/context";
 import { date as fdate, eur, pct, pctRaw } from "../lib/format";
-import { FAMILY_LABEL, FAMILY_ORDER, famHex, famVar } from "../lib/families";
-import { prefersReducedMotion, useReducedMotion, webglAvailable } from "../lib/motion";
-import { gsap, onVisible, ScrollTrigger } from "../lib/gsap";
+import { FAMILY_LABEL, FAMILY_ORDER, famVar } from "../lib/families";
+import { prefersReducedMotion } from "../lib/motion";
+import { gsap, onVisible, ScrollTrigger, whenSeen } from "../lib/gsap";
 import type { FamilyKey, Overview } from "../lib/types";
 import { Board, Money, type BoardRow } from "../components/Story";
 import { TimeChart, useWidth } from "../components/charts";
-import type { RevenueScene, RevFund } from "../three/RevenueScene";
+import { HomeIntro } from "../components/HomeIntro";
+import { RothschildCity } from "../components/RothschildCity";
+import "../styles/home-game.css";
 import * as I from "../components/Icon";
 
 /** Revenus de gestion estimés (GET /api/revenue) : encours × taux de frais de gestion financière. */
@@ -22,7 +24,7 @@ type Revenue = {
   change_1y: { total: number | null; flows: number | null; market: number | null };
   funds: RevRow[]; families: RevGroup[]; ranges: RevGroup[]; asset_classes: RevGroup[]; trend: { d: string; v: number }[];
 };
-type Dist = { countries: BoardRow[]; n_shares_registered: number };
+type Dist = { countries: BoardRow[]; n_shares_registered: number; clients?: { kind?: string; countries: unknown[] }[] };
 
 export default function Home() {
   const { api, meta } = useApp();
@@ -33,10 +35,9 @@ export default function Home() {
   return (
     <div className="home rv">
       <Grain />
-      <Hero r={r} mock={!!meta?.is_mock} />
+      <HomeIntro ov={ov.data ?? null} dist={dist.data ?? null} revenue={r?.total ?? null} mock={!!meta?.is_mock} date={ov.data?.date ?? r?.date} />
       <Paths />
       {r && <Ranking r={r} />}
-      {r && <Drivers r={r} />}
       {r && <Breakdown r={r} />}
       {r && r.trend.length > 2 && <Trend r={r} />}
       {r && <Method r={r} />}
@@ -49,6 +50,8 @@ export default function Home() {
           <Rise><p className="home__lede">{dist.data.n_shares_registered} parts disposent d'au moins un enregistrement actif. <Link className="link" to="/distribution">Tous les pays de commercialisation et le globe</Link></p></Rise>
         </section>
       )}
+      {r && <Drivers r={r} />}
+      {r && <RothschildCity funds={r.funds} total={r.total} date={r.date} mock={!!meta?.is_mock} />}
       <section className="home__close" aria-labelledby="h-close">
         <div className="home__close-in">
           <Rise><div className="eyebrow home__eyebrow">Espace métiers</div></Rise>
@@ -66,148 +69,10 @@ export default function Home() {
   );
 }
 
-// ------------------------------------------------------------------ ouverture : la cité des revenus
-function Hero({ r, mock }: { r: Revenue | null; mock: boolean }) {
-  const host = useRef<HTMLDivElement>(null);
-  const labels = useRef<HTMLDivElement>(null);
-  const root = useRef<HTMLElement>(null);
-  const big = useRef<HTMLSpanElement>(null);
-  const scene = useRef<RevenueScene | null>(null);
-  const nav = useNavigate();
-  const reduced = useReducedMotion();
-  const [tip, setTip] = useState<{ f: RevFund; x: number; y: number } | null>(null);
-  const [focus, setFocus] = useState<string | null>(null);
-  const [gl] = useState(() => webglAvailable());
-  const total = r?.total ?? null;
-
-  // Rideau d'ouverture : barres de cinéma, filet d'or qui balaie l'écran, puis le chiffre
-  useLayoutEffect(() => {
-    const el = root.current;
-    if (!el || prefersReducedMotion()) return;
-    const ctx = gsap.context(() => {
-      const tl = gsap.timeline({ defaults: { ease: "power3.inOut" } });
-      tl.set(".rv__curtain", { autoAlpha: 1 })
-        .fromTo(".rv__sweep", { scaleX: 0 }, { scaleX: 1, duration: 0.55, ease: "power4.inOut" }, 0.05)
-        .to(".rv__sweep", { scaleY: 120, opacity: 0, duration: 0.6, ease: "power2.in" }, 0.6)
-        .to(".rv__curtain", { autoAlpha: 0, duration: 0.5 }, 0.75)
-        .fromTo(".rv__bars i", { scaleY: 1.6 }, { scaleY: 1, duration: 1.2 }, 0.6)
-        .fromTo(".rv__kicker", { opacity: 0, letterSpacing: "0.6em" }, { opacity: 1, letterSpacing: "0.24em", duration: 1.4, ease: "power2.out" }, 0.9)
-        .fromTo(".rv__big", { opacity: 0, yPercent: 30, filter: "blur(18px)" }, { opacity: 1, yPercent: 0, filter: "blur(0px)", duration: 1.3, ease: "expo.out" }, 1.0)
-        .fromTo(".rv__unit, .rv__what", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.9, stagger: 0.1 }, 1.6)
-        .fromTo(".rv__facts > *", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.8, stagger: 0.08, ease: "power3.out", clearProps: "transform" }, 2.1)
-        .fromTo(".rv__legend > *", { opacity: 0, x: -12 }, { opacity: 1, x: 0, duration: 0.6, stagger: 0.06, clearProps: "transform" }, 2.3)
-        .fromTo(".rv__cue", { opacity: 0 }, { opacity: 1, duration: 0.8 }, 2.8);
-    }, el);
-    return () => ctx.revert();
-  }, []);
-
-  // Compteur : 0 → total pendant que les tours sortent de terre
-  useEffect(() => {
-    const el = big.current;
-    if (!el || total == null) return;
-    const { value } = splitEur(total);
-    if (prefersReducedMotion()) { el.textContent = value; return; }
-    const target = parseFloat(value.replace(/\s/g, "").replace(",", "."));
-    const dec = value.includes(",") ? value.split(",")[1].length : 0;
-    const o = { v: 0 };
-    const tw = gsap.to(o, { v: target, duration: 2.4, delay: 1.0, ease: "expo.out",
-      onUpdate: () => { el.textContent = o.v.toLocaleString("fr-FR", { minimumFractionDigits: dec, maximumFractionDigits: dec }); } });
-    return () => { tw.kill(); el.textContent = value; };
-  }, [total]);
-
-  // Scène 3D (chargée à la demande ; sans WebGL, le chiffre et le classement suffisent)
-  useEffect(() => {
-    const el = host.current, lab = labels.current;
-    if (!el || !lab || !r || !gl) return;
-    let alive = true, s: RevenueScene | null = null;
-    import("../three/RevenueScene").then(({ RevenueScene }) => {
-      if (!alive) return;
-      const colors = Object.fromEntries([...FAMILY_ORDER, "nc"].map((k) => [k, famHex(k as FamilyKey, true)]));
-      s = new RevenueScene(el, {
-        funds: r.funds.map((f) => ({ id: f.id, name: f.name, family: f.family, revenue: f.revenue, aum: f.aum, rate: f.rate, share: f.share })),
-        colors, reduced, labelLayer: lab, formatEur: (v) => eur(v),
-        onHover: (f, x, y) => setTip(f ? { f, x, y } : null), onSelect: (f) => nav(`/fonds/${encodeURIComponent(f.id)}`),
-      });
-      scene.current = s;
-    });
-    return () => { alive = false; s?.dispose(); scene.current = null; };
-  }, [r, gl, reduced, nav]);
-  useEffect(() => { scene.current?.setFocus(focus); }, [focus]);
-
-  const parts = total != null ? splitEur(total) : null;
-  const fams = r ? FAMILY_ORDER.map((k) => r.families.find((g) => g.key === k)).filter(Boolean) as RevGroup[] : [];
-  return (
-    <section className="rv__hero" ref={root} aria-labelledby="h-home"
-      onKeyDown={(e) => { if (e.key === "ArrowLeft") scene.current?.nudge(-20); else if (e.key === "ArrowRight") scene.current?.nudge(20); }}>
-      <div className="rv__scene" ref={host} aria-hidden="true" />
-      <div className="rv__labels" ref={labels} aria-hidden="true" />
-      <div className="rv__vignette" aria-hidden="true" />
-      <div className="rv__bars" aria-hidden="true"><i /><i /></div>
-      <div className="rv__copy">
-        <div className="eyebrow rv__kicker">Rothschild &amp; Co Asset Management{r ? ` · au ${fdate(r.date)}` : ""}{mock ? " · données fictives" : ""}</div>
-        <h1 className="rv__title" id="h-home">
-          <span className="sr-only">Revenus de gestion annuels estimés : {total != null ? eur(total) : "chargement"}. </span>
-          <span className={`rv__big num${parts ? "" : " is-loading"}`} aria-hidden="true"><span ref={big}>{parts?.value ?? "000"}</span><span className="rv__unit">{parts?.unit ?? "M€"}</span></span>
-          <span className="rv__what">de revenus de gestion par an, estimés sur les encours d'aujourd'hui.</span>
-        </h1>
-        {r && (
-          <div className="rv__facts">
-            <div><b className="num">{r.rate != null ? pctRaw(r.rate) : "—"}</b><span>taux moyen de frais de gestion</span></div>
-            <div><b className="num">{r.concentration.n_for_80pct ?? "—"}</b><span>fonds font 80&nbsp;% des revenus, sur {r.concentration.n_funds}</span></div>
-            <div><b className={`num ${(r.change_1y.total ?? 0) >= 0 ? "up-t" : "down-t"}`}>{eur(r.change_1y.total, { signed: true })}</b><span>en un an, dont {eur(r.change_1y.flows, { signed: true })} par la collecte</span></div>
-          </div>
-        )}
-        {fams.length > 0 && (
-          <ul className="rv__legend" aria-label="Familles de gestion (survolez pour isoler)">
-            {fams.map((g) => (
-              <li key={g.key}>
-                <button type="button" aria-pressed={focus === g.key} onMouseEnter={() => setFocus(g.key)} onMouseLeave={() => setFocus(null)}
-                  onFocus={() => setFocus(g.key)} onBlur={() => setFocus(null)}>
-                  <span className="dot" style={{ background: famVar(g.key, true) }} />{FAMILY_LABEL[g.key as FamilyKey] ?? g.label}
-                  <span className="num">{pct(g.share, { signed: false, digits: 0 })}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      {tip && (
-        <div className="rv__tip" style={{ left: tip.x, top: tip.y }} role="status">
-          <span className="dot" style={{ background: famVar(tip.f.family, true) }} />
-          <b>{tip.f.name}</b>
-          <dl>
-            <div><dt>Revenus / an</dt><dd className="num">{eur(tip.f.revenue)}</dd></div>
-            <div><dt>Encours</dt><dd className="num">{eur(tip.f.aum)}</dd></div>
-            <div><dt>Taux</dt><dd className="num">{pctRaw(tip.f.rate)}</dd></div>
-            <div><dt>Part des revenus</dt><dd className="num">{pct(tip.f.share, { signed: false })}</dd></div>
-          </dl>
-          <span className="small muted">Cliquer pour ouvrir la fiche</span>
-        </div>
-      )}
-      {gl && r && (
-        <div className="rv__ctl" role="group" aria-label="Vue de la cité des revenus">
-          <button type="button" data-touch onClick={() => scene.current?.nudge(-35)} aria-label="Tourner vers la gauche"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7 7a7 7 0 1 1-2 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><path d="M7 2v5h5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></button>
-          <button type="button" data-touch onClick={() => scene.current?.resetView()} aria-label="Revenir au cadrage d'origine"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="currentColor" /><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="2" /></svg></button>
-          <button type="button" data-touch onClick={() => scene.current?.nudge(35)} aria-label="Tourner vers la droite"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M17 7a7 7 0 1 0 2 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><path d="M17 2v5h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></button>
-        </div>
-      )}
-      <div className="rv__curtain" aria-hidden="true"><i className="rv__sweep" /></div>
-      <div className="home__cue rv__cue" aria-hidden="true"><span>Ce qui rapporte</span><i /></div>
-    </section>
-  );
-}
-
-function splitEur(v: number): { value: string; unit: string } {
-  const a = Math.abs(v);
-  if (a >= 1e9) return { value: (v / 1e9).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), unit: "Md€" };
-  if (a >= 1e6) return { value: (v / 1e6).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }), unit: "M€" };
-  return { value: (v / 1e3).toLocaleString("fr-FR", { maximumFractionDigits: 0 }), unit: "k€" };
-}
-
 // ------------------------------------------------------------------ par où commencer (un chemin par métier)
 const PATHS: { who: string; what: string; links: { to: string; label: string }[] }[] = [
   { who: "Direction", what: "Ce qui rapporte, ce qui grossit, ce qui décroche.", links: [
-    { to: "#h-rank", label: "Les fonds qui rapportent le plus" }, { to: "/encours", label: "La ville des encours" }, { to: "/comparateur", label: "Comparer des fonds" }] },
+    { to: "#h-rank", label: "Les fonds qui rapportent le plus" }, { to: "#h-city", label: "Rothschild City" }, { to: "/comparateur", label: "Comparer des fonds" }] },
   { who: "Commercial & distribution", what: "Quelle part proposer, où, et à qui.", links: [
     { to: "/distribution", label: "Pays et autorisations" }, { to: "/passif", label: "Qui détient nos fonds" }, { to: "/comparateur", label: "Comparateur de performance" }] },
   { who: "Gestion", what: "La fiche, le portefeuille, les performances.", links: [
@@ -302,7 +167,7 @@ function Drivers({ r }: { r: Revenue }) {
     if (!el || prefersReducedMotion()) return;
     const bars = el.querySelectorAll<HTMLElement>(".dv__bar i");
     gsap.set(bars, { scaleX: 0 });
-    return onVisible(el, () => gsap.to(bars, { scaleX: 1, duration: 1.4, stagger: 0.15, ease: "expo.out" }));
+    return whenSeen(el, () => gsap.to(bars, { scaleX: 1, duration: 1.4, stagger: 0.15, ease: "expo.out" }));
   }, [r]);
   const row = (label: string, v: number | null, cls: string, note: string) => (
     <div className={`dv__row ${cls}`}>
@@ -334,7 +199,7 @@ function Drivers({ r }: { r: Revenue }) {
           </div>
         )}
         <div className="dv__lists">
-          {list("Plus forte hausse", up)}
+          {up.length > 0 ? list("Plus forte hausse", up) : <p className="home__lede">Variation par fonds non calculable : il faut au moins un an d'encours et un taux de frais pour chaque fonds.</p>}
           {down.length > 0 && list("Plus forte baisse", down)}
         </div>
       </div>
@@ -385,7 +250,7 @@ function Bridge({ total, change, flows, market }: { total: number; change: numbe
       if (link) tl.fromTo(link, { attr: { x2: num(link, "x1") } }, { attr: { x2: num(link, "x2") }, duration: 0.4, ease: "power2.inOut" }, at + 0.45);
     });
     q(".br__check").forEach((e) => tl.fromTo(e, { opacity: 0, attr: { x2: num(e, "x1") } }, { opacity: 1, attr: { x2: num(e, "x2") }, duration: 0.8 }, 0.35 + n * 0.62));
-    const stop = onVisible(el, () => tl.play(), "0px 0px -18% 0px");
+    const stop = whenSeen(el, () => tl.play(), 0.82);
     return () => { stop(); tl.progress(1).kill(); };
   }, [W, total, change, flows, market]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
@@ -549,7 +414,7 @@ function Rise({ children }: { children: ReactNode }) {
     const el = ref.current;
     if (!el || prefersReducedMotion()) return;
     const tw = gsap.fromTo(el, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 1, ease: "rco", paused: true, clearProps: "transform" });
-    const off = onVisible(el, () => tw.play());
+    const off = whenSeen(el, () => tw.play(), 0.9);
     return () => { off(); tw.revert(); };
   }, []);
   return <div ref={ref} className="rise">{children}</div>;

@@ -191,7 +191,7 @@ class Service:
                         "var": {p: A.variation(fa, ff, m.period_start(end, p), end) for p in ("1M", "YTD", "1A")},
                         "series": A.monthly_points(fa, end)})
         movers = live.dropna(subset=["delta_1M"]).sort_values("delta_1M")
-        flows = live.dropna(subset=["flows_YTD"]).sort_values("flows_YTD")
+        flows = live[~live["id"].isin(self._flows_off_funds())].dropna(subset=["flows_YTD"]).sort_values("flows_YTD")
         cols = ["id", "name", "family", "aum", "delta_1M", "var_1M", "flows_YTD", "flows_1M"]
         n_parts = int((m.share_aum.loc[end].fillna(0) > 0).sum())
         return {
@@ -286,7 +286,21 @@ class Service:
         regs = self._registrations
         by_fund = regs[regs["active"]].groupby("fund_id")["country_fr"].apply(lambda s: sorted(set(s)))
         df["countries"] = df["id"].map(by_fund).apply(lambda v: v if isinstance(v, list) else [])
+        off = self._flows_off_funds()
+        df["flows_off"] = df["id"].isin(off)
+        if off:
+            for c in [c for c in df.columns if c.startswith("flows_") and c != "flows_off"]:
+                df.loc[df["flows_off"], c] = np.nan
         return df
+
+    def _flows_off_funds(self) -> set:
+        return set((getattr(self.m, "flows_off", None) or {}).get("funds", []))
+
+    def flows_off(self) -> dict:
+        """Collecte JUMP neutralisée : règle, fonds et parts concernés."""
+        fo = getattr(self.m, "flows_off", None) or {}
+        return {"rule": fo.get("rule"), "reason": fo.get("reason"), "n_parts": len(fo.get("parts", [])),
+                "funds": [{"id": f, "name": _str(self.m.funds.at[f, "name"]) if f in self.m.funds.index else f} for f in fo.get("funds", [])]}
 
     def funds(self, d: str | None, filters: dict[str, str]) -> dict:
         df = self._fund_table(d)
@@ -439,9 +453,10 @@ class Service:
                                                          ("benchmark", "Benchmark_Name"), ("objective", "Investment_objective_FR"),
                                                          ("horizon", "Recommended_Investment_Period"), ("amf", "ESG_AMF_Category"), ("maturity", "Maturity_date"))},
             "aum": _num(aum.get(end)) if has_aum else None,
-            "var": A.variations(m, aum, fc, end) if has_aum else None,
+            "var": self._var_off(A.variations(m, aum, fc, end), fid) if has_aum else None,
             "aum_series": A.daily_points(aum, end) if has_aum else [],
-            "flows_monthly": _monthly_flows(fc, end) if has_aum else [],
+            "flows_monthly": _monthly_flows(fc, end) if has_aum and fid not in self._flows_off_funds() else [],
+            "flows_off": ({"reason": (m.flows_off or {}).get("reason"), "rule": (m.flows_off or {}).get("rule")} if fid in self._flows_off_funds() else None),
             "performance": perf_payload,
             "shares": shares,
             "composition": comp,
@@ -454,6 +469,12 @@ class Service:
                          for c in self.controls(d)["controls"] if any(it.get("fund_id") == fid for it in c["items"])],
         }
         return payload
+
+    def _var_off(self, var: dict | None, fid: str) -> dict | None:
+        """Collecte neutralisée : ni collecte ni effet marché (l'écart ne peut pas être attribué)."""
+        if not var or fid not in self._flows_off_funds():
+            return var
+        return {k: {**v, "flows": None, "market": None} if isinstance(v, dict) else v for k, v in var.items()}
 
     _BRIEF_COLS = ("Share_Name", "ISIN_Code", "Share_Class", "Subscription_Currency", "Share_Hedged_Against_FX_Exposure",
                    "Income_Distribution", "Investor_Type", "Initial_Subscription_Minimum_Amount", "Ongoing_Charges_ex_post",
@@ -509,7 +530,7 @@ class Service:
         sid = lk["pi_shareid"]
         ref = self._share_refs().get(sid, {}) if isinstance(sid, str) else {}
         a = _num(ctx["aum"].get(jp)) if jp in ctx["aum"] else None
-        flows = ctx["flows"].get(jp) if ctx["start"] is not None else None
+        flows = ctx["flows"].get(jp) if ctx["start"] is not None and jp not in set((m.flows_off or {}).get("parts", [])) else None
         p = ctx["pos"].get(jp, -1)
         return {
             "id": self._share_key(jp), "jump": jp,
@@ -855,6 +876,14 @@ class Service:
         def add(key, title, audience, severity, description, items):
             out.append({"key": key, "title": title, "audience": audience, "severity": severity,
                         "description": description, "items": items, "count": len(items)})
+
+        # 0. Collecte JUMP neutralisée (décision métier : données JUMP erronées)
+        fo = getattr(m, "flows_off", None) or {}
+        if fo.get("funds"):
+            add("flows_off", "Collecte JUMP neutralisée", "Encours", "info",
+                f"{fo.get('reason')} Règle APP_FLOWS_DISABLED : « {fo.get('rule')} ». La variation d'encours de ces fonds n'est attribuée "
+                "ni à la collecte ni à l'effet marché dans leur fiche ; les souscriptions et rachats du passif sont affichés quand ils existent.",
+                [{"fund_id": f, "name": name(f), "detail": f"{sum(1 for p in fo.get('parts', []) if m.link.at[p, 'fund_id'] == f)} part(s) concernée(s)"} for f in fo["funds"]])
 
         # 1. Changement de SRI
         items = []

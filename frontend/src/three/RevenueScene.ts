@@ -30,7 +30,16 @@ export type RevOptions = {
   onHover: (f: RevFund | null, x: number, y: number) => void;
   onSelect: (f: RevFund) => void;
   onIntroDone?: () => void;
+  /** false : la cité attend play() (lancée quand elle entre à l'écran). */
+  autoIntro?: boolean;
+  /** false : pas de décalage de cadrage pour une colonne de texte. */
+  offset?: boolean;
+  /** Position de la caméra (mini-carte), environ dix fois par seconde. */
+  onCamera?: (c: { x: number; z: number; tx: number; tz: number; yaw: number }) => void;
+  /** Noms des quartiers (familles) posés au sol. */
+  districtNames?: Record<string, string>;
 };
+export type DriveInput = { f: number; r: number; turn: number; zoom: number; boost: boolean };
 
 const SECTORS = ["ae", "aid", "fi", "ao", "nc"];
 const H_MAX = 46;
@@ -96,6 +105,15 @@ export class RevenueScene {
   private t0 = performance.now();
   private idleSpin = true;
   private focus: string | null = null;
+  private played = false;
+  private game = false;
+  private input: DriveInput = { f: 0, r: 0, turn: 0, zoom: 0, boost: false };
+  private selected: Tower | null = null;
+  private beacon: THREE.Mesh | null = null;
+  private beaconMat: THREE.MeshBasicMaterial | null = null;
+  private districts: { el: HTMLDivElement; x: number; z: number }[] = [];
+  private lastCam = 0;
+  private lastT = performance.now();
 
   constructor(private host: HTMLElement, private o: RevOptions) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
@@ -130,8 +148,22 @@ export class RevenueScene {
     this.io = new IntersectionObserver(([e]) => { this.visible = e.isIntersecting; });
     this.io.observe(host);
     this.resize();
-    this.playIntro();
+    if (this.o.autoIntro !== false) this.play();
+    else this.hideAll();
     this.raf = requestAnimationFrame(this.loop);
+  }
+
+  /** Lance l'ouverture (une seule fois). */
+  play() {
+    if (this.played) return;
+    this.played = true;
+    this.playIntro();
+  }
+
+  private hideAll() {
+    this.towers.forEach((t) => this.setHeight(t, 0));
+    this.camera.position.set(0.01, 230, 0.01);
+    this.controls.target.set(0, 0, 0);
   }
 
   // ---------------------------------------------------------------- construction
@@ -205,6 +237,23 @@ export class RevenueScene {
         void i;
       });
     });
+    // Balise de la tour sélectionnée : colonne de lumière carrée
+    this.beaconMat = new THREE.MeshBasicMaterial({ color: 0xf3c56b, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    const bg = new THREE.BoxGeometry(1, 1, 1); bg.translate(0, 0.5, 0);
+    this.beacon = new THREE.Mesh(bg, this.beaconMat);
+    this.beacon.visible = false;
+    this.scene.add(this.beacon);
+    // Noms des quartiers, au sol, sur l'avenue de chaque secteur
+    if (this.o.districtNames) {
+      fams.forEach((fam, si) => {
+        const a = (si + 0.5) * span, d = document.createElement("div");
+        d.className = "rev3d__district";
+        d.textContent = this.o.districtNames![fam] ?? fam;
+        d.style.setProperty("--c", this.o.colors[fam] ?? "#8d929c");
+        this.o.labelLayer.appendChild(d);
+        this.districts.push({ el: d, x: Math.cos(a) * 112, z: Math.sin(a) * 112 });
+      });
+    }
     // Étiquettes : les six revenus les plus élevés
     const sorted = [...this.towers].sort((a, b) => b.f.revenue - a.f.revenue);
     sorted.slice(0, 6).forEach((t, k) => {
@@ -308,6 +357,52 @@ export class RevenueScene {
     gsap.to(this.controls.target, { x: tx, y: ty, z: tz, duration: d, ease: "power3.inOut" });
   }
 
+  /** Mode exploration : zoom à la molette, déplacements au clavier, pas de rotation automatique. */
+  setGame(on: boolean) {
+    this.game = on;
+    this.controls.enableZoom = on;
+    this.controls.minDistance = 18;
+    this.controls.maxDistance = 320;
+    if (on) this.idleSpin = false;
+  }
+
+  /** Commandes de pilotage (maintenues tant que les touches sont enfoncées). */
+  setInput(i: Partial<DriveInput>) { this.input = { ...this.input, ...i }; }
+
+  /** Vole jusqu'à une tour et la marque d'une colonne de lumière (null : retire la marque). */
+  select(id: string | null, fly = true) {
+    const t = this.towers.find((x) => x.f.id === id) ?? null;
+    this.selected = t;
+    if (!this.beacon || !this.beaconMat) return;
+    if (!t) { gsap.to(this.beaconMat, { opacity: 0, duration: 0.3, onComplete: () => { if (this.beacon && !this.selected) this.beacon.visible = false; } }); return; }
+    const w = (t.mesh.geometry as THREE.BoxGeometry).parameters.width;
+    this.beacon.visible = true;
+    this.beacon.position.set(t.x, t.h, t.z);
+    this.beacon.rotation.y = t.mesh.rotation.y;
+    this.beacon.scale.set(w * 0.5, 160, w * 0.5);
+    gsap.fromTo(this.beaconMat, { opacity: 0 }, { opacity: 0.28, duration: 0.6 });
+    if (!fly) return;
+    this.idleSpin = false;
+    const d = this.o.reduced ? 0 : 1.2;
+    const c = this.controls.target, p = this.camera.position;
+    const dir = new THREE.Vector3(p.x - c.x, 0, p.z - c.z).normalize();
+    const dist = 70 + t.h * 1.3;
+    gsap.to(this.controls.target, { x: t.x, y: t.h * 0.55, z: t.z, duration: d, ease: "power3.inOut" });
+    gsap.to(this.camera.position, { x: t.x + dir.x * dist, y: t.h * 0.5 + 34 + t.h * 0.5, z: t.z + dir.z * dist, duration: d, ease: "power3.inOut" });
+  }
+
+  /** Recentre la caméra sur un point du sol (clic sur la mini-carte). */
+  goTo(x: number, z: number) {
+    this.idleSpin = false;
+    const c = this.controls.target, p = this.camera.position;
+    const dx = x - c.x, dz = z - c.z, d = this.o.reduced ? 0 : 0.9;
+    gsap.to(this.controls.target, { x, z, duration: d, ease: "power3.inOut" });
+    gsap.to(this.camera.position, { x: p.x + dx, z: p.z + dz, duration: d, ease: "power3.inOut" });
+  }
+
+  /** Positions au sol des tours (mini-carte). */
+  layout() { return this.towers.map((t) => ({ id: t.f.id, family: t.f.family, x: t.x, z: t.z, w: (t.mesh.geometry as THREE.BoxGeometry).parameters.width })); }
+
   /** Met en avant une famille (null : toutes). */
   setFocus(fam: string | null) {
     this.focus = fam;
@@ -358,7 +453,7 @@ export class RevenueScene {
     this.camera.aspect = w / h;
     this.camera.fov = w < 700 ? 54 : 38;
     // sur grand écran, la cité se décale à droite de la colonne de texte au lieu de passer derrière
-    if (w >= 1000) this.camera.setViewOffset(w, h, -w * 0.17, 0, w, h);
+    if (w >= 1000 && this.o.offset !== false) this.camera.setViewOffset(w, h, -w * 0.17, 0, w, h);
     else this.camera.clearViewOffset();
     this.camera.updateProjectionMatrix();
     this.composer?.setSize(w, h);
@@ -370,22 +465,53 @@ export class RevenueScene {
   private loop = (now: number) => {
     this.raf = requestAnimationFrame(this.loop);
     if (!this.visible) return;
-    const busy = this.intro.k < 1 || gsap.isTweening(this.camera.position);
+    const inp = this.input;
+    const busy = this.intro.k < 1 || gsap.isTweening(this.camera.position) || this.game || !!(inp.f || inp.r || inp.turn || inp.zoom);
     if (!this.quality.gate(now, busy)) return;
     const t = (now - this.t0) / 1000;
     if (this.sparkMat && !motionPaused()) this.sparkMat.uniforms.uTime.value = t;
-    if (this.idleSpin && this.intro.k >= 1 && !motionPaused()) {
+    if (this.idleSpin && !this.game && this.intro.k >= 1 && !motionPaused()) {
       const p = this.camera.position, c = this.controls.target;
       const a = 0.0009;
       const x = p.x - c.x, z = p.z - c.z;
       p.x = c.x + x * Math.cos(a) - z * Math.sin(a);
       p.z = c.z + x * Math.sin(a) + z * Math.cos(a);
     }
+    const dt = Math.min(0.05, (now - this.lastT) / 1000);
+    this.lastT = now;
+    const i = this.input;
+    if (i.f || i.r || i.turn || i.zoom) {
+      const p = this.camera.position, c = this.controls.target;
+      const fwd = new THREE.Vector3(c.x - p.x, 0, c.z - p.z).normalize();
+      const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+      const v = (i.boost ? 120 : 55) * dt;
+      const mv = fwd.multiplyScalar(i.f * v).add(right.multiplyScalar(i.r * v));
+      const lim = 150;
+      const nx = Math.max(-lim, Math.min(lim, c.x + mv.x)), nz = Math.max(-lim, Math.min(lim, c.z + mv.z));
+      p.x += nx - c.x; p.z += nz - c.z; c.x = nx; c.z = nz;
+      if (i.turn) {
+        const a = i.turn * 1.4 * dt, x = p.x - c.x, z = p.z - c.z;
+        p.x = c.x + x * Math.cos(a) - z * Math.sin(a);
+        p.z = c.z + x * Math.sin(a) + z * Math.cos(a);
+      }
+      if (i.zoom) {
+        const off = new THREE.Vector3().subVectors(p, c);
+        const len = Math.max(18, Math.min(320, off.length() * (1 + i.zoom * 1.2 * dt)));
+        off.setLength(len); p.copy(c).add(off);
+      }
+      this.idleSpin = false;
+    }
+    if (this.beaconMat && this.selected) this.beaconMat.opacity = 0.2 + 0.1 * Math.sin(t * 3);
+    if (this.o.onCamera && now - this.lastCam > 90) {
+      this.lastCam = now;
+      const p = this.camera.position, c = this.controls.target;
+      this.o.onCamera({ x: p.x, z: p.z, tx: c.x, tz: c.z, yaw: Math.atan2(c.z - p.z, c.x - p.x) });
+    }
     this.controls.update();
     for (const tw of this.towers) {
-      const on = this.hovered === tw ? 1 : 0;
+      const on = this.hovered === tw || this.selected === tw ? 1 : 0;
       tw.hover += (on - tw.hover) * 0.15;
-      const dimT = this.focus && tw.f.family !== this.focus ? 0.18 : this.hovered && this.hovered !== tw ? 0.55 : 1;
+      const dimT = this.focus && tw.f.family !== this.focus ? 0.18 : (this.hovered && this.hovered !== tw && this.selected !== tw) ? 0.55 : 1;
       tw.dim += (dimT - tw.dim) * 0.1;
       tw.mat.emissiveIntensity = 0.22 + tw.hover * 0.9;
       tw.mat.opacity = 0.25 + 0.71 * tw.dim;
@@ -403,6 +529,12 @@ export class RevenueScene {
   private placeLabels() {
     const w = this.host.clientWidth, h = this.host.clientHeight;
     const v = new THREE.Vector3();
+    for (const d of this.districts) {
+      v.set(d.x, 0.5, d.z).project(this.camera);
+      const vis = v.z < 1 && this.intro.k > 0.5;
+      d.el.style.opacity = vis ? String(Math.min(1, (this.intro.k - 0.5) * 2)) : "0";
+      d.el.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px) translate(-50%, -50%)`;
+    }
     const placed: [number, number, number, number][] = [];
     const ranked = this.towers.filter((t) => t.label).sort((a, b) => b.f.revenue - a.f.revenue);
     for (const t of ranked) {
@@ -439,6 +571,8 @@ export class RevenueScene {
     el.removeEventListener("pointerleave", this.onLeave);
     el.removeEventListener("click", this.onClick);
     this.towers.forEach((t) => t.label?.remove());
+    this.districts.forEach((d) => d.el.remove());
+    gsap.killTweensOf(this.beaconMat);
     this.scene.traverse((o) => {
       const m = o as THREE.Mesh;
       m.geometry?.dispose();
