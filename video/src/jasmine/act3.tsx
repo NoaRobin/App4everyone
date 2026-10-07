@@ -151,10 +151,12 @@ const RecapPanel: React.FC<{ k: number }> = ({ k }) => {
   const e = prog(f, 0, 10, EASE.signature);
   return (
     <>
-      <AppCam name={r.name} trim={r.trim} crop={r.crop} w={1040} h={585} cx={CX + side * 360} cy={CY}
-        tilt={`perspective(2200px) rotateY(${-side * mix(34, 20, e)}deg) translateZ(${mix(-300, 0, e)}px)`} frameGlow={0.4 + 0.6 * pulse(f, BEAT)} />
+      <AppCam name={r.name} trim={r.trim} crop={r.crop} w={860} h={484} cx={CX + side * 450} cy={CY}
+        tilt={`perspective(2200px) rotateY(${-side * mix(34, 20, e)}deg) translateZ(${mix(-300, 0, e)}px)`} frameGlow={0.4 + 0.6 * pulse(f, BEAT)}>
+        {r.name === "jfiche" && <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: "40%", background: "linear-gradient(to top, #060b15 35%, rgba(6,11,21,0))" }} />}
+      </AppCam>
       <div style={{ position: "absolute", left: side > 0 ? 144 : undefined, right: side < 0 ? 144 : undefined, top: CY - 110, textAlign: side > 0 ? "left" : "right" }}>
-        <Slam at={0} dur={6} style={{ ...TYPE.hero, fontSize: 200, color: k === 2 ? COLOR.goldInk : COLOR.ink }}>{r.word}</Slam>
+        <Slam at={0} dur={6} style={{ ...TYPE.hero, fontSize: 160, color: k === 2 ? COLOR.goldInk : COLOR.ink }}>{r.word}</Slam>
       </div>
       <Note />
     </>
@@ -172,7 +174,9 @@ const Triptych: React.FC<{ len: number }> = ({ len }) => {
         const x = CX + (i - 1) * mix(700, 560, g) * (1 - close);
         return (
           <AppCam key={i} name={r.name} trim={r.trim + 60} crop={r.crop} w={540} h={304} cx={x} cy={CY - 30}
-            tilt={`perspective(1800px) rotateY(${(1 - i) * 18 * (1 - close)}deg) scale(${mix(0.9, 1, g) * (1 - 0.7 * close)})`} frameGlow={1} opacity={1 - close} />
+            tilt={`perspective(1800px) rotateY(${(1 - i) * 18 * (1 - close)}deg) scale(${mix(0.9, 1, g) * (1 - 0.7 * close)})`} frameGlow={1} opacity={1 - close}>
+            {r.name === "jfiche" && <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: "40%", background: "linear-gradient(to top, #060b15 35%, rgba(6,11,21,0))" }} />}
+          </AppCam>
         );
       })}
       <Thread x0={mix(CX, 120, g) + (CX - 120) * close} x1={mix(CX, W - 120, g) - (CX - 120) * close} y={CY + 170} thick={2.5} />

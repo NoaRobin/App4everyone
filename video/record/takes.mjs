@@ -120,7 +120,7 @@ export const TAKES = {
       await typeAt(c, f, 122, "frais de gestion europe valeur", 2);
       await glide(c, f, 196, 236, [1500, 820], [1180, 330]);
       if (f === 246) await c.keyboard.press("Enter");
-      await glide(c, f, 290, 340, [1180, 330], [700, 640]);
+      await glide(c, f, 290, 340, [1180, 330], [1240, 760]);   // la souris s'écarte : la réponse reste dégagée
     },
   },
   // La fiche répond à tout : une question par mesure de musique (61,5 images)

@@ -125,9 +125,9 @@ export const ExportTitle: React.FC = () => {
 const T = (n: number) => Math.round(n * BEAT);
 const EXPORT_KEYS: CamKey[] = [
   { f: 0, c: { x: 0, y: 0, w: 1920 } },
-  { f: T(3), c: { x: 200, y: 330, w: 1100 }, cut: true },
-  { f: T(5), c: { x: 230, y: 350, w: 1020 } },
-  { f: T(6), c: { x: 0, y: 0, w: 1920 }, cut: true },
+  { f: T(3), c: { x: 200, y: 90, w: 1320 }, cut: true },
+  { f: T(5), c: { x: 220, y: 110, w: 1260 } },
+  { f: T(6), c: { x: 150, y: 120, w: 1150 }, cut: true },   // pendant le défilement : la colonne d'encours par défaut reste hors champ
   { f: T(9) + 8, c: { x: 180, y: 70, w: 900 }, cut: true },
   { f: T(17), c: { x: 190, y: 74, w: 880 } },
   { f: T(23) + 6, c: { x: 236, y: 60, w: 1450 } },
@@ -156,7 +156,6 @@ export const Export: React.FC = () => {
         {intro <= 0 && CLICKS.map(([at, x, y], i) => { const p = toScreen(crop, x, y); return <ClickRing key={i} at={at} x={p.x} y={p.y} size={130} />; })}
       </AppCam>
       {intro > 0 && <Caption eyebrow="Vos données" title={<>Prêtes pour Excel.</>} at={2} out={T(3) - 8} y={420} size={104} align="right" />}
-      {intro <= 0 && <Chapter n="03" label="Exporter" at={T(3)} />}
       <Shade on={f >= T(3)} />
       <Caption eyebrow="Fonds · Product Info" title="Une ligne par fonds." at={T(3) + 2} out={T(6) - 6} y={860} size={72} />
       <Caption eyebrow="Packs prêts à l'emploi" title="Fiche d'identité." at={T(17)} out={T(20) - 5} y={860} size={72} />

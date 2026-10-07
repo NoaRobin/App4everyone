@@ -210,5 +210,5 @@ export const SERIF = FONT.serif;
 
 /** Dégradé bas pour la lisibilité des légendes posées sur l'application. */
 export const Shade: React.FC<{ on?: boolean; h?: number }> = ({ on = true, h = 380 }) => (on
-  ? <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: h, background: "linear-gradient(to top, rgba(6,11,21,0.92), rgba(6,11,21,0.6) 50%, transparent)" }} />
+  ? <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: h, background: "linear-gradient(to top, rgba(6,11,21,0.97), rgba(6,11,21,0.85) 45%, transparent)" }} />
   : null);

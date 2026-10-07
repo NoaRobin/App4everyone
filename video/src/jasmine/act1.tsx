@@ -6,7 +6,7 @@ import { AbsoluteFill, useCurrentFrame } from "remotion";
 import { Ambient, GoldPoint, Grain } from "../components/Chrome";
 import { COLOR, EASE, FONT, NUMERIC, TYPE, VIDEO } from "../theme";
 import { hash, mix, prog } from "../lib/anim";
-import { AppCam, Caption, Chapter, ClickRing, cropAt, CamKey, Flash, Letters, Mark, Note, Shade, Slam, Sweep, Thread } from "./kit";
+import { AppCam, Caption, ClickRing, cropAt, CamKey, Flash, Letters, Mark, Note, Shade, Slam, Sweep, Thread } from "./kit";
 import { BEAT, beat, from, pulse, S } from "./timeline";
 
 const W = VIDEO.width, H = VIDEO.height, CX = W / 2, CY = H / 2;
@@ -103,10 +103,10 @@ export const Open: React.FC = () => {
 // Entrée 246 (= temps 36 du film), fiche ensuite.
 const SEARCH_KEYS: CamKey[] = [
   { f: 0, c: { x: 0, y: 0, w: 1920 } },
-  { f: 46, c: { x: 330, y: 60, w: 920 }, cut: true },   // à droite des résultats : les encours, hors champ
-  { f: 100, c: { x: 350, y: 66, w: 890 } },
-  { f: 108, c: { x: 520, y: 80, w: 900 }, cut: true },
-  { f: 196, c: { x: 560, y: 96, w: 820 } },
+  { f: 46, c: { x: 330, y: 30, w: 920 }, cut: true },   // à droite des résultats : les encours, hors champ
+  { f: 100, c: { x: 350, y: 34, w: 890 } },
+  { f: 108, c: { x: 520, y: 30, w: 900 }, cut: true },
+  { f: 196, c: { x: 560, y: 60, w: 820 } },
   { f: 246, c: { x: 180, y: 70, w: 960 }, cut: true },
   { f: 296, c: { x: 200, y: 90, w: 900 } },
   { f: 308, c: { x: 226, y: 486, w: 690 }, cut: true },
@@ -128,8 +128,7 @@ export const Search: React.FC = () => {
         <AppCam name="jcherche" crop={crop} tilt={tilt} frameGlow={intro} />
       </AbsoluteFill>
       {intro > 0 && <Caption eyebrow="01 · Chercher" title={<>Trouver un fonds.<br />En une frappe.</>} at={2} out={38} y={380} size={104} />}
-      <Shade on={f >= 46} />
-      {f >= 46 && <Chapter n="01" label="Chercher" at={46} />}
+      <Shade on={f >= 46} h={520} />
       <Caption eyebrow="Recherche tolérante" title="Un nom, un ISIN, un gérant." at={lb("search", 3)} out={lb("search", 6) - 6} y={800} size={78} />
       <Caption eyebrow="Ou une question" title="« frais de gestion europe valeur »" at={lb("search", 7)} out={lb("search", 11) - 4} y={820} size={70} />
       <ClickRing at={246} x={W / 2} y={H / 2} size={240} />
