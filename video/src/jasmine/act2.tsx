@@ -42,7 +42,10 @@ export const Fiche: React.FC = () => {
               WebkitTextStroke: `2px rgba(220,179,109,0.55)`, whiteSpace: "nowrap", transform: `translateX(${-(f - q0) * 1.2 * side}px)` }}>{QUESTIONS[k]}</Slam>
           </div>
           <div style={{ opacity: 1 - out }}>
-            <AppCam name="jfiche" trim={6} crop={crop} w={1180} h={664} cx={CX} cy={CY + 70} tilt={tilt} frameGlow={0.35 + 0.65 * pulse(f, BAR, 12)} />
+            <AppCam name="jfiche" trim={6} crop={crop} w={1180} h={664} cx={CX} cy={CY + 70} tilt={tilt} frameGlow={0.35 + 0.65 * pulse(f, BAR, 12)}>
+              {/* sous les réponses courtes, la page continue (section encours) : fondu au noir */}
+              <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: "34%", background: "linear-gradient(to top, #060b15 35%, rgba(6,11,21,0))" }} />
+            </AppCam>
           </div>
           <Chapter n="02" label="Comprendre" at={2} out={t2 - 8} />
           <div style={{ position: "absolute", right: 144, top: 66, ...TYPE.eyebrow, fontSize: 21, color: COLOR.ink2, opacity: enterK * (1 - out) }}>
