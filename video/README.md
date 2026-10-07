@@ -1,7 +1,10 @@
 # Vidéos de présentation — Rothschild & Co Asset Management
 
-Quatre films Remotion en 1920 × 1080, 30 i/s, qui partagent la charte de `src/theme.ts` :
+Cinq films Remotion en 1920 × 1080, 30 i/s, qui partagent la charte de `src/theme.ts` :
 
+- **« Le matin »** (`Matin`, 1 min 30) : avec voix off. L'extraction JUMP de chaque matin et le tic-tac, les outils
+  éparpillés, Fabric qui relie tout, puis Jasmine : plans 3D, cas pratique, export Excel ; JUMP n'aurait pas terminé.
+  Voir `MATIN.md`.
 - **« Jasmine »** (`Jasmine`, 1 min 30) : le film de l'application sous son nouveau nom, dans la lignée du « Fil d'or »
   (le fil et le point d'or, la charte, sans voix), monté sur les temps d'une musique libre de droits. Il va droit au
   métier : recherche de fonds, frais de gestion, questions à la fiche (ISIN, cut-off, SFDR, dépositaire, gérant), puis
@@ -21,6 +24,7 @@ Quatre films Remotion en 1920 × 1080, 30 i/s, qui partagent la charte de `src/t
 
 | Fichier | Contenu |
 |---|---|
+| `rendus/matin.mp4`, `rendus/matin-leger.mp4` | « Le matin », pleine qualité et allégée |
 | `rendus/jasmine.mp4`, `rendus/jasmine-leger.mp4` | « Jasmine », pleine qualité et allégée |
 | `rendus/nexus.mp4`, `rendus/nexus-leger.mp4` | « Entrée », la publicité Nexus, pleine qualité et allégée |
 | `rendus/dix-minutes.mp4` | « Dix minutes », pleine qualité (1920 × 1080, H.264, son AAC 320 kb/s, 71 Mo), voix off hors ligne affinée |
@@ -60,6 +64,7 @@ Dans un environnement sans Chrome téléchargeable, ajoutez `--browser-executabl
 | `public/app/` | Captures de l'application sur ce même jeu fictif |
 | `public/fonts/` | Polices de l'application (Instrument Serif, Inter Tight, JetBrains Mono, licence OFL), servies en local |
 | `music/score.py` | Partition originale synthétisée, calée sur le montage, d'où `public/music.wav` |
+| `src/matin/`, `public/matin/` | « Le matin » : actes I à III, bande son (`music/matin.py`), voix off hors ligne (`music/voix_matin.py`) |
 | `src/jasmine/` | « Jasmine » : grille musicale (`timeline.ts`), logo qui se plie, caméra virtuelle sur les prises, plans 1 à 9 |
 | `public/jasmine/` | Musique du film : « Fireworks », FreePD (domaine public, CC0), extrait de 86,8 s à 176,8 s |
 | `src/nexus/` | « Entrée » : clavier 3D (three.js), actes I à III, minutage sur la grille de la musique |
