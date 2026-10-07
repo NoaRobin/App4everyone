@@ -17,10 +17,13 @@ import { Teaser } from "./teaser/Teaser";
 import { TEASER_TOTAL } from "./teaser/timeline";
 import { Nexus } from "./nexus/Nexus";
 import { NEXUS_TOTAL } from "./nexus/timeline";
+import { Jasmine } from "./jasmine/Jasmine";
+import { JASMINE_TOTAL } from "./jasmine/timeline";
 
 export const RemotionRoot: React.FC = () => {
   return (
     <>
+      <Composition id="Jasmine" component={Jasmine} durationInFrames={JASMINE_TOTAL} {...VIDEO} />
       <Composition id="Nexus" component={Nexus} durationInFrames={NEXUS_TOTAL} {...VIDEO} />
       <Composition id="DixMinutes" component={Teaser} durationInFrames={TEASER_TOTAL} {...VIDEO} />
       <Composition id="FilDor" component={FilDor} durationInFrames={TOTAL} {...VIDEO} />

@@ -102,4 +102,58 @@ export const TAKES = {
     frames: 240,
     at: async (f, c) => { await scroll(c, f, 30, 230, 0, 5200); },
   },
+  // ---------------------------------------------------------------- film « Jasmine »
+  // L'ouverture de l'accueil : le logo Jasmine se déplie, le mot s'écrit
+  jhome: {
+    url: "/", ready: has(".nx__mark svg"), frames: 210,
+  },
+  // Rubrique Fonds : un nom, puis une question directe → la fiche répond (frais de gestion)
+  jcherche: {
+    cursor: true,
+    url: "/fonds", ready: has(".kbd__stage canvas"), warmClock: true,
+    frames: 390,
+    at: async (f, c) => {
+      await glide(c, f, 0, 1, [1500, 820], [1500, 820]);
+      if (f === 6) await c.page.locator(".kbd__bar input").focus();
+      await typeAt(c, f, 16, "europe valeur", 3);
+      if (f === 108) await c.keyboard.press("Escape");
+      await typeAt(c, f, 122, "frais de gestion europe valeur", 2);
+      await glide(c, f, 196, 236, [1500, 820], [1180, 330]);
+      if (f === 246) await c.keyboard.press("Enter");
+      await glide(c, f, 290, 340, [1180, 330], [700, 640]);
+    },
+  },
+  // La fiche répond à tout : une question par mesure de musique (61,5 images)
+  jfiche: {
+    cursor: true,
+    url: `/fonds/${FUND}`, ready: has(".fund__ask input"), warmClock: true,
+    frames: 330,
+    at: async (f, c) => {
+      const ask = async (t0, q) => {
+        if (f === t0) { await c.page.locator(".fund__ask input").first().focus(); await c.keyboard.press("Control+A"); await c.keyboard.press("Backspace"); }
+        await typeAt(c, f, t0 + 2, q, 2);
+      };
+      await glide(c, f, 0, 1, [1000, 800], [1000, 800]);
+      const Q = ["isin", "cut-off", "sfdr", "dépositaire", "gérant"];
+      for (let i = 0; i < Q.length; i++) await ask(6 + Math.round(i * 61.538), Q[i]);
+    },
+  },
+  // Export : Fonds · Product Info, packs de champs, style, téléchargement Excel — chaque clic sur un temps (15,385 images)
+  jexport: {
+    cursor: true,
+    url: "/export", ready: has(".xpk__b"), warmClock: true,
+    frames: 600,
+    at: async (f, c) => {
+      const T = (n) => Math.round(n * 15.385);
+      const hop = async (n0, n1, p0, p1) => { await glide(c, f, T(n0), T(n1) - 4, p0, p1); if (f === T(n1)) await c.mouse.click(p1[0], p1[1]); };
+      await hop(2, 5, [1500, 700], [400, 500]);
+      await scroll(c, f, T(6), T(9), 0, 640);
+      await hop(10, 13, [400, 500], [526, 122]);
+      await hop(14, 17, [526, 122], [330, 214]);
+      await hop(18, 20, [330, 214], [326, 311]);
+      await hop(21, 23, [326, 311], [470, 354]);
+      await hop(25, 28, [470, 354], [758, 882]);
+      await hop(30, 33, [758, 882], [1544, 960]);
+    },
+  },
 };

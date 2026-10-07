@@ -1,0 +1,114 @@
+[
+ {
+  "nom": "Europe Valeur",
+  "famille": "Actions européennes",
+  "gerant": "Victor Lambert",
+  "sfdr": "Article 8",
+  "fraisMax": 0.02,
+  "fraisReels": 0.016
+ },
+ {
+  "nom": "Monde Convictions",
+  "famille": "Actions internationales et gestion diversifiée",
+  "gerant": "Claire Vasseur",
+  "sfdr": "Article 8",
+  "fraisMax": 0.02,
+  "fraisReels": 0.016
+ },
+ {
+  "nom": "Monétaire Euro",
+  "famille": "Fixed Income",
+  "gerant": "Pierre-Antoine Garnier",
+  "sfdr": "Article 8",
+  "fraisMax": 0.012,
+  "fraisReels": 0.009
+ },
+ {
+  "nom": "Patrimoine Équilibre",
+  "famille": "Actions internationales et gestion diversifiée",
+  "gerant": "Julien Ferrand",
+  "sfdr": "Article 8",
+  "fraisMax": 0.012,
+  "fraisReels": 0.009
+ },
+ {
+  "nom": "Europe Convictions",
+  "famille": "Actions européennes",
+  "gerant": "Camille Duret",
+  "sfdr": "Article 8",
+  "fraisMax": 0.02,
+  "fraisReels": 0.016
+ },
+ {
+  "nom": "Crédit Euro Investment Grade",
+  "famille": "Fixed Income",
+  "gerant": "Marc Aubry",
+  "sfdr": "Article 8",
+  "fraisMax": 0.012,
+  "fraisReels": 0.009
+ },
+ {
+  "nom": "Technologies Mondiales",
+  "famille": "Actions internationales et gestion diversifiée",
+  "gerant": "Pierre-Antoine Garnier",
+  "sfdr": "Article 8",
+  "fraisMax": 0.02,
+  "fraisReels": 0.016
+ },
+ {
+  "nom": "Obligations Vertes",
+  "famille": "Fixed Income",
+  "gerant": "Olivier Tessier",
+  "sfdr": "Article 9",
+  "fraisMax": 0.012,
+  "fraisReels": 0.009
+ },
+ {
+  "nom": "France Excellence",
+  "famille": "Actions européennes",
+  "gerant": "Olivier Tessier",
+  "sfdr": "Article 8",
+  "fraisMax": 0.02,
+  "fraisReels": 0.016
+ },
+ {
+  "nom": "Sélection ISR",
+  "famille": "Architecture ouverte",
+  "gerant": "Pierre-Antoine Garnier",
+  "sfdr": "Article 8",
+  "fraisMax": 0.012,
+  "fraisReels": 0.009
+ },
+ {
+  "nom": "Europe Croissance Durable",
+  "famille": "Actions européennes",
+  "gerant": "Karim Haddad",
+  "sfdr": "Article 9",
+  "fraisMax": 0.02,
+  "fraisReels": 0.016
+ },
+ {
+  "nom": "Asie Croissance",
+  "famille": "Actions internationales et gestion diversifiée",
+  "gerant": "Élodie Chastel",
+  "sfdr": "Article 6",
+  "fraisMax": 0.02,
+  "fraisReels": 0.016
+ },
+ {
+  "nom": "Échéance 2028",
+  "famille": "Fixed Income",
+  "gerant": "Camille Duret",
+  "sfdr": "Article 8",
+  "fraisMax": 0.012,
+  "fraisReels": 0.009
+ },
+ {
+  "nom": "Euro Dividendes",
+  "famille": "Actions européennes",
+  "gerant": "Inès Marchal",
+  "sfdr": "Article 8",
+  "fraisMax": 0.02,
+  "fraisReels": 0.016
+ }
+]

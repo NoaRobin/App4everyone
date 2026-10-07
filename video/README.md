@@ -1,7 +1,12 @@
 # Vidéos de présentation — Rothschild & Co Asset Management
 
-Trois films Remotion en 1920 × 1080, 30 i/s, qui partagent la charte de `src/theme.ts` :
+Quatre films Remotion en 1920 × 1080, 30 i/s, qui partagent la charte de `src/theme.ts` :
 
+- **« Jasmine »** (`Jasmine`, 1 min 30) : le film de l'application sous son nouveau nom, dans la lignée du « Fil d'or »
+  (le fil et le point d'or, la charte, sans voix), monté sur les temps d'une musique libre de droits. Il va droit au
+  métier : recherche de fonds, frais de gestion, questions à la fiche (ISIN, cut-off, SFDR, dépositaire, gérant), puis
+  l'export Excel (champs Product Info, packs, style, téléchargement) et le fichier obtenu. Ni encours ni R-co Valor.
+  Voir `JASMINE.md`.
 - **« Entrée »** (`Nexus`, 2 min 15) : la publicité. Le clavier 3D de l'application seul pendant une minute, la touche
   Entrée sur l'explosion de la musique, puis l'application ; l'extraction JUMP tourne en parallèle. Voir `NEXUS.md`.
 
@@ -16,6 +21,7 @@ Trois films Remotion en 1920 × 1080, 30 i/s, qui partagent la charte de `src/th
 
 | Fichier | Contenu |
 |---|---|
+| `rendus/jasmine.mp4`, `rendus/jasmine-leger.mp4` | « Jasmine », pleine qualité et allégée |
 | `rendus/nexus.mp4`, `rendus/nexus-leger.mp4` | « Entrée », la publicité Nexus, pleine qualité et allégée |
 | `rendus/dix-minutes.mp4` | « Dix minutes », pleine qualité (1920 × 1080, H.264, son AAC 320 kb/s, 71 Mo), voix off hors ligne affinée |
 | `rendus/dix-minutes-leger.mp4` | La même vidéo allégée (23 Mo), pour l'envoyer par messagerie |
@@ -25,6 +31,8 @@ Trois films Remotion en 1920 × 1080, 30 i/s, qui partagent la charte de `src/th
 ```console
 npm i                      # dépendances
 npm run dev                # Remotion Studio : aperçu interactif, une composition par scène dans « Scenes »
+npx remotion render Jasmine out/jasmine.mp4 --codec=h264 --crf=17 --audio-codec=aac --audio-bitrate=320k
+node record/recorder.mjs jcherche jfiche jexport   # prises du film « Jasmine »
 npx remotion render DixMinutes out/dix-minutes.mp4 --codec=h264 --crf=17 --audio-codec=aac --audio-bitrate=320k
 node record/recorder.mjs   # réenregistre les prises de l'application (application lancée sur APP_URL, Playwright requis)
 python3 music/voiceover.py --compare   # comparatif de voix Azure (Rémy, Henri), sans toucher au film
@@ -52,6 +60,8 @@ Dans un environnement sans Chrome téléchargeable, ajoutez `--browser-executabl
 | `public/app/` | Captures de l'application sur ce même jeu fictif |
 | `public/fonts/` | Polices de l'application (Instrument Serif, Inter Tight, JetBrains Mono, licence OFL), servies en local |
 | `music/score.py` | Partition originale synthétisée, calée sur le montage, d'où `public/music.wav` |
+| `src/jasmine/` | « Jasmine » : grille musicale (`timeline.ts`), logo qui se plie, caméra virtuelle sur les prises, plans 1 à 9 |
+| `public/jasmine/` | Musique du film : « Fireworks », FreePD (domaine public, CC0), extrait de 86,8 s à 176,8 s |
 | `src/nexus/` | « Entrée » : clavier 3D (three.js), actes I à III, minutage sur la grille de la musique |
 | `src/teaser/` | « Dix minutes » : minutage (`timeline.ts`), actes I à III, plan « Comment ça marche », voix off et sous-titres |
 | `record/` | Enregistreur de l'application en temps virtuel : 1/30 s exactement entre deux captures, donc des prises sans saccade |
