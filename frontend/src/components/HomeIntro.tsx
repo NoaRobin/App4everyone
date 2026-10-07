@@ -1,7 +1,7 @@
 /**
  * Accueil, ouverture — l'application en un geste.
  *
- *   Ouverture   nuit, filet d'or qui balaie, les lettres de NEXUS qui se rassemblent, quatre compteurs nourris par les
+ *   Ouverture   nuit, filet d'or qui balaie, le logo qui se déplie, les lettres de JASMINE qui se rassemblent, quatre compteurs nourris par les
  *               données (encours, fonds, pays, revenus) ; au défilement, le mot s'ouvre et laisse passer la suite.
  *   Traversée   les sept espaces de l'application défilent à l'horizontale, épinglés au défilement (ScrollTrigger) :
  *               un chiffre réel, une phrase, un petit mouvement qui dit ce que fait l'espace, un lien pour y entrer.
@@ -14,11 +14,12 @@ import { gsap, ScrollTrigger } from "../lib/gsap";
 import { prefersReducedMotion } from "../lib/motion";
 import type { Overview } from "../lib/types";
 import * as I from "./Icon";
+import { JasmineMark } from "./JasmineLogo";
 
 type Dist = { countries: { country: string }[]; n_shares_registered: number; clients?: { kind?: string; countries: unknown[] }[] };
 type Props = { ov: Overview | null; dist: Dist | null; revenue: number | null; mock: boolean; date?: string; afterOpening?: ReactNode };
 
-const WORD = "NEXUS";
+const WORD = "JASMINE";
 
 export function HomeIntro({ ov, dist, revenue, mock, date, afterOpening }: Props) {
   const root = useRef<HTMLDivElement>(null);
@@ -69,6 +70,8 @@ export function HomeIntro({ ov, dist, revenue, mock, date, afterOpening }: Props
         .to(".nx__sweep", { scaleY: 90, opacity: 0, duration: 0.65, ease: "power2.in" }, 0.62)
         .to(".nx__curtain", { autoAlpha: 0, duration: 0.5 }, 0.8)
         .fromTo(".nx__floor", { opacity: 0, rotateX: 88 }, { opacity: 1, rotateX: 72, duration: 2.4, ease: "power3.out" }, 0.7)
+        .fromTo(".nx__mark", { opacity: 0, rotate: -150, scale: 0.3 }, { opacity: 1, rotate: 0, scale: 1, duration: 1.8, ease: "expo.out" }, 0.75)
+        .fromTo(".nx__mark g", { scale: 0, svgOrigin: "50 50" }, { scale: 1, svgOrigin: "50 50", duration: 1.2, stagger: 0.09, ease: "back.out(1.4)" }, 0.85)
         .fromTo(".nx__l", { opacity: 0, yPercent: () => gsap.utils.random(-140, 140), xPercent: () => gsap.utils.random(-90, 90), rotate: () => gsap.utils.random(-28, 28), filter: "blur(16px)", scale: 1.6 },
           { opacity: 1, yPercent: 0, xPercent: 0, rotate: 0, filter: "blur(0px)", scale: 1, duration: 1.6, stagger: { each: 0.07, from: "center" } }, 0.9)
         .fromTo(".nx__rule", { scaleX: 0 }, { scaleX: 1, duration: 1.2, ease: "power3.inOut" }, 1.7)
@@ -128,7 +131,8 @@ export function HomeIntro({ ov, dist, revenue, mock, date, afterOpening }: Props
         <div className="nx__glow" aria-hidden="true" />
         <div className="nx__in">
           <div className="eyebrow nx__kicker">Rothschild &amp; Co Asset Management{date ? ` · au ${new Date(`${date}T00:00:00Z`).toLocaleDateString("fr-FR", { timeZone: "UTC" })}` : ""}{mock ? " · données fictives" : ""}</div>
-          <h1 className="nx__word" id="h-nexus" aria-label="Nexus">{WORD.split("").map((c, i) => <span key={i} className="nx__l" aria-hidden="true">{c}</span>)}</h1>
+          <div className="nx__mark" aria-hidden="true"><JasmineMark size={124} /></div>
+          <h1 className="nx__word" id="h-nexus" aria-label="Jasmine">{WORD.split("").map((c, i) => <span key={i} className="nx__l" aria-hidden="true">{c}</span>)}</h1>
           <i className="nx__rule" aria-hidden="true" />
           <p className="nx__tag">Toutes les données de la maison, reliées&nbsp;: fonds, encours, distribution, passif, portefeuilles — et ce qu'ils rapportent.</p>
           <dl className="nx__counters">
