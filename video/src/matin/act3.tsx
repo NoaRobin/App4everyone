@@ -7,7 +7,7 @@ import { AbsoluteFill, Sequence, useCurrentFrame } from "remotion";
 import { Ambient, Grain } from "../components/Chrome";
 import { BRAND, COLOR, EASE, FONT, NUMERIC, TYPE, VIDEO } from "../theme";
 import { mix, prog } from "../lib/anim";
-import { AppCam, CamKey, ClickRing, cropAt, Flash, Letters, Mark, MarkStatic, Note, Slam, Thread } from "../jasmine/kit";
+import { AppCam, CamKey, cropAt, Flash, Letters, Mark, MarkStatic, Note, Slam, Thread } from "../jasmine/kit";
 import { BEAT, JUMP_S, JUMP_START, len, lb, mmss, pulse, sec, from } from "./timeline";
 import FONDS from "../jasmine/fonds.json";
 
@@ -20,58 +20,46 @@ const Question: React.FC<{ at: number; out?: number; children: React.ReactNode; 
     <Slam at={at} out={out} dur={8} style={{ ...TYPE.title, fontSize: size, color: COLOR.ink, textShadow: "0 6px 40px rgba(0,0,0,0.95)" }}>{children}</Slam>
   </div>
 );
+const BottomShade = () => <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 300, background: "linear-gradient(to top, rgba(4,7,14,0.94), rgba(4,7,14,0.55) 60%, transparent)" }} />;
+/** La question, sobre, en bas à gauche (voix off). */
+const Caption: React.FC<{ at: number; children: React.ReactNode }> = ({ at, children }) => (
+  <div style={{ position: "absolute", left: 144, bottom: 104 }}>
+    <Slam at={at} dur={12} style={{ ...TYPE.title, fontSize: 64, color: COLOR.ink, textShadow: "0 4px 30px rgba(0,0,0,0.9)" }}>{children}</Slam>
+  </div>
+);
 const TopShade = () => <div style={{ position: "absolute", left: 0, right: 0, top: 0, height: 320, background: "linear-gradient(to bottom, rgba(4,7,14,0.95), rgba(4,7,14,0.6) 60%, transparent)" }} />;
 
-// ================================================================== 8a. Les frais de gestion (temps 36 → 44) — « jcherche »
+// ================================================================== 8a. Les frais de gestion d'Europe Valeur (temps 36 → 52) — « nfrais »
+const FEES_KEYS: CamKey[] = [
+  { f: 0, c: { x: 500, y: 10, w: 940 } },
+  { f: 196, c: { x: 540, y: 20, w: 860 } },
+  { f: 232, c: { x: 210, y: 440, w: 760 }, cut: true },   // après le passage de page : la réponse
+  { f: 257, c: { x: 226, y: 470, w: 700 } },
+];
 export const Fees: React.FC = () => {
   const f = useCurrentFrame();
-  const show = prog(f, Math.round(2 * BEAT), 8, EASE.signature);
-  const crop = { x: mix(200, 226, show), y: mix(440, 486, show), w: mix(820, 690, prog(f, 32, 90, EASE.premium)) };
   return (
     <AbsoluteFill style={{ background: COLOR.paper }}>
-      <Ambient glow={1.2} />
-      <div style={{ opacity: show }}>
-        <AppCam name="jcherche" trim={261} crop={crop} w={1500} h={844} cx={CX} cy={CY + 90}
-          tilt={`perspective(2400px) rotateX(${mix(18, 6, show)}deg) scale(${1 + 0.01 * pulse(f)})`} frameGlow={0.6} />
-      </div>
-      <TopShade />
-      <Question at={2} size={92}>Les frais de gestion d'un fonds&nbsp;?</Question>
+      <AppCam name="nfrais" crop={cropAt(FEES_KEYS, f)} />
+      <BottomShade />
+      <Caption at={4}>Les frais de gestion d'Europe Valeur&nbsp;?</Caption>
       <Note />
       <Grain />
     </AbsoluteFill>
   );
 };
 
-// ================================================================== 8b. Article 8 × Italie × architecture ouverte × gérant (temps 44 → 60) — « msfdr »
-const SFDR_KEYS: CamKey[] = [
-  { f: 0, c: { x: 500, y: 20, w: 920 } },
-  { f: 120, c: { x: 540, y: 30, w: 860 } },
-  { f: 206, c: { x: 110, y: 70, w: 1000 }, cut: true },
-  { f: 257, c: { x: 120, y: 80, w: 920 } },
-];
-export const Sfdr: React.FC = () => {
+// ================================================================== 8b. L'heure limite de ses parts (temps 52 → 60) — « ncutoff »
+export const Cutoff: React.FC = () => {
   const f = useCurrentFrame();
-  const crop = cropAt(SFDR_KEYS, f);
+  const t = prog(f, 0, len("cutoff"), EASE.premium);
   return (
     <AbsoluteFill style={{ background: COLOR.paper }}>
-      <AbsoluteFill style={{ transform: `scale(${1 + 0.012 * pulse(f, BEAT * 2)})` }}>
-        <AppCam name="msfdr" crop={crop} />
-      </AbsoluteFill>
-      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 420, background: "linear-gradient(to top, rgba(4,7,14,0.96), rgba(4,7,14,0.7) 55%, transparent)" }} />
-      {/* les critères, un par temps, comme des filtres qui s'empilent */}
-      <div style={{ position: "absolute", left: 144, right: 144, bottom: 110, display: "flex", gap: 64, alignItems: "flex-end" }}>
-        {([["SFDR", "Article 8", 0], ["Pays", "Commercialisés en Italie", 1.5], ["Famille", "Architecture ouverte", 3], ["Gérant", "Thomas Delorme", 8.5]] as const).map(([k, t, n]) => {
-          const on = prog(f, Math.round(n * BEAT * 2) + 4, 8, EASE.signature);
-          return (
-            <div key={k} style={{ opacity: on, transform: `translateY(${(1 - on) * 30}px)` }}>
-              <div style={{ ...TYPE.eyebrow, fontSize: 19, color: COLOR.goldInk, marginBottom: 10 }}>{k}</div>
-              <div style={{ ...TYPE.title, fontSize: 50, color: COLOR.ink, borderBottom: `2px solid ${COLOR.gold}`, paddingBottom: 6, whiteSpace: "nowrap" }}>{t}</div>
-            </div>
-          );
-        })}
-      </div>
-      <ClickRing at={204} x={CX} y={CY} size={300} />
-      <Flash at={205} peak={0.45} dur={10} />
+      <AppCam name="ncutoff" trim={8} crop={{ x: mix(200, 226, t), y: mix(470, 500, t), w: mix(760, 700, t) }}>
+        <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: "30%", background: "linear-gradient(to top, #060b15 35%, rgba(6,11,21,0))" }} />
+      </AppCam>
+      <BottomShade />
+      <Caption at={2}>L'heure limite de ses parts&nbsp;?</Caption>
       <Note />
       <Grain />
     </AbsoluteFill>
@@ -86,8 +74,8 @@ export const Rank: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: COLOR.paper }}>
       <AppCam name="mrank" trim={20} crop={crop} />
-      <TopShade />
-      <Question at={1} size={96}>Quel fonds rapporte le plus&nbsp;?</Question>
+      <BottomShade />
+      <Caption at={2}>Les fonds qui rapportent le plus&nbsp;?</Caption>
       <Note />
       <Grain />
     </AbsoluteFill>
@@ -97,22 +85,17 @@ export const Rank: React.FC = () => {
 // ================================================================== 8d. Qui y est investi (temps 68 → 76) — « mcarnet »
 export const Carnet: React.FC = () => {
   const f = useCurrentFrame();
-  // titre et recherche → la liste des clients filtrée sur Europe Valeur → le détail du client cliqué
+  // la recherche se tape, la liste des clients se resserre sur Europe Valeur
   const crop = cropAt([
-    { f: 0, c: { x: 60, y: 250, w: 1100 } },
-    { f: 52, c: { x: 80, y: 270, w: 1040 } },
-    { f: 56, c: { x: 140, y: 300, w: 960 }, cut: true },
-    { f: 112, c: { x: 160, y: 330, w: 900 } },
-    { f: 118, c: { x: 720, y: 380, w: 1100 }, cut: true },
-    { f: 129, c: { x: 740, y: 390, w: 1060 } },
+    { f: 0, c: { x: 40, y: 240, w: 1180 } },
+    { f: 84, c: { x: 60, y: 260, w: 1100 } },
+    { f: 129, c: { x: 80, y: 300, w: 1000 } },
   ], f);
   return (
     <AbsoluteFill style={{ background: COLOR.paper }}>
-      <AbsoluteFill style={{ transform: `scale(${1 + 0.012 * pulse(f, BEAT * 2)})` }}>
-        <AppCam name="mcarnet" trim={20} crop={crop} />
-      </AbsoluteFill>
-      <TopShade />
-      <Question at={1} size={96}>Et qui y est investi&nbsp;?</Question>
+      <AppCam name="ncarnet" crop={crop} />
+      <BottomShade />
+      <Caption at={2}>Et qui y est investi&nbsp;?</Caption>
       <Note>Images de l'application · clients synthétiques, jeu de données fictif</Note>
       <Grain />
     </AbsoluteFill>
@@ -173,11 +156,11 @@ export const Excel: React.FC = () => {
 // ================================================================== 10. Final (temps 84 → 82,4 s) : le couloir, puis les trois accords
 const CORRIDOR = [
   { name: "mcourbe", trim: 40, crop: { x: 0, y: 0, w: 1920 } },
-  { name: "msfdr", trim: 250, crop: { x: 110, y: 70, w: 1000 } },
+  { name: "nfrais", trim: 250, crop: { x: 226, y: 470, w: 700 } },
   { name: "mglobe", trim: 40, crop: { x: 240, y: 60, w: 1440 } },
   { name: "jexport", trim: 470, crop: { x: 594, y: 140, w: 1000 } },
   { name: "mcomp", trim: 40, crop: { x: 80, y: 60, w: 1760 } },
-  { name: "mcarnet", trim: 180, crop: { x: 80, y: 120, w: 900 } },
+  { name: "ncarnet", trim: 120, crop: { x: 80, y: 300, w: 1000 } },
   { name: "mville", trim: 40, crop: { x: 100, y: 70, w: 1720 } },
   { name: "jfiche", trim: 30, crop: { x: 226, y: 500, w: 700 } },
 ];
@@ -223,9 +206,9 @@ export const Finale: React.FC = () => {
           </div>
         </>
       )}
-      <Flash at={h1} peak={1} dur={16} />
-      <Flash at={h2} peak={0.5} dur={10} />
-      <Flash at={h3} peak={0.6} dur={14} />
+      <Flash at={h1} peak={0.55} dur={18} />
+      <Flash at={h2} peak={0.25} dur={12} />
+      <Flash at={h3} peak={0.3} dur={14} />
       <AbsoluteFill style={{ background: "#000", opacity: prog(f, L - 8, 8, EASE.exit) }} />
       <Grain />
     </AbsoluteFill>

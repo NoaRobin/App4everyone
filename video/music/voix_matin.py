@@ -43,9 +43,8 @@ LINES = [
     ("une", 27.9, "Une seule application."),
     ("nom", 31.5, "Jasmine."),
     ("plus", 32.75, "Et plus encore."),
-    ("frais", 49.4, "Les frais de gestion d'un fonds ?"),
-    ("sfdr", 53.4, "Les fonds article 8, commercialisés en Italie, en architecture ouverte…"),
-    ("gerant", 58.3, "gérés par Thomas Delorme ?"),
+    ("frais", 49.6, "Les frais de gestion d'Europe Valeur ?"),
+    ("cutoff", 58.1, "L'heure limite de ses parts ?"),
     ("rapporte", 62.2, "Quel fonds rapporte le plus ?"),
     ("investi", 66.5, "Et qui y est investi ?"),
     ("travaille", 70.85, "Jasmine travaille aussi."),
@@ -55,6 +54,7 @@ LINES = [
     ("signature", 87.4, "Jasmine. Tout, au même endroit."),
 ]
 EXTRA = {
+    "frais": ["Les frais de gestion d'Europe Valeur ?", "Les frais de gestion, d'Europe Valeur ?"],
     "jump": ["Dans Djeump.", "Dans Djomp.", "Dans, Djeump."],
     "pasfini": ["Djeump n'aurait pas terminé.", "Djomp n'aurait pas terminé."],
     "docinfo": ["Dans Dok Info.", "Dans Doc-Info."],

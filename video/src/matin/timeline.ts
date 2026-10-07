@@ -6,9 +6,9 @@
  *  22 → 28 s    Et si tout était au même endroit ? Le schéma dans Fabric.
  *  28 → 30 s    Le creux : « Une seule application. »
  *  30 s         L'explosion : Jasmine. Puis « Et plus encore. »
- *  34 → 49 s    Les plus beaux plans 3D de l'application, une coupe tous les deux temps.
- *  49 → 71 s    Cas pratique : frais de gestion ; Article 8 × Italie × architecture ouverte × gérant ; le fonds qui
- *               rapporte le plus ; qui y est investi.
+ *  34 → 49 s    Six plans 3D de l'application, une mesure chacun.
+ *  49 → 71 s    Cas pratique, recherches tapées à vitesse naturelle : les frais de gestion d'Europe Valeur ; l'heure
+ *               limite de ses parts ; les fonds qui rapportent le plus ; qui y est investi.
  *  71 → 75 s    Jasmine travaille aussi : l'export Excel, très vite.
  *  75 → 82 s    Final : les trois derniers accords.
  *  82 → 90 s    Silence, tic-tac : pendant ce film, JUMP n'aurait pas terminé.
@@ -37,8 +37,8 @@ export const S = {
   drop: [DROP, B(8)],
   more: [B(8), B(12)],
   reel: [B(12), B(36)],
-  fees: [B(36), B(44)],
-  sfdr: [B(44), B(60)],
+  fees: [B(36), B(52)],
+  cutoff: [B(52), B(60)],
   rank: [B(60), B(68)],
   carnet: [B(68), B(76)],
   excel: [B(76), B(84)],

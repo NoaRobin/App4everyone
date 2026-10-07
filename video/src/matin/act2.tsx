@@ -15,28 +15,27 @@ const W = VIDEO.width, CX = W / 2, CY = VIDEO.height / 2;
 // ================================================================== 5. L'explosion (temps 0 → 8)
 export const Drop: React.FC = () => {
   const f = useCurrentFrame();
-  const fly = [0, 1, 2, 3, 4].map((i) => prog(f, i, 7, EASE.signature));
-  const fold = [0, 1, 2, 3, 4].map((i) => prog(f, 4 + i, 9, EASE.premium));
-  const heart = prog(f, 8, 6, EASE.signature);
-  const z = mix(1.6, 1, prog(f, 0, 30, EASE.signature));
-  const rot = mix(-60, 0, prog(f, 0, 26, EASE.signature));
-  const shake = Math.exp(-f / 6) * 10;
+  const fly = [0, 1, 2, 3, 4].map((i) => prog(f, i * 3, 16, EASE.signature));
+  const fold = [0, 1, 2, 3, 4].map((i) => prog(f, 10 + i * 3, 16, EASE.premium));
+  const heart = prog(f, 26, 10, EASE.signature);
+  const z = mix(1.25, 1, prog(f, 0, 50, EASE.signature));
+  const rot = mix(-36, 0, prog(f, 0, 50, EASE.signature));
   const up = prog(f, lb("drop", 4), 14, EASE.signature);
   return (
-    <AbsoluteFill style={{ transform: `translate(${Math.sin(f * 2.1) * shake}px, ${Math.cos(f * 1.7) * shake}px)` }}>
+    <AbsoluteFill>
       <Ambient glow={1.6} />
       {/* rayons */}
-      <AbsoluteFill style={{ background: `conic-gradient(from ${f * 0.6}deg at 50% ${mix(50, 40, up)}%, transparent 0deg, rgba(220,179,109,0.10) 8deg, transparent 18deg, transparent 60deg, rgba(220,179,109,0.08) 70deg, transparent 82deg, transparent 140deg, rgba(220,179,109,0.1) 150deg, transparent 162deg, transparent 230deg, rgba(220,179,109,0.07) 240deg, transparent 252deg, transparent 300deg, rgba(220,179,109,0.09) 310deg, transparent 322deg)`, opacity: Math.min(1, f / 6) }} />
+      <AbsoluteFill style={{ background: `conic-gradient(from ${f * 0.6}deg at 50% ${mix(50, 40, up)}%, transparent 0deg, rgba(220,179,109,0.10) 8deg, transparent 18deg, transparent 60deg, rgba(220,179,109,0.08) 70deg, transparent 82deg, transparent 140deg, rgba(220,179,109,0.1) 150deg, transparent 162deg, transparent 230deg, rgba(220,179,109,0.07) 240deg, transparent 252deg, transparent 300deg, rgba(220,179,109,0.09) 310deg, transparent 322deg)`, opacity: 0.45 * Math.min(1, f / 20) }} />
       <div style={{ position: "absolute", left: CX - 230, top: mix(CY - 230, CY - 330, up), transform: `scale(${z * (1 + 0.035 * pulse(f, BEAT))}) rotate(${rot}deg)` }}>
         <Mark size={460} fly={fly} fold={fold} heart={heart} glow={1.4} />
       </div>
       <div style={{ position: "absolute", left: 0, width: W, top: mix(CY + 260, CY + 130, up), display: "flex", justifyContent: "center" }}>
-        <Letters text="JASMINE" at={lb("drop", 2.5)} every={2} gold={[3]} style={{ fontFamily: FONT.serif, fontSize: 230, color: COLOR.ink, letterSpacing: "0.06em", lineHeight: 1 }} />
+        <Letters text="JASMINE" at={lb("drop", 2.5)} every={4} gold={[3]} style={{ fontFamily: FONT.serif, fontSize: 210, color: COLOR.ink, letterSpacing: "0.06em", lineHeight: 1 }} />
       </div>
       <div style={{ position: "absolute", left: 0, width: W, top: CY + 390, textAlign: "center" }}>
         <Slam at={lb("drop", 5)} style={{ ...TYPE.eyebrow, fontSize: 28, color: COLOR.goldInk, letterSpacing: "0.4em" }}>Toutes vos données · un seul endroit</Slam>
       </div>
-      <Flash at={0} peak={1} dur={18} />
+      <Flash at={0} peak={0.55} dur={22} />
       <Grain />
     </AbsoluteFill>
   );
@@ -66,18 +65,12 @@ export const More: React.FC = () => {
 type Shot = { name: string; trim: number; crop: Crop; label: string; tilt?: [number, number]; zoom?: number };
 const FULL: Crop = { x: 0, y: 0, w: 1920 };
 const SHOTS: Shot[] = [
-  { name: "mville", trim: 60, crop: { x: 100, y: 70, w: 1720 }, label: "La ville des encours", zoom: 1.12 },
-  { name: "mcourbe", trim: 10, crop: FULL, label: "Du jour à l'année", tilt: [14, -6] },
-  { name: "mglobe", trim: 10, crop: { x: 160, y: 60, w: 1600 }, label: "Le monde", zoom: 1.18 },
-  { name: "mcomp", trim: 10, crop: { x: 80, y: 60, w: 1760 }, label: "La performance", tilt: [-14, 5] },
-  { name: "mpassif", trim: 10, crop: { x: 160, y: 500, w: 1040 }, label: "Le passif", zoom: 1.15 },
-  { name: "mclavier", trim: 4, crop: { x: 420, y: 470, w: 1080 }, label: "La recherche", tilt: [12, 6] },
-  { name: "mville", trim: 80, crop: { x: 820, y: 220, w: 900 }, label: "Fonds par fonds", zoom: 1.1 },
-  { name: "mglobe", trim: 70, crop: { x: 300, y: 520, w: 1000 }, label: "Pays par pays", tilt: [-12, -5] },
-  { name: "mcourbe", trim: 70, crop: { x: 1100, y: 350, w: 800 }, label: "La collecte", zoom: 1.2 },
-  { name: "mcomp", trim: 70, crop: { x: 480, y: 220, w: 960 }, label: "Côte à côte", tilt: [14, -4] },
-  { name: "mville", trim: 95, crop: { x: 600, y: 150, w: 1100 }, label: "Chaque fonds, un immeuble", zoom: 1.15 },
-  { name: "mcity", trim: 60, crop: { x: 300, y: 100, w: 1320 }, label: "Jasmine", tilt: [-12, 4] },
+  { name: "mville", trim: 40, crop: { x: 100, y: 70, w: 1720 }, label: "La ville des encours", zoom: 1.08 },
+  { name: "mcourbe", trim: 10, crop: FULL, label: "Du jour à l'année", tilt: [10, -4] },
+  { name: "mglobe", trim: 20, crop: { x: 160, y: 60, w: 1600 }, label: "Le monde", zoom: 1.1 },
+  { name: "mcomp", trim: 20, crop: { x: 80, y: 60, w: 1760 }, label: "La performance", tilt: [-10, 4] },
+  { name: "mpassif", trim: 10, crop: { x: 160, y: 500, w: 1040 }, label: "Le passif", zoom: 1.08 },
+  { name: "mcity", trim: 60, crop: { x: 300, y: 100, w: 1320 }, label: "Toute la maison", tilt: [8, 3] },
 ];
 
 const ReelShot: React.FC<{ s: Shot; i: number; d: number }> = ({ s, i, d }) => {
@@ -95,9 +88,9 @@ const ReelShot: React.FC<{ s: Shot; i: number; d: number }> = ({ s, i, d }) => {
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 300, background: "linear-gradient(to top, rgba(4,7,14,0.9), transparent)" }} />
       <div style={{ position: "absolute", left: 144, bottom: 110, opacity: lab, transform: `translateX(${(1 - lab) * -40}px)` }}>
         <div style={{ ...TYPE.eyebrow, fontSize: 20, color: COLOR.goldInk, marginBottom: 10 }}>{String(i + 1).padStart(2, "0")} / {SHOTS.length}</div>
-        <div style={{ ...TYPE.title, fontSize: 96, color: COLOR.ink, textShadow: "0 6px 40px rgba(0,0,0,0.9)" }}>{s.label}</div>
+        <div style={{ ...TYPE.title, fontSize: 80, color: COLOR.ink, textShadow: "0 6px 40px rgba(0,0,0,0.9)" }}>{s.label}</div>
       </div>
-      <Flash at={0} peak={0.35} dur={6} />
+      <AbsoluteFill style={{ background: COLOR.paper, opacity: 1 - prog(f, 0, 8, EASE.premium) }} />
     </AbsoluteFill>
   );
 };
@@ -107,7 +100,7 @@ export const Reel: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: COLOR.paper }}>
       {SHOTS.map((s, i) => {
-        const a = Math.round(i * 2 * BEAT), b = i === SHOTS.length - 1 ? L : Math.round((i + 1) * 2 * BEAT);
+        const a = Math.round(i * 4 * BEAT), b = i === SHOTS.length - 1 ? L : Math.round((i + 1) * 4 * BEAT);
         return (
           <Sequence key={i} from={a} durationInFrames={b - a} layout="none">
             <ReelShot s={s} i={i} d={b - a} />

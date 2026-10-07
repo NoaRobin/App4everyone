@@ -6,12 +6,12 @@ import { AbsoluteFill, Sequence, staticFile } from "remotion";
 import { Audio } from "@remotion/media";
 import { Fabric, Gap, Mornings, Tools } from "./act1";
 import { Drop, More, Reel } from "./act2";
-import { Carnet, Epilogue, Excel, Fees, Finale, Rank, Sfdr } from "./act3";
+import { Carnet, Cutoff, Epilogue, Excel, Fees, Finale, Rank } from "./act3";
 import { from, len, ShotId } from "./timeline";
 
 const SHOTS: [ShotId, React.FC][] = [
   ["mornings", Mornings], ["tools", Tools], ["fabric", Fabric], ["gap", Gap], ["drop", Drop], ["more", More], ["reel", Reel],
-  ["fees", Fees], ["sfdr", Sfdr], ["rank", Rank], ["carnet", Carnet], ["excel", Excel], ["finale", Finale], ["epilogue", Epilogue],
+  ["fees", Fees], ["cutoff", Cutoff], ["rank", Rank], ["carnet", Carnet], ["excel", Excel], ["finale", Finale], ["epilogue", Epilogue],
 ];
 
 export const Matin: React.FC = () => (

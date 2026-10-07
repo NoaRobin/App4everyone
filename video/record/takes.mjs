@@ -24,6 +24,14 @@ async function typeAt(ctx, f, f0, text, every = 3) {
   if (f >= f0 && Number.isInteger(i) && i < text.length) await ctx.keyboard.type(text[i]);
 }
 
+/** Frappe naturelle : un caractère toutes les 3 à 7 images (déterministe), une petite pause après les espaces. */
+function naturalSchedule(f0, text, seed = 7) {
+  const out = []; let t = f0, x = seed;
+  for (const ch of text) { out.push(t); x = (x * 9301 + 49297) % 233280; t += 3 + Math.floor((x / 233280) * 5) + (ch === " " ? 3 : 0); }
+  return out;
+}
+async function typeNatural(ctx, f, sched, text) { const i = sched.indexOf(f); if (i >= 0) await ctx.keyboard.type(text[i]); }
+
 export const FUND = "155e77ed-09bd-519f-b072-47124ec183bc";
 
 export const TAKES = {
@@ -250,5 +258,44 @@ export const TAKES = {
   mclavier: {
     url: "/fonds", ready: has(".kbd__stage canvas"), warmClock: true, frames: 90,
     at: async (f, c) => { if (f === 2) await c.page.locator(".kbd__bar input").focus(); await typeAt(c, f, 6, "jasmine", 3); },
+  },
+  // ---------------------------------------------------------------- « Le matin », version institutionnelle : frappe naturelle
+  nfrais: {
+    cursor: true,
+    url: "/fonds", ready: has(".kbd__stage canvas"), warmClock: true,
+    frames: 270,
+    at: async (f, c) => {
+      const q = "frais de gestion europe valeur", sc = naturalSchedule(18, q, 11);
+      await glide(c, f, 0, 1, [1500, 860], [1500, 860]);
+      if (f === 6) await c.page.locator(".kbd__bar input").focus();
+      await typeNatural(c, f, sc, q);
+      await glide(c, f, 168, 196, [1500, 860], [1180, 330]);
+      if (f === 204) await c.keyboard.press("Enter");
+      await glide(c, f, 220, 260, [1180, 330], [1300, 800]);
+    },
+  },
+  ncutoff: {
+    cursor: true,
+    url: `/fonds/${FUND}`, ready: has(".fund__ask input"), warmClock: true,
+    frames: 140,
+    at: async (f, c) => {
+      const q = "cut-off", sc = naturalSchedule(22, q, 5);
+      await glide(c, f, 0, 16, [1300, 900], [560, 541]);
+      if (f === 18) await c.page.locator(".fund__ask input").first().click();
+      await typeNatural(c, f, sc, q);
+      await glide(c, f, 80, 130, [560, 541], [1100, 800]);
+    },
+  },
+  ncarnet: {
+    cursor: true,
+    url: "/passif", ready: has("#h-carnet"), warmClock: true,
+    frames: 150,
+    at: async (f, c) => {
+      const q = "europe valeur", sc = naturalSchedule(16, q, 3);
+      await glide(c, f, 0, 10, [1500, 700], [700, 338]);
+      if (f === 12) await c.page.locator("input[placeholder^='Client']").first().click();
+      await typeNatural(c, f, sc, q);
+      await glide(c, f, 100, 140, [700, 338], [1500, 900]);
+    },
   },
 };

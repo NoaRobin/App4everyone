@@ -100,23 +100,16 @@
  {
   "id": "frais",
   "file": "matin/vo/frais.wav",
-  "at": 1482,
-  "frames": 54,
-  "text": "Les frais de gestion d'un fonds ?"
+  "at": 1488,
+  "frames": 67,
+  "text": "Les frais de gestion d'Europe Valeur ?"
  },
  {
-  "id": "sfdr",
-  "file": "matin/vo/sfdr.wav",
-  "at": 1602,
-  "frames": 151,
-  "text": "Les fonds article 8, commercialisés en Italie, en architecture ouverte…"
- },
- {
-  "id": "gerant",
-  "file": "matin/vo/gerant.wav",
-  "at": 1749,
-  "frames": 52,
-  "text": "gérés par Thomas Delorme ?"
+  "id": "cutoff",
+  "file": "matin/vo/cutoff.wav",
+  "at": 1743,
+  "frames": 49,
+  "text": "L'heure limite de ses parts ?"
  },
  {
   "id": "rapporte",
