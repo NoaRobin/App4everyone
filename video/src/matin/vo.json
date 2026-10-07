@@ -1,0 +1,170 @@
+[
+ {
+  "id": "matin",
+  "file": "matin/vo/matin.wav",
+  "at": 68,
+  "frames": 55,
+  "text": "Chaque matin, à la même heure…"
+ },
+ {
+  "id": "lance",
+  "file": "matin/vo/lance.wav",
+  "at": 154,
+  "frames": 47,
+  "text": "on lance l'extraction."
+ },
+ {
+  "id": "attend",
+  "file": "matin/vo/attend.wav",
+  "at": 240,
+  "frames": 34,
+  "text": "Et l'on attend."
+ },
+ {
+  "id": "existe",
+  "file": "matin/vo/existe.wav",
+  "at": 370,
+  "frames": 54,
+  "text": "La réponse existe déjà."
+ },
+ {
+  "id": "eparpille",
+  "file": "matin/vo/eparpille.wav",
+  "at": 423,
+  "frames": 45,
+  "text": "Mais elle est éparpillée."
+ },
+ {
+  "id": "pi",
+  "file": "matin/vo/pi.wav",
+  "at": 477,
+  "frames": 42,
+  "text": "Dans Product Info."
+ },
+ {
+  "id": "jump",
+  "file": "matin/vo/jump.wav",
+  "at": 518,
+  "frames": 33,
+  "text": "Dans JUMP."
+ },
+ {
+  "id": "centaure",
+  "file": "matin/vo/centaure.wav",
+  "at": 552,
+  "frames": 35,
+  "text": "Dans Centaure."
+ },
+ {
+  "id": "docinfo",
+  "file": "matin/vo/docinfo.wav",
+  "at": 588,
+  "frames": 39,
+  "text": "Dans Doc Info."
+ },
+ {
+  "id": "endroit",
+  "file": "matin/vo/endroit.wav",
+  "at": 659,
+  "frames": 61,
+  "text": "Et si tout était au même endroit ?"
+ },
+ {
+  "id": "fabric",
+  "file": "matin/vo/fabric.wav",
+  "at": 738,
+  "frames": 46,
+  "text": "Relié, dans Fabric."
+ },
+ {
+  "id": "une",
+  "file": "matin/vo/une.wav",
+  "at": 837,
+  "frames": 49,
+  "text": "Une seule application."
+ },
+ {
+  "id": "nom",
+  "file": "matin/vo/nom.wav",
+  "at": 945,
+  "frames": 31,
+  "text": "Jasmine."
+ },
+ {
+  "id": "plus",
+  "file": "matin/vo/plus.wav",
+  "at": 982,
+  "frames": 37,
+  "text": "Et plus encore."
+ },
+ {
+  "id": "frais",
+  "file": "matin/vo/frais.wav",
+  "at": 1482,
+  "frames": 54,
+  "text": "Les frais de gestion d'un fonds ?"
+ },
+ {
+  "id": "sfdr",
+  "file": "matin/vo/sfdr.wav",
+  "at": 1602,
+  "frames": 151,
+  "text": "Les fonds article 8, commercialisés en Italie, en architecture ouverte…"
+ },
+ {
+  "id": "gerant",
+  "file": "matin/vo/gerant.wav",
+  "at": 1749,
+  "frames": 52,
+  "text": "gérés par Thomas Delorme ?"
+ },
+ {
+  "id": "rapporte",
+  "file": "matin/vo/rapporte.wav",
+  "at": 1866,
+  "frames": 51,
+  "text": "Quel fonds rapporte le plus ?"
+ },
+ {
+  "id": "investi",
+  "file": "matin/vo/investi.wav",
+  "at": 1995,
+  "frames": 44,
+  "text": "Et qui y est investi ?"
+ },
+ {
+  "id": "travaille",
+  "file": "matin/vo/travaille.wav",
+  "at": 2126,
+  "frames": 49,
+  "text": "Jasmine travaille aussi."
+ },
+ {
+  "id": "excel",
+  "file": "matin/vo/excel.wav",
+  "at": 2178,
+  "frames": 63,
+  "text": "Vos fichiers Excel, en un clic."
+ },
+ {
+  "id": "pendant",
+  "file": "matin/vo/pendant.wav",
+  "at": 2496,
+  "frames": 39,
+  "text": "Pendant ce film…"
+ },
+ {
+  "id": "pasfini",
+  "file": "matin/vo/pasfini.wav",
+  "at": 2550,
+  "frames": 55,
+  "text": "JUMP n'aurait pas terminé."
+ },
+ {
+  "id": "signature",
+  "file": "matin/vo/signature.wav",
+  "at": 2622,
+  "frames": 58,
+  "text": "Jasmine. Tout, au même endroit."
+ }
+]

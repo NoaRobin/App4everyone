@@ -156,4 +156,99 @@ export const TAKES = {
       await hop(30, 33, [758, 882], [1544, 960]);
     },
   },
+  // ---------------------------------------------------------------- film « Le matin » : cas pratique
+  // Article 8, commercialisés en Italie, architecture ouverte, puis un gérant → la sélection
+  msfdr: {
+    cursor: true,
+    url: "/fonds", ready: has(".kbd__stage canvas"), warmClock: true,
+    frames: 330,
+    at: async (f, c) => {
+      await glide(c, f, 0, 1, [1500, 860], [1500, 860]);
+      if (f === 4) await c.page.locator(".kbd__bar input").focus();
+      await typeAt(c, f, 10, "article 8 italie architecture ouverte", 2);
+      await typeAt(c, f, 124, " thomas delorme", 2);
+      await glide(c, f, 160, 196, [1500, 860], [1180, 300]);
+      if (f === 204) await c.keyboard.press("Enter");
+      await glide(c, f, 230, 300, [1180, 300], [1700, 900]);
+    },
+  },
+  // Les fonds qui rapportent le plus (accueil, section des revenus)
+  mrank: {
+    url: "/", ready: has(".nx__mark svg"), warmClock: true,
+    setup: async ({ page, step }) => {
+      for (let y = 0; y <= 10400; y += 400) { await page.evaluate((v) => window.scrollTo(0, v), y); await step(40); await page.waitForTimeout(30); }
+      await scrollToSel(page, "#h-rank", -120);
+      for (let i = 0; i < 6; i++) { await step(0); await page.waitForTimeout(80); }
+    },
+    frames: 180,
+  },
+  // Qui est investi dans Europe Valeur (passif nominatif, clients synthétiques)
+  mcarnet: {
+    cursor: true,
+    url: "/passif", ready: has("#h-carnet"), warmClock: true,
+    frames: 240,
+    at: async (f, c) => {
+      await glide(c, f, 0, 30, [1500, 700], [700, 338]);
+      if (f === 34) await c.page.locator("input[placeholder^='Client']").first().click();
+      await typeAt(c, f, 40, "europe valeur", 2);
+      await glide(c, f, 90, 130, [700, 338], [600, 465]);
+      if (f === 136) await c.mouse.click(600, 465);
+      await glide(c, f, 150, 230, [600, 465], [1500, 900]);
+    },
+  },
+  // Ce que rapporte le fonds (fiche Europe Valeur, en-tête)
+  mrapporte: {
+    cursor: true,
+    url: `/fonds/${FUND}`, ready: has(".fund__ask input"), warmClock: true,
+    frames: 150,
+    at: async (f, c) => { await glide(c, f, 20, 110, [1700, 900], [1232, 470]); },
+  },
+  // ---------------------------------------------------------------- film « Le matin » : les plus beaux plans 3D
+  mhome: { url: "/", ready: has(".nx__mark svg"), frames: 150 },
+  mcity: {
+    cursor: true,
+    url: "/", ready: has(".nx__mark svg"), warmClock: true,
+    setup: async ({ page, step }) => {
+      await scrollToSel(page, ".c3__scene", -40);
+      for (let i = 0; i < 200; i++) { await step(33); await page.waitForTimeout(40); if (await page.evaluate(() => !!document.querySelector(".c3__scene canvas"))) break; }
+      for (let i = 0; i < 30; i++) { await step(33); await page.waitForTimeout(20); }
+    },
+    frames: 150,
+    at: async (f, c) => { await glide(c, f, 0, 148, [700, 600], [1300, 520]); },
+  },
+  mville: {
+    cursor: true,
+    url: "/encours", ready: has(".ecity__canvas canvas"), warmClock: true, frames: 120,
+    at: async (f, c) => { await glide(c, f, 0, 118, [1500, 720], [1050, 540]); },
+  },
+  mcourbe: {
+    cursor: true,
+    url: "/encours", ready: has(".aum3d__canvas canvas"), warmClock: true,
+    setup: async ({ page }) => { await scrollToSel(page, ".aumc", -110); },
+    frames: 120,
+    at: async (f, c) => { await glide(c, f, 0, 118, [600, 760], [1500, 680]); },
+  },
+  mglobe: {
+    cursor: true,
+    url: "/distribution", ready: has(".globe__canvas canvas"), warmClock: true,
+    setup: async ({ page }) => { await scrollToSel(page, ".globe", -90); },
+    frames: 120,
+    at: async (f, c) => { await glide(c, f, 0, 118, [1250, 620], [960, 500]); },
+  },
+  mpassif: {
+    url: "/passif", ready: has(".pa-seg canvas"), warmClock: true,
+    setup: async ({ page }) => { await scrollToSel(page, ".pa-seg", -140); },
+    frames: 120,
+  },
+  mcomp: {
+    cursor: true,
+    url: "/comparateur", ready: has(".cmp3d__canvas canvas"), warmClock: true,
+    setup: async ({ page }) => { await scrollToSel(page, ".cmp3d", -170); },
+    frames: 120,
+    at: async (f, c) => { await glide(c, f, 0, 118, [700, 650], [1300, 640]); },
+  },
+  mclavier: {
+    url: "/fonds", ready: has(".kbd__stage canvas"), warmClock: true, frames: 90,
+    at: async (f, c) => { if (f === 2) await c.page.locator(".kbd__bar input").focus(); await typeAt(c, f, 6, "jasmine", 3); },
+  },
 };
