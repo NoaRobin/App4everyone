@@ -172,7 +172,7 @@ export const Excel: React.FC = () => {
 
 // ================================================================== 10. Final (temps 84 → 82,4 s) : le couloir, puis les trois accords
 const CORRIDOR = [
-  { name: "mcity", trim: 40, crop: { x: 120, y: 80, w: 1680 } },
+  { name: "mcourbe", trim: 40, crop: { x: 0, y: 0, w: 1920 } },
   { name: "msfdr", trim: 250, crop: { x: 110, y: 70, w: 1000 } },
   { name: "mglobe", trim: 40, crop: { x: 240, y: 60, w: 1440 } },
   { name: "jexport", trim: 470, crop: { x: 594, y: 140, w: 1000 } },

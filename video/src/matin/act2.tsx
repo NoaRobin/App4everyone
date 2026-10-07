@@ -66,18 +66,18 @@ export const More: React.FC = () => {
 type Shot = { name: string; trim: number; crop: Crop; label: string; tilt?: [number, number]; zoom?: number };
 const FULL: Crop = { x: 0, y: 0, w: 1920 };
 const SHOTS: Shot[] = [
-  { name: "mcity", trim: 20, crop: { x: 120, y: 80, w: 1680 }, label: "Rothschild City", zoom: 1.12 },
-  { name: "mville", trim: 10, crop: { x: 100, y: 70, w: 1720 }, label: "Les encours", tilt: [14, -6] },
-  { name: "mcourbe", trim: 10, crop: FULL, label: "Jour après jour", zoom: 1.18 },
-  { name: "mglobe", trim: 10, crop: { x: 240, y: 60, w: 1440 }, label: "Le monde", tilt: [-14, 5] },
-  { name: "mpassif", trim: 10, crop: { x: 60, y: 40, w: 1800 }, label: "Le passif", zoom: 1.15 },
-  { name: "mcomp", trim: 10, crop: { x: 80, y: 60, w: 1760 }, label: "La performance", tilt: [12, 6] },
-  { name: "mclavier", trim: 4, crop: { x: 380, y: 300, w: 1160 }, label: "La recherche", zoom: 1.1 },
-  { name: "mcity", trim: 80, crop: { x: 420, y: 220, w: 1080 }, label: "Les revenus", tilt: [-12, -5] },
-  { name: "mville", trim: 70, crop: { x: 360, y: 200, w: 1200 }, label: "Fonds par fonds", zoom: 1.2 },
-  { name: "mglobe", trim: 70, crop: { x: 480, y: 160, w: 960 }, label: "Pays par pays", tilt: [14, -4] },
-  { name: "mcourbe", trim: 70, crop: { x: 300, y: 160, w: 1300 }, label: "Collecte", zoom: 1.15 },
-  { name: "mcomp", trim: 70, crop: { x: 300, y: 160, w: 1300 }, label: "Côte à côte", tilt: [-12, 4] },
+  { name: "mville", trim: 60, crop: { x: 100, y: 70, w: 1720 }, label: "La ville des encours", zoom: 1.12 },
+  { name: "mcourbe", trim: 10, crop: FULL, label: "Du jour à l'année", tilt: [14, -6] },
+  { name: "mglobe", trim: 10, crop: { x: 160, y: 60, w: 1600 }, label: "Le monde", zoom: 1.18 },
+  { name: "mcomp", trim: 10, crop: { x: 80, y: 60, w: 1760 }, label: "La performance", tilt: [-14, 5] },
+  { name: "mpassif", trim: 10, crop: { x: 160, y: 500, w: 1040 }, label: "Le passif", zoom: 1.15 },
+  { name: "mclavier", trim: 4, crop: { x: 420, y: 470, w: 1080 }, label: "La recherche", tilt: [12, 6] },
+  { name: "mville", trim: 80, crop: { x: 820, y: 220, w: 900 }, label: "Fonds par fonds", zoom: 1.1 },
+  { name: "mglobe", trim: 70, crop: { x: 300, y: 520, w: 1000 }, label: "Pays par pays", tilt: [-12, -5] },
+  { name: "mcourbe", trim: 70, crop: { x: 1100, y: 350, w: 800 }, label: "La collecte", zoom: 1.2 },
+  { name: "mcomp", trim: 70, crop: { x: 480, y: 220, w: 960 }, label: "Côte à côte", tilt: [14, -4] },
+  { name: "mville", trim: 95, crop: { x: 600, y: 150, w: 1100 }, label: "Chaque fonds, un immeuble", zoom: 1.15 },
+  { name: "mcity", trim: 60, crop: { x: 300, y: 100, w: 1320 }, label: "Jasmine", tilt: [-12, 4] },
 ];
 
 const ReelShot: React.FC<{ s: Shot; i: number; d: number }> = ({ s, i, d }) => {
