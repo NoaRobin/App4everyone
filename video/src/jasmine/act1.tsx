@@ -103,8 +103,8 @@ export const Open: React.FC = () => {
 // Entrée 246 (= temps 36 du film), fiche ensuite.
 const SEARCH_KEYS: CamKey[] = [
   { f: 0, c: { x: 0, y: 0, w: 1920 } },
-  { f: 46, c: { x: 300, y: 60, w: 1320 }, cut: true },
-  { f: 100, c: { x: 380, y: 70, w: 1180 } },
+  { f: 46, c: { x: 330, y: 60, w: 920 }, cut: true },   // à droite des résultats : les encours, hors champ
+  { f: 100, c: { x: 350, y: 66, w: 890 } },
   { f: 108, c: { x: 520, y: 80, w: 900 }, cut: true },
   { f: 196, c: { x: 560, y: 96, w: 820 } },
   { f: 246, c: { x: 180, y: 70, w: 960 }, cut: true },

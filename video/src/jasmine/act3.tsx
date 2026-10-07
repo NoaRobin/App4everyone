@@ -121,7 +121,7 @@ export const Excel: React.FC = () => {
 
 // ================================================================== 8. Chercher. Comprendre. Exporter. (mesures 35 → 39)
 const RECAP = [
-  { word: "Chercher.", name: "jcherche", trim: 70, crop: { x: 380, y: 70, w: 1180 } },
+  { word: "Chercher.", name: "jcherche", trim: 140, crop: { x: 520, y: 80, w: 900 } },
   { word: "Comprendre.", name: "jfiche", trim: 30, crop: { x: 226, y: 500, w: 700 } },
   { word: "Exporter.", name: "jexport", trim: 470, crop: { x: 594, y: 140, w: 1000 } },
 ];
