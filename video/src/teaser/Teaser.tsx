@@ -6,8 +6,8 @@ import type React from "react";
 import { AbsoluteFill, Series, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { Audio } from "@remotion/media";
 import { Launch, Ritual, Rupture } from "./act1";
-import { Aum, Manifesto, Valor } from "./act2a";
-import { CourbeShot, DistributionShot, PassifShot, PerfShot, RevenusShot, SearchShot, WallShot } from "./act2b";
+import { Manifesto } from "./act2a";
+import { DistributionShot, PassifShot, PerfShot, RevenusShot, SearchShot, WallShot } from "./act2b";
 import { Count, Sign } from "./act3";
 import { FabricShot } from "./fabric";
 import { JumpHud } from "./kit";
@@ -32,9 +32,6 @@ export const Teaser: React.FC = () => {
         <Series.Sequence name="I · La rupture" durationInFrames={SHOTS.rupture} premountFor={fps}><Rupture /></Series.Sequence>
         <Series.Sequence name="I · Comment ça marche" durationInFrames={SHOTS.fabric} premountFor={fps}><FabricShot /></Series.Sequence>
         <Series.Sequence name="II · Manifeste" durationInFrames={SHOTS.manifesto} premountFor={fps}><Manifesto /></Series.Sequence>
-        <Series.Sequence name="II · 50,3 Md€" durationInFrames={SHOTS.aum} premountFor={fps}><Aum /></Series.Sequence>
-        <Series.Sequence name="II · R-co Valor" durationInFrames={SHOTS.valor} premountFor={fps}><Valor /></Series.Sequence>
-        <Series.Sequence name="II · Courbe" durationInFrames={SHOTS.courbe} premountFor={fps}><CourbeShot /></Series.Sequence>
         <Series.Sequence name="II · Revenus" durationInFrames={SHOTS.revenus} premountFor={fps}><RevenusShot /></Series.Sequence>
         <Series.Sequence name="II · Distribution" durationInFrames={SHOTS.distribution} premountFor={fps}><DistributionShot /></Series.Sequence>
         <Series.Sequence name="II · Passif" durationInFrames={SHOTS.passif} premountFor={fps}><PassifShot /></Series.Sequence>

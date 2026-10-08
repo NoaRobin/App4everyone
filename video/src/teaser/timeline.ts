@@ -1,24 +1,21 @@
 /**
- * « Dix minutes » — minutage. Coupes franches, toutes sur un temps de la musique (120 battements par minute : un temps
+ * « Dix minutes » — minutage (version Jasmine : sans les plans encours ni R-co Valor, 1 min 57,5). Coupes franches, toutes sur un temps de la musique (120 battements par minute : un temps
  * = 15 images). Le compteur d'extraction JUMP démarre à l'image JUMP_START et court jusqu'au plan « Le compte ».
  */
 export const SHOTS = {
   launch: 210,       // I.  L'attente — une extraction JUMP est lancée
-  ritual: 390,       //     le rituel : recherches, fichiers, mails, attente
-  rupture: 180,      //     « Et si tout était déjà là ? »
-  fabric: 540,       //     comment ça marche : les outils d'aujourd'hui, Fabric, l'application
-  manifesto: 240,    // II. Toutes les informations métiers, au même endroit
-  aum: 360,          //     50,3 milliards d'euros
-  valor: 330,        //     R-co Valor, 10 Md€
-  courbe: 360,       //     l'encours, du jour à l'année (application)
-  revenus: 330,      //     les fonds qui nous font gagner le plus (application)
-  distribution: 330, //     globe et Sankey (application)
-  passif: 270,       //     qui détient nos fonds (application)
-  perf: 300,         //     comparer, en relief (application)
-  search: 390,       //     plus de recherches Product Info (application)
-  wall: 240,         //     le mur : tout, en même temps
-  count: 360,        // III. Le compte : l'extraction n'est pas finie
-  sign: 450,         //     signature, puis le nom de l'application : Nexus
+  ritual: 375,       //     le rituel : recherches, fichiers, mails, attente
+  rupture: 135,      //     « Et si tout était déjà là ? »
+  fabric: 510,       //     comment ça marche : les outils d'aujourd'hui, Fabric, l'application
+  manifesto: 195,    // II. Toutes les informations métiers, au même endroit
+  revenus: 240,      //     les fonds qui nous font gagner le plus (application)
+  distribution: 210, //     globe et Sankey (application)
+  passif: 180,       //     qui détient nos fonds (application)
+  perf: 210,         //     comparer, en relief (application)
+  search: 375,       //     plus de recherches Product Info (application)
+  wall: 225,         //     le mur : tout, en même temps
+  count: 300,        // III. Le compte : l'extraction n'est pas finie
+  sign: 360,         //     signature, puis le nom de l'application : Jasmine
 } as const;
 export type Shot = keyof typeof SHOTS;
 

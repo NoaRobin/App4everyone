@@ -120,46 +120,6 @@
   "text": "Résultat : toutes les informations métiers, au même endroit."
  },
  {
-  "shot": "aum",
-  "i": 0,
-  "file": "vo/aum-0.wav",
-  "at": 150,
-  "frames": 107,
-  "text": "Plus de cinquante milliards d'euros d'encours, suivis au jour le jour."
- },
- {
-  "shot": "valor",
-  "i": 0,
-  "file": "vo/valor-0.wav",
-  "at": 64,
-  "frames": 85,
-  "text": "Notre plus gros fonds, R-co Valor : dix milliards."
- },
- {
-  "shot": "valor",
-  "i": 1,
-  "file": "vo/valor-1.wav",
-  "at": 158,
-  "frames": 51,
-  "text": "Près d'un euro sur cinq."
- },
- {
-  "shot": "courbe",
-  "i": 0,
-  "file": "vo/courbe-0.wav",
-  "at": 30,
-  "frames": 119,
-  "text": "L'encours de chaque fonds, par jour, par semaine, par mois ou par année."
- },
- {
-  "shot": "courbe",
-  "i": 1,
-  "file": "vo/courbe-1.wav",
-  "at": 155,
-  "frames": 34,
-  "text": "En un clic."
- },
- {
   "shot": "revenus",
   "i": 0,
   "file": "vo/revenus-0.wav",
@@ -234,14 +194,6 @@
  {
   "shot": "wall",
   "i": 0,
-  "file": "vo/wall-0.wav",
-  "at": 8,
-  "frames": 26,
-  "text": "Encours."
- },
- {
-  "shot": "wall",
-  "i": 1,
   "file": "vo/wall-1.wav",
   "at": 38,
   "frames": 29,
@@ -249,7 +201,7 @@
  },
  {
   "shot": "wall",
-  "i": 2,
+  "i": 1,
   "file": "vo/wall-2.wav",
   "at": 68,
   "frames": 36,
@@ -257,7 +209,7 @@
  },
  {
   "shot": "wall",
-  "i": 3,
+  "i": 2,
   "file": "vo/wall-3.wav",
   "at": 98,
   "frames": 27,
@@ -265,7 +217,7 @@
  },
  {
   "shot": "wall",
-  "i": 4,
+  "i": 3,
   "file": "vo/wall-4.wav",
   "at": 128,
   "frames": 34,
@@ -273,7 +225,7 @@
  },
  {
   "shot": "wall",
-  "i": 5,
+  "i": 4,
   "file": "vo/wall-5.wav",
   "at": 164,
   "frames": 33,

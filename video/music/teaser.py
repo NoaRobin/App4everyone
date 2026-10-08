@@ -196,21 +196,13 @@ theme(at("fabric", 300), START["manifesto"], THEME_A, vel=0.34)
 # manifeste : le thème s'élève, le cor
 harp_arp(START["manifesto"], [50, 57, 62, 66, 69, 74, 78], 0.07, 0.5)
 horn(START["manifesto"], [50, 57], 6.0, 0.36)
-theme(START["manifesto"], START["aum"], THEME_B, vel=0.42)
-flow(START["manifesto"], START["aum"], 0.5, 0.3)
+theme(START["manifesto"], START["revenus"], THEME_B, vel=0.42)
+flow(START["manifesto"], START["revenus"], 0.5, 0.3)
 strings(START["manifesto"], TC, vel=0.3, cello=True, bass=True)
-# 50,3 Md€
-flow(START["aum"], START["valor"], 0.5, 0.3)
-horn(at("aum", 150), [57, 62], 4.5, 0.36)
-harp_arp(at("aum", 150), [62, 66, 69, 74, 78, 81], 0.08, 0.45)
-theme(START["aum"], START["valor"], THEME_A, vel=0.38, octave=12)
-# R-co Valor : la tour monte en harpe
-flow(START["valor"], START["courbe"], 0.5, 0.3)
-harp_arp(at("valor", 60), [62, 64, 66, 69, 71, 74, 76, 78, 81, 83, 86], 0.14, 0.42)
-horn(at("valor", 120), [62, 66], 4.0, 0.34)
 # l'application : le piano coule plus vite, le thème revient par moments
-flow(START["courbe"], START["passif"], 0.25, 0.24)
-theme(START["courbe"], START["revenus"], THEME_A, vel=0.36)
+horn(START["revenus"], [57, 62], 4.5, 0.34)
+flow(START["revenus"], START["passif"], 0.25, 0.24)
+theme(START["revenus"], START["distribution"], THEME_A, vel=0.36)
 theme(START["distribution"], START["passif"], THEME_B, vel=0.36)
 flow(START["passif"], START["passif"] + 4.0, 0.5, 0.26, octave=12)                       # passif : respiration
 flow(START["passif"] + 4.0, START["search"], 0.25, 0.24)

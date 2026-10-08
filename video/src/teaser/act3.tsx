@@ -3,6 +3,7 @@
  * n'est pas finie. « L'application, elle, vous a tout montré. » La barre se défait en fil d'or, puis la signature.
  */
 import type React from "react";
+import { MarkStatic } from "../jasmine/kit";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 import { GoldPoint, Grain } from "../components/Chrome";
 import { mix, prog, tracking } from "../lib/anim";
@@ -55,9 +56,9 @@ export const Sign: React.FC = () => {
   const line = prog(frame, 0, 36, EASE.signature);
   const half = mix(600, 300, line);
   const name = prog(frame, 14, 30), am = prog(frame, 30, 30), tag = prog(frame, 96, 26), soon = prog(frame, 176, 26);
-  const black = prog(frame, 262, 36, EASE.premium);
-  // le nom de l'application, sur le noir : un point d'or, un trait qui s'étire, puis « Nexus »
-  const NX = 312;
+  const black = prog(frame, 200, 30, EASE.premium);
+  // le nom de l'application, sur le noir : un point d'or, un trait qui s'étire, puis le jasmin et « Jasmine »
+  const NX = 222;
   const nxPoint = prog(frame, NX, 18), nxLine = prog(frame, NX + 10, 40, EASE.signature);
   const nxName = prog(frame, NX + 22, 36, EASE.premium), nxOut = prog(frame, SIGN_END - 34, 32, EASE.premium);
   const nxHalf = mix(0, 330, nxLine);
@@ -81,13 +82,14 @@ export const Sign: React.FC = () => {
       <Grain />
       <AbsoluteFill style={{ background: "#000", opacity: black }} />
       <AbsoluteFill style={{ opacity: 1 - nxOut }}>
-        <div style={{ position: "absolute", left: 0, width: VIDEO.width, top: CY - 150, textAlign: "center", opacity: nxName, transform: `translateY(${(1 - nxName) * 22}px)` }}>
-          <span style={{ ...TYPE.display, fontSize: 200, color: COLOR.ink, letterSpacing: tracking(frame, NX + 22, 60, 0.12, 0.02) }}>Nexus</span>
+        <div style={{ position: "absolute", left: 0, width: VIDEO.width, top: CY - 330, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, opacity: nxName, transform: `translateY(${(1 - nxName) * 22}px)` }}>
+          <div style={{ transform: `rotate(${mix(-40, 0, nxName)}deg) scale(${mix(0.6, 1, nxName)})` }}><MarkStatic size={190} glow={0.9} /></div>
+          <span style={{ ...TYPE.display, fontSize: 200, color: COLOR.ink, letterSpacing: tracking(frame, NX + 22, 60, 0.12, 0.02) }}>Jasmine</span>
         </div>
         <div style={{ position: "absolute", left: VIDEO.width / 2 - nxHalf, width: nxHalf * 2, top: CY + 96, height: 2, background: `linear-gradient(90deg, transparent, ${COLOR.gold} 30%, ${COLOR.goldGlow} 70%, transparent)`, boxShadow: "0 0 14px rgba(220,179,109,0.45)", opacity: nxLine }} />
         <GoldPoint x={VIDEO.width / 2} y={CY + 97} size={12} glow={1.2} style={{ opacity: nxPoint * (1 - 0.6 * nxLine) }} />
       </AbsoluteFill>
-      <Letterbox k={prog(frame, 200, 40, EASE.premium)} />
+      <Letterbox k={prog(frame, 180, 30, EASE.premium)} />
     </AbsoluteFill>
   );
 };

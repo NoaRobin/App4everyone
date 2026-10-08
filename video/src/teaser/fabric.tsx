@@ -114,7 +114,7 @@ export const FabricShot: React.FC = () => {
         </div>
         {/* l'application */}
         <div style={{ position: "absolute", inset: 0, perspective: 1800, perspectiveOrigin: "70% 50%", opacity: prog(f, tApp, 24) }}>
-          <Screen3D name="courbe" scale={0.34} reflection={false} transform={`translate3d(${SCREEN_X - VIDEO.width / 2}px, ${CUBE.y - VIDEO.height / 2}px, 0px) rotateY(${mix(-24, -10, pan)}deg)`} />
+          <Screen3D name="comparateur" scale={0.34} reflection={false} transform={`translate3d(${SCREEN_X - VIDEO.width / 2}px, ${CUBE.y - VIDEO.height / 2}px, 0px) rotateY(${mix(-24, -10, pan)}deg)`} />
         </div>
         <div style={{ position: "absolute", left: SCREEN_X - 326, top: CUBE.y + 210, display: "flex", gap: 14 }}>
           {shapeWords.map((w, i) => {

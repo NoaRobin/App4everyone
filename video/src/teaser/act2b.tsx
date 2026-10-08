@@ -16,25 +16,6 @@ const Stage: React.FC<{ children: React.ReactNode; persp?: number; origin?: stri
   <div style={{ position: "absolute", inset: 0, perspective: persp, perspectiveOrigin: origin, transformStyle: "preserve-3d" }}>{children}</div>
 );
 
-// ------------------------------------------------------------------ la courbe des encours
-export const CourbeShot: React.FC = () => {
-  const f = useCurrentFrame();
-  const k = prog(f, 0, SHOTS.courbe, EASE.premium);
-  const enter = prog(f, 0, 40, EASE.signature);
-  return (
-    <AbsoluteFill>
-      <Night />
-      <Stage>
-        <Screen3D name="courbe" scale={0.7}
-          transform={`translate3d(${mix(260, 180, k)}px, ${mix(80, 40, k)}px, ${mix(-900, -260, enter) + 120 * k}px) rotateY(${mix(-30, -12, k)}deg) rotateX(${mix(8, 3, k)}deg)`} />
-      </Stage>
-      <ShotTitle eyebrow="Encours" title={<>Du jour à l'année.<br /><span style={{ color: COLOR.goldInk, fontStyle: "italic" }}>En un clic.</span></>} at={20} out={SHOTS.courbe - 16} y={190} size={104} />
-      <Note>{NOTE_APP}</Note>
-      <Grain />
-    </AbsoluteFill>
-  );
-};
-
 // ------------------------------------------------------------------ les fonds qui rapportent (mise au point sélective)
 export const RevenusShot: React.FC = () => {
   const f = useCurrentFrame();
@@ -149,9 +130,9 @@ export const SearchShot: React.FC = () => {
 };
 
 // ------------------------------------------------------------------ le mur : tout, en même temps
-const WALL = ["courbe", "home", "globe", "passif", "comparateur", "sankey", "fiche", "ville", "recherche", "courbe", "globe", "home"];
+const WALL = ["fiche", "home", "globe", "passif", "comparateur", "sankey", "fiche", "recherche", "comparateur", "passif", "globe", "home"];
 /** Les mots du mur suivent la voix : un mot par réplique, puis « Tout est relié. » */
-const FLASH = ["Encours", "Revenus", "Distribution", "Passif", "Performance", "Tout est relié."];
+const FLASH = ["Revenus", "Distribution", "Passif", "Performance", "Tout est relié."];
 
 export const WallShot: React.FC = () => {
   const f = useCurrentFrame();
