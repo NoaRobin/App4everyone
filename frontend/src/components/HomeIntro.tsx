@@ -1,7 +1,7 @@
 /**
  * Accueil, ouverture — l'application en un geste.
  *
- *   Ouverture   nuit, filet d'or qui balaie, le logo qui se déplie, les lettres de JASMINE qui se rassemblent, quatre compteurs nourris par les
+ *   Ouverture   nuit, filet d'or qui balaie, le logo qui se déplie, les lettres de JASMIN qui se rassemblent, quatre compteurs nourris par les
  *               données (encours, fonds, pays, revenus) ; au défilement, le mot s'ouvre et laisse passer la suite.
  *   Traversée   les sept espaces de l'application défilent à l'horizontale, épinglés au défilement (ScrollTrigger) :
  *               un chiffre réel, une phrase, un petit mouvement qui dit ce que fait l'espace, un lien pour y entrer.
@@ -19,7 +19,7 @@ import { JasmineMark } from "./JasmineLogo";
 type Dist = { countries: { country: string }[]; n_shares_registered: number; clients?: { kind?: string; countries: unknown[] }[] };
 type Props = { ov: Overview | null; dist: Dist | null; revenue: number | null; mock: boolean; date?: string; afterOpening?: ReactNode };
 
-const WORD = "JASMINE";
+const WORD = "JASMIN";
 
 export function HomeIntro({ ov, dist, revenue, mock, date, afterOpening }: Props) {
   const root = useRef<HTMLDivElement>(null);
@@ -132,7 +132,7 @@ export function HomeIntro({ ov, dist, revenue, mock, date, afterOpening }: Props
         <div className="nx__in">
           <div className="eyebrow nx__kicker">Rothschild &amp; Co Asset Management{date ? ` · au ${new Date(`${date}T00:00:00Z`).toLocaleDateString("fr-FR", { timeZone: "UTC" })}` : ""}{mock ? " · données fictives" : ""}</div>
           <div className="nx__mark" aria-hidden="true"><JasmineMark size={124} /></div>
-          <h1 className="nx__word" id="h-nexus" aria-label="Jasmine">{WORD.split("").map((c, i) => <span key={i} className="nx__l" aria-hidden="true">{c}</span>)}</h1>
+          <h1 className="nx__word" id="h-nexus" aria-label="Jasmin">{WORD.split("").map((c, i) => <span key={i} className="nx__l" aria-hidden="true">{c}</span>)}</h1>
           <i className="nx__rule" aria-hidden="true" />
           <p className="nx__tag">Toutes les données de la maison, reliées&nbsp;: fonds, encours, distribution, passif, portefeuilles — et ce qu'ils rapportent.</p>
           <dl className="nx__counters">

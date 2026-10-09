@@ -37,10 +37,10 @@ export function Header() {
     <header className={`hdr hdr--night${scrolled ? " is-scrolled" : ""}${pano ? " hdr--pano" : ""}`}>
       <a href="#contenu" className="skip-link">Aller au contenu</a>
       <div className="hdr__in">
-        <Link to="/" className="brand brand--jasmine" aria-label="Jasmine, Rothschild & Co Asset Management — accueil">
+        <Link to="/" className="brand brand--jasmine" aria-label="Jasmin, Rothschild & Co Asset Management — accueil">
           <JasmineMark size={34} style={{ flex: "none" }} />
           <span className="brand__txt">
-            <span className="brand__name">Jasmine</span>
+            <span className="brand__name">Jasmin</span>
             <span className="brand__sub">Rothschild &amp; Co · Asset Management</span>
           </span>
         </Link>
