@@ -8,7 +8,8 @@ Règles de confidentialité (appliquées aux données réelles comme aux donnée
   volume absolu ; les effectifs en tranches (« 5 à 19 », « 20 à 99 »…), jamais en nombres exacts ;
 - souscriptions et rachats sont montrés côte à côte, jamais soustraits (aucun flux net).
 Exception explicite de l'équipe : la vue nominative (porteurs d'un fonds, fonds d'un client, carnet « qui est investi dans
-quoi » avec les encours Montant EUR par client, fonds et part) est calculée à la demande dans la source, jamais mise en cache
+quoi » avec les encours Montant EUR par client, fonds et part ; détail des positions d'un fonds, ligne à ligne, avec les
+colonnes nominatives Nom client, Compte et Commercial) est calculée à la demande dans la source, jamais mise en cache
 ni journalisée, et n'est jamais reconstruite à partir de parts en pourcentage.
 Les compteurs techniques de la lecture des tables (lignes, valeurs nulles, dates valides) sont des nombres de lignes,
 jamais des montants : ils servent à vérifier la qualité de la source.
@@ -420,6 +421,36 @@ class PandasReader:
         df = df[df["client"].isin(set(keep))]
         return df.groupby(["client", "isin"], dropna=False).agg(n=("v", "size"), v=("v", "sum"), comptes=("compte", "nunique")).reset_index()
 
+    def positions(self, name: str, m: dict, isins: list[str], where=(), eq: tuple[str, str | None] | None = None, cap: int = 5000) -> pd.DataFrame:
+        """Positions d'un fonds, ligne à ligne, triées par Montant EUR décroissant (vue nominative, à la demande)."""
+        c = cols_of(m)
+        idx = self._index(name, m, where)
+        idx = idx[self._of(name, c, "isin", "id", idx).isin(set(isins)).fillna(False).to_numpy()]
+        if eq is not None:
+            k, v = eq
+            if k not in c:
+                return pd.DataFrame(columns=[a for a, _, _ in POS_FIELDS])
+            x = self._of(name, c, k, "id" if k == "isin" else "text", idx)
+            idx = idx[(x.isna() if v is None else x.eq(v)).fillna(False).to_numpy()]
+        df = pd.DataFrame({a: (self._of(name, c, k, how, idx) if k in c else pd.Series(None, index=idx, dtype=object)) for a, k, how in POS_FIELDS}, index=idx)
+        df = df.sort_values("v", ascending=False, na_position="last").head(int(cap))
+        for a, _, how in POS_FIELDS:
+            if how == "date":
+                df[a] = pd.to_datetime(df[a]).dt.strftime("%Y-%m-%d").where(df[a].notna(), None) if len(df) else df[a]
+            elif how != "num":
+                df[a] = df[a].astype(object).where(df[a].notna(), None)
+        return df.reset_index(drop=True)
+
+
+# Détail d'une position (vue nominative) : alias, clé du schéma, conversion
+POS_FIELDS: tuple[tuple[str, str, str], ...] = (
+    ("client", "nom_client", "text"), ("compte", "compte", "id"), ("compte_nom", "compte_nom", "text"), ("classification", "classification", "text"),
+    ("commercial", "commercial", "text"), ("sdg", "sdg", "text"), ("teneur", "teneur", "text"), ("pays", "pays", "text"),
+    ("type_fonds", "type_fonds", "text"), ("fonds", "fonds", "text"), ("isin", "isin", "id"), ("classe_actif", "classe_actif", "text"),
+    ("desk", "desk", "text"), ("quantite", "quantite", "num"), ("cours", "cours", "num"), ("montant_devise", "montant_devise", "num"),
+    ("devise", "devise", "text"), ("v", "montant_eur", "num"), ("premier_trade", "premier_trade", "date"), ("dernier_trade", "dernier_trade", "date"),
+)
+
 
 def _concentration(v: np.ndarray) -> dict:
     n = len(v)
@@ -643,6 +674,35 @@ class SqlReader:
                f"FROM {frm} JOIN (SELECT TOP {n} {cl} AS [k] FROM {frm} WHERE {cond} AND {cl} IS NOT NULL GROUP BY {cl} ORDER BY SUM({v}) DESC) t "
                f"ON t.[k] = {cl} WHERE {cond} GROUP BY {cl}, {isin}")
         return self.src.query(sql, [], label="passif carnet des clients")
+
+    def positions(self, name: str, m: dict, isins: list[str], where=(), eq: tuple[str, str | None] | None = None, cap: int = 5000) -> pd.DataFrame:
+        """Positions d'un fonds, ligne à ligne : ISIN et filtre en paramètres, TOP borné, tri par Montant EUR dans Fabric."""
+        if not isins:
+            return pd.DataFrame(columns=[a for a, _, _ in POS_FIELDS])
+        c = cols_of(m)
+        frm, cond = self._from(name, m, where)
+
+        def expr(k: str, how: str) -> str:
+            if k not in c:
+                return "CAST(NULL AS VARCHAR(10))"
+            x = self._q(name, c[k])
+            return {"text": _sql_text(x), "id": _sql_id(x), "num": _sql_num(x), "date": f"CONVERT(VARCHAR(10), {_sql_date(x)}, 23)"}[how]
+        params: list = list(isins)
+        conds = [cond, f"{expr('isin', 'id')} IN ({', '.join('?' for _ in isins)})"]
+        if eq is not None:
+            k, v = eq
+            if k not in c:
+                return pd.DataFrame(columns=[a for a, _, _ in POS_FIELDS])
+            e = expr(k, "id" if k == "isin" else "text")
+            if v is None:
+                conds.append(f"{e} IS NULL")
+            else:
+                conds.append(f"{e} = ?")
+                params.append(v)
+        sel = ", ".join(f"{expr(k, how)} AS [{a}]" for a, k, how in POS_FIELDS)
+        n = max(1, min(int(cap), 20000))
+        q = f"SELECT TOP {n} {sel} FROM {frm} WHERE {' AND '.join(conds)} ORDER BY {expr('montant_eur', 'num')} DESC"
+        return self.src.query(q, params, label="passif positions d'un fonds")
 
 
 # ------------------------------------------------------------------ vues (parts, tranches, libellés propres)
@@ -1122,6 +1182,74 @@ class Passif:
                 "measure": "Montant EUR des positions au passif", "countries": countries,
                 "segments": rows("classification", label=lambda v: SEGMENTS[segment_of(v)]), "teneurs": rows("teneur", top=8),
                 "parts": parts, "currencies": rows("devise"), "positions": int(g["n"].sum())}
+
+    AXES = {"countries": "pays", "segments": "classification", "teneurs": "teneur", "parts": "isin", "currencies": "devise"}
+
+    def fund_positions(self, fund_id: str, axis: str | None = None, key: str | None = None, limit: int = 25) -> dict:
+        """Positions d'un fonds à la date de la photo, ligne à ligne et triées par Montant EUR : tout le détail de la table
+        Position (porteur, compte, commercial, teneur, pays, part, quantité, cours, montants, premières et dernières
+        opérations). Vue nominative : calculée à la demande dans la source, jamais mise en cache ni journalisée.
+        `axis`/`key` restreignent à un groupe de la répartition (un pays, un segment, un teneur, une part, une devise)."""
+        ready = self._ready()
+        if ready is None:
+            return {"available": False, "reason": "Positions du passif non publiées."}
+        d, maps, iso = ready
+        mp = maps["position"]
+        if mp["fields"]["montant_eur"]["col"] is None:
+            return {"available": False, "reason": "Colonne Montant EUR absente de la table Position."}
+        if axis is not None and axis not in self.AXES:
+            return {"available": False, "reason": "Axe inconnu."}
+        isins = sorted(k for k, f in self.isin_to_fund.items() if f == fund_id)
+        limit = max(1, min(int(limit), 2000))
+        base = self._breakdown_base(mp, iso)
+        base = base[base["fund"] == fund_id]
+        fund_tot = float(base["v"].sum())
+
+        # Groupe demandé : mêmes libellés que la répartition (« Non renseigné » ↔ valeur absente)
+        eq, seg = None, None
+        if axis and key is not None:
+            col = self.AXES[axis]
+            if axis == "segments":
+                seg = key
+                sel = base["classification"].map(lambda v: SEGMENTS[segment_of(v)]) == key
+            else:
+                raw = None if key == NOT_SET else (key.strip().upper().replace(" ", "") if axis == "parts" else key.strip())
+                eq = (col, raw)
+                sel = base[col].map(_label if axis != "parts" else (lambda v: v or NOT_SET)) == key
+            grp = base[sel]
+        else:
+            grp = base
+        grp_tot, grp_n = float(grp["v"].sum()), int(grp["n"].sum())
+        # Le segment regroupe plusieurs classifications : filtré ici, après une lecture bornée des positions du fonds
+        cap = limit if seg is None else max(limit, min(20000, int(base["n"].sum())))
+        df = self.reader.positions("position", mp, isins, [("date_eq", "date", iso)], eq=eq, cap=cap) if isins else None
+        if df is None or df.empty:
+            rows = []
+        else:
+            df = df.copy()
+            if seg is not None:
+                df = df[df["classification"].map(lambda v: SEGMENTS[segment_of(v)]) == seg]
+            df = df.head(limit)
+            asof = pd.Timestamp(iso)
+            rows = []
+            for x in df.itertuples(index=False):
+                v = float(x.v) if x.v is not None and x.v == x.v else None
+                first = pd.Timestamp(x.premier_trade) if x.premier_trade else None
+                num = (lambda y: float(y) if y is not None and y == y else None)
+                pays = _label(x.pays)
+                rows.append({
+                    "client": None if x.client is None else str(x.client), "compte": x.compte, "compte_nom": x.compte_nom,
+                    "segment": SEGMENTS[segment_of(x.classification)], "classification": x.classification, "commercial": x.commercial,
+                    "sdg": x.sdg, "teneur": x.teneur, "pays": pays, "iso": L.country(pays)[1] if pays != NOT_SET else None,
+                    "isin": x.isin, "share": self.share_names.get(x.isin or "", None), "fonds_source": x.fonds, "type_fonds": x.type_fonds,
+                    "classe_actif": x.classe_actif, "desk": x.desk, "quantite": num(x.quantite), "cours": num(x.cours),
+                    "montant_devise": num(x.montant_devise), "devise": x.devise, "encours": v,
+                    "pct_group": _pct(v, grp_tot) if v is not None else None, "pct_fund": _pct(v, fund_tot) if v is not None else None,
+                    "premier_trade": x.premier_trade, "dernier_trade": x.dernier_trade,
+                    "anciennete_ans": round((asof - first).days / 365.25, 1) if first is not None and first <= asof else None})
+        return {"available": True, "nominatif": True, "fund": fund_id, "name": self.fund_names.get(fund_id), "as_of": iso,
+                "axis": axis, "key": key, "group_total": grp_tot, "group_positions": grp_n, "fund_total": fund_tot,
+                "shown": len(rows), "more": grp_n > len(rows), "positions": rows}
 
     def client_search(self, q: str, limit: int = 25) -> dict:
         """Fonds détenus par les clients dont le nom contient `q` : part de chaque fonds détenue par le client."""

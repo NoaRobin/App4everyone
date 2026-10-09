@@ -461,3 +461,41 @@ def test_collecte_de_remplacement_par_le_passif(nominatif):
     assert f["net"] == pytest.approx(f["subscriptions"] - f["redemptions"])
     assert f["subscriptions"] + f["redemptions"] > 0 and f["first"] <= f["last"]
     assert nominatif.fund_flows("INCONNU")["available"] is False
+
+
+def test_positions_d_un_fonds(nominatif):
+    """Détail des positions d'un fonds : lignes triées par Montant EUR, filtre par groupe, mêmes totaux que la répartition."""
+    b = nominatif.fund_breakdown("PR1")
+    allp = nominatif.fund_positions("PR1", limit=5000)
+    assert allp["available"] and allp["nominatif"] and allp["group_positions"] == b["positions"]
+    assert sum(p["encours"] for p in allp["positions"]) == pytest.approx(b["total"])
+    enc = [p["encours"] for p in allp["positions"]]
+    assert enc == sorted(enc, reverse=True)
+    top = b["countries"][0]
+    p = nominatif.fund_positions("PR1", "countries", top["key"], limit=3)
+    assert p["group_positions"] == top["positions"] and p["shown"] == min(3, top["positions"]) and p["more"] == (top["positions"] > 3)
+    assert all(x["pays"] == top["key"] for x in p["positions"])
+    full = nominatif.fund_positions("PR1", "countries", top["key"], limit=5000)
+    assert sum(x["pct_group"] for x in full["positions"]) == pytest.approx(100, abs=1)
+    seg = b["segments"][0]
+    s = nominatif.fund_positions("PR1", "segments", seg["key"], limit=5000)
+    assert s["shown"] == seg["positions"] and {x["segment"] for x in s["positions"]} == {seg["key"]}
+    assert nominatif.fund_positions("PR1", "inconnu", "x")["available"] is False
+    assert nominatif.fund_positions("INCONNU")["positions"] == []
+
+
+def test_positions_sql_parametrees():
+    """ISIN et valeur du groupe passent en paramètres ; TOP borné ; lecture seule."""
+    seen: list[tuple[str, list]] = []
+
+    class Fake:
+        def query(self, sql, params=(), **kw):
+            seen.append((assert_read_only(sql), list(params)))
+            if "TOP 0 *" in sql:
+                return pd.DataFrame(columns=[f"_c{i}" for i in range(21)])
+            return pd.DataFrame(columns=[a for a, _, _ in P.POS_FIELDS])
+    r = P.SqlReader(Fake(), P.table_names())
+    m = P.resolve_mapping(r.columns("position"), "position")
+    r.positions("position", m, ["FR0000000001"], [("date_eq", "date", "2026-09-30")], eq=("pays", "France'; DROP TABLE x --"), cap=10 ** 9)
+    sql, params = seen[-1]
+    assert params == ["FR0000000001", "France'; DROP TABLE x --"] and "DROP" not in sql and "TOP 20000 " in sql

@@ -230,7 +230,7 @@ def passif_fund_flows(fid: str):
 @app.get("/api/fonds/{fid}/repartition")
 def fund_breakdown(fid: str, date: str | None = None):
     """Où est détenu un fonds : encours au passif par pays du porteur, segment, teneur, part et devise ; couverture par
-    rapport à l'encours JUMP ; pays d'autorisation sans porteur et porteurs hors des pays d'autorisation."""
+    rapport à l'encours JUMP ; pays d'autorisation (JUMP), listés à part."""
     svc = _api_service()
     if fid not in svc.m.funds.index:
         raise HTTPException(404, "Fonds inconnu")
@@ -241,13 +241,22 @@ def fund_breakdown(fid: str, date: str | None = None):
     out["jump_aum"] = jump
     out["jump_date"] = end.date().isoformat()
     out["coverage_pct"] = (out.get("total") or 0) / jump * 100 if jump and out.get("total") else None
+    # Pays d'autorisation de JUMP, montrés à part : jamais rapprochés du pays du porteur (libellés de deux sources)
     regs = svc._registrations
     fr = regs[(regs["fund_id"] == fid) & (regs["active"])]
     allowed = {c: i for c, i in zip(fr["country_fr"], fr["iso"])}
-    held = {c["key"] for c in out.get("countries") or [] if not c.get("other")}
-    out["registered"] = [{"country": c, "iso": allowed[c], "held": c in held} for c in sorted(allowed)]
-    out["held_not_registered"] = sorted(c for c in held if c not in allowed and c != "Non renseigné")
+    out["registered"] = [{"country": c, "iso": allowed[c]} for c in sorted(allowed)]
     return _ok(out)
+
+
+@app.get("/api/fonds/{fid}/positions")
+def fund_positions(fid: str, axe: str | None = None, cle: str | None = None, n: int = 25):
+    """Positions d'un fonds au passif, ligne à ligne (vue nominative) : tout le détail de la table Position, filtrable par
+    pays, segment, teneur, part ou devise. Calcul à la demande dans la source, jamais mis en cache ni journalisé."""
+    svc = _api_service()
+    if fid not in svc.m.funds.index:
+        raise HTTPException(404, "Fonds inconnu")
+    return _ok(passif_obj().fund_positions(fid, axe, cle, n))
 
 
 @app.get("/api/passif/carnet")
