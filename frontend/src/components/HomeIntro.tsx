@@ -94,12 +94,18 @@ export function HomeIntro({ ov, dist, revenue, mock, date, afterOpening }: Props
         scrollTrigger: { trigger: wrap, start: "top top", end: () => `+=${dist()}`, pin: true, scrub: 0.8, invalidateOnRefresh: true, anticipatePin: 1,
           onUpdate: (st) => gsap.set(".sp__prog i", { scaleX: st.progress }) } });
       el.querySelectorAll<HTMLElement>(".sp__p").forEach((p) => {
-        gsap.timeline({ scrollTrigger: { trigger: p, containerAnimation: move, start: "left 78%", toggleActions: "play none none reverse" }, defaults: { ease: "expo.out" } })
-          .fromTo(p.querySelectorAll(".sp__n, .sp__t, .sp__d"), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.9, stagger: 0.07 }, 0)
-          .fromTo(p.querySelectorAll(".sp__stat, .sp__sub, .sp__go"), { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: 0.8, stagger: 0.07 }, 0.15)
-          .fromTo(p.querySelectorAll(".vz i"), { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, stagger: { each: 0.012, from: "random" } }, 0.1)
-          .fromTo(p.querySelectorAll(".vz path"), { strokeDashoffset: 400 }, { strokeDashoffset: 0, duration: 1.6, ease: "power2.inOut" }, 0.1);
-        gsap.fromTo(p.querySelector(".sp__big"), { xPercent: 18 }, { xPercent: -18, ease: "none", scrollTrigger: { trigger: p, containerAnimation: move, start: "left right", end: "right left", scrub: true } });
+        // Chaque panneau n'a pas toutes les pièces (pas de visuel, pas de grand chiffre) : on n'anime que ce qui existe
+        const tl = gsap.timeline({ scrollTrigger: { trigger: p, containerAnimation: move, start: "left 78%", toggleActions: "play none none reverse" }, defaults: { ease: "expo.out" } });
+        const add = (sel: string, from: gsap.TweenVars, to: gsap.TweenVars, at: number) => {
+          const t = p.querySelectorAll(sel);
+          if (t.length) tl.fromTo(t, from, to, at);
+        };
+        add(".sp__n, .sp__t, .sp__d", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.9, stagger: 0.07 }, 0);
+        add(".sp__stat, .sp__sub, .sp__go", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: 0.8, stagger: 0.07 }, 0.15);
+        add(".vz i", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, stagger: { each: 0.012, from: "random" } }, 0.1);
+        add(".vz path", { strokeDashoffset: 400 }, { strokeDashoffset: 0, duration: 1.6, ease: "power2.inOut" }, 0.1);
+        const big = p.querySelector(".sp__big");
+        if (big) gsap.fromTo(big, { xPercent: 18 }, { xPercent: -18, ease: "none", scrollTrigger: { trigger: p, containerAnimation: move, start: "left right", end: "right left", scrub: true } });
       });
     });
     return () => { ctx.revert(); mm.revert(); };

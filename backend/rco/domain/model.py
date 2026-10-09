@@ -293,7 +293,8 @@ class Model:
         e = end.date()
         starts = {
             "1J": None, "1S": e - timedelta(days=7), "1M": (pd.Timestamp(e) - pd.DateOffset(months=1)).date(),
-            "3M": (pd.Timestamp(e) - pd.DateOffset(months=3)).date(), "YTD": date(e.year - 1, 12, 31),
+            "3M": (pd.Timestamp(e) - pd.DateOffset(months=3)).date(), "6M": (pd.Timestamp(e) - pd.DateOffset(months=6)).date(),
+            "YTD": date(e.year - 1, 12, 31),
             "1A": (pd.Timestamp(e) - pd.DateOffset(years=1)).date(), "3A": (pd.Timestamp(e) - pd.DateOffset(years=3)).date(),
         }
         if period == "1J":
@@ -305,7 +306,7 @@ class Model:
         return self.as_of(s)
 
 
-PERIODS = ["1J", "1S", "1M", "3M", "YTD", "1A", "3A"]
+PERIODS = ["1J", "1S", "1M", "3M", "6M", "YTD", "1A", "3A"]
 
 
 def memo(m: Any) -> dict:

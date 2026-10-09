@@ -17,10 +17,11 @@ import { fieldId, fundEntries } from "../lib/fiche";
 import * as I from "../components/Icon";
 import { recordVisit } from "../lib/desk";
 import { AumCurve } from "../components/AumCurve";
+import { HoldingSection } from "../components/FundHolding";
 
 const TOC = [
   ["synthese", "Synthèse"], ["encours", "Encours"], ["performance", "Performance"], ["parts", "Parts"], ["portefeuille", "Portefeuille"],
-  ["esg", "ESG"], ["distribution", "Distribution"], ["caracteristiques", "Caractéristiques"], ["controles", "Contrôles"],
+  ["esg", "ESG"], ["distribution", "Distribution"], ["detention", "Détention"], ["caracteristiques", "Caractéristiques"], ["controles", "Contrôles"],
 ] as const;
 
 export default function Fund() {
@@ -120,6 +121,7 @@ function FundView({ f }: { f: FundDetail }) {
             </div>
           </div>
           {h.objective && <p className="fund__obj">{h.objective}</p>}
+          <Essentials f={f} />
         </div>
       </header>
 
@@ -134,11 +136,46 @@ function FundView({ f }: { f: FundDetail }) {
           <HoldingsSection f={f} />
           <EsgSection f={f} />
           <DistribSection f={f} />
+          <HoldingSection fundId={f.id} name={f.name} />
           <CharSection sections={f.sections} validations={f.validations} />
           <ControlsSection f={f} />
         </div>
       </div>
     </div>
+  );
+}
+
+/** L'essentiel, en une ligne : les réponses les plus demandées sur la part principale et le fonds, chacune avec sa source. */
+function Essentials({ f }: { f: FundDetail }) {
+  const main = f.shares.find((s) => s.main) ?? f.shares[0];
+  const field = (label: string) => f.sections.flatMap((s) => s.items).find((it) => it.label === label);
+  const fv = (label: string) => { const it = field(label); if (!it || it.value === "" || it.value == null) return null;
+    return it.kind === "pct" ? pctRaw(Number(it.value)) : it.kind === "bool" ? (it.value ? "Oui" : "Non") : String(it.value); };
+  const items: { k: string; v: React.ReactNode; sub?: string; to?: string }[] = [];
+  if (main) {
+    items.push({ k: `ISIN part ${main.class ?? "principale"}`, v: <CopyCode code={main.isin} />, sub: [main.ccy, main.distribution].filter(Boolean).join(" · "), to: `#parts` });
+    if (main.cutoff || main.settlement) items.push({ k: "Cut-off · règlement", v: [main.cutoff, main.settlement].filter(Boolean).join(" · "), to: `#parts` });
+    if (main.ongoing != null) items.push({ k: "Frais courants (part)", v: pctRaw(main.ongoing), sub: main.mgmt_fee != null ? `gestion ${pctRaw(main.mgmt_fee)}` : undefined, to: `#parts` });
+  }
+  const mx = fv("Frais de gestion maximum"), re = fv("Frais de gestion réels");
+  if (mx || re) items.push({ k: "Frais de gestion (fonds)", v: [mx && `${mx} max.`, re && `${re} réels`].filter(Boolean).join(" · "), to: "#caracteristiques" });
+  const dep = fv("Dépositaire"); if (dep) items.push({ k: "Dépositaire", v: dep, to: "#caracteristiques" });
+  const freq = fv("Fréquence de valorisation"); if (freq) items.push({ k: "Valorisation", v: freq, to: "#caracteristiques" });
+  if (main?.min_sub) items.push({ k: "Minimum de souscription", v: eur(main.min_sub), to: "#parts" });
+  if (!items.length) return null;
+  return (
+    <section className="ess" aria-label="L'essentiel du fonds">
+      <div className="ess__h eyebrow">L'essentiel</div>
+      <dl className="ess__grid">
+        {items.map((it) => (
+          <div key={it.k} className="ess__it">
+            <dt>{it.to ? <a href={it.to}>{it.k}</a> : it.k}</dt>
+            <dd>{it.v}</dd>
+            {it.sub && <span className="small muted">{it.sub}</span>}
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 
@@ -571,8 +608,8 @@ function FundEconomics({ id }: { id: string }) {
         </Link>
       )}
       {p && (
-        <Link to={`/passif?fonds=${encodeURIComponent(id)}#h-clients`} className="fund__eco-i" title="Part de l'encours suivi au passif (positions des comptes), en tranche de positions">
-          <span className="eyebrow">Au passif</span>
+        <Link to={`/passif?fonds=${encodeURIComponent(id)}#h-clients`} className="fund__eco-i" title="Poids du fonds dans l'encours total suivi au passif (positions des comptes de la maison)">
+          <span className="eyebrow">Poids au passif</span>
           <b className="num">{p.pct != null ? pctRaw(p.pct, 1) : "—"}</b>
           <span className="small muted">{p.positions ? `${p.positions.label} positions` : "positions < 5"}{pas.data?.source === "synthétique" ? " · synthétique" : ""}</span>
         </Link>

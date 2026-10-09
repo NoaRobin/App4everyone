@@ -105,7 +105,7 @@ export default function Encours() {
                 sub: `${g.n_funds != null ? plural(g.n_funds, "fonds", "fonds") + " · " : ""}${pct(g.weight, { signed: false, digits: 1 })} des encours`, badge: <>YTD {pct(g.var.YTD?.pct)}</> }))} />
           </section>
           <section className="section reveal" aria-labelledby="h-grp">
-            <Head id="grp" eyebrow="Groupe par groupe" title="D'où vient la variation ?"
+            <Head id="grp" eyebrow="Groupe par groupe" title={"D'où vient la variation\u00a0?"}
               lede={<>Pour chaque groupe&nbsp;: poids, variation depuis le 1er janvier, et sa décomposition entre <b className="gold-t">collecte nette estimée</b> et <b className="blue-t">effet marché</b>. {data.filterable ? "Cliquez un groupe pour la liste des fonds." : "Répartition au niveau des parts : un fonds peut apparaître dans plusieurs groupes."}</>} />
             <GroupList groups={data.groups} colorFor={colorFor} onOpen={data.filterable ? open : undefined} />
           </section>

@@ -227,6 +227,29 @@ def passif_fund_flows(fid: str):
     return _ok(passif_obj().fund_flows(fid))
 
 
+@app.get("/api/fonds/{fid}/repartition")
+def fund_breakdown(fid: str, date: str | None = None):
+    """Où est détenu un fonds : encours au passif par pays du porteur, segment, teneur, part et devise ; couverture par
+    rapport à l'encours JUMP ; pays d'autorisation sans porteur et porteurs hors des pays d'autorisation."""
+    svc = _api_service()
+    if fid not in svc.m.funds.index:
+        raise HTTPException(404, "Fonds inconnu")
+    out = dict(passif_obj().fund_breakdown(fid))
+    end = svc.end(date)
+    jump = svc.m.fund_aum[fid].get(end) if fid in svc.m.fund_aum.columns else None
+    jump = float(jump) if jump is not None and jump == jump else None
+    out["jump_aum"] = jump
+    out["jump_date"] = end.date().isoformat()
+    out["coverage_pct"] = (out.get("total") or 0) / jump * 100 if jump and out.get("total") else None
+    regs = svc._registrations
+    fr = regs[(regs["fund_id"] == fid) & (regs["active"])]
+    allowed = {c: i for c, i in zip(fr["country_fr"], fr["iso"])}
+    held = {c["key"] for c in out.get("countries") or [] if not c.get("other")}
+    out["registered"] = [{"country": c, "iso": allowed[c], "held": c in held} for c in sorted(allowed)]
+    out["held_not_registered"] = sorted(c for c in held if c not in allowed and c != "Non renseigné")
+    return _ok(out)
+
+
 @app.get("/api/passif/carnet")
 def passif_book(top: int = 60):
     """Qui est investi dans quoi : premiers clients par encours, leurs fonds et leurs parts (vue nominative, à la demande)."""

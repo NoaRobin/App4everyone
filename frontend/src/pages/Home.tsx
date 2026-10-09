@@ -87,6 +87,7 @@ function Paths() {
     const el = ref.current;
     if (!el || prefersReducedMotion()) return;
     const cards = el.querySelectorAll<HTMLElement>(".pth__c");
+    if (!cards.length) return;
     gsap.set(cards, { opacity: 0, y: 24 });
     return onVisible(el, () => gsap.to(cards, { opacity: 1, y: 0, duration: 0.7, stagger: 0.04, ease: "power3.out", clearProps: "opacity,transform" }));
   }, []);
@@ -123,6 +124,7 @@ function Ranking({ r }: { r: Revenue }) {
     if (!el || prefersReducedMotion()) return;
     const bars = el.querySelectorAll<HTMLElement>(".rk__bar i");
     const rows = el.querySelectorAll<HTMLElement>(".rk__row");
+    if (!rows.length) return;
     gsap.set(bars, { scaleX: 0 });
     gsap.set(rows, { opacity: 0, y: 12 });
     return onVisible(el, () => {
@@ -166,6 +168,7 @@ function Drivers({ r }: { r: Revenue }) {
     const el = ref.current;
     if (!el || prefersReducedMotion()) return;
     const bars = el.querySelectorAll<HTMLElement>(".dv__bar i");
+    if (!bars.length) return;
     gsap.set(bars, { scaleX: 0 });
     return whenSeen(el, () => gsap.to(bars, { scaleX: 1, duration: 1.4, stagger: 0.15, ease: "expo.out" }));
   }, [r]);
@@ -293,9 +296,11 @@ function Breakdown({ r }: { r: Revenue }) {
     const el = ref.current;
     if (!el || prefersReducedMotion()) return;
     const segs = el.querySelectorAll<HTMLElement>(".bd__strip span");
+    if (!segs.length) return;
     // Chaque segment s'ouvre de bas en haut, à l'équerre, dans l'ordre de la part
     gsap.fromTo(segs, { clipPath: "inset(100% 0% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", duration: 0.75, stagger: 0.05, ease: "power3.out", clearProps: "clipPath" });
-    gsap.fromTo(el.querySelectorAll(".bd__strip b"), { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.05, delay: 0.35, ease: "power2.out" });
+    const labels = el.querySelectorAll(".bd__strip b");
+    if (labels.length) gsap.fromTo(labels, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.05, delay: 0.35, ease: "power2.out" });
   }, [dim]);
   return (
     <section className="rv__sec" aria-labelledby="h-bd">

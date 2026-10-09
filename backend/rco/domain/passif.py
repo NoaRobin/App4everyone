@@ -1072,6 +1072,57 @@ class Passif:
                 "clients": rows, "others_pct": _pct(float(rest["v"].sum()), tot) if len(rest) else None,
                 "top10_pct": _pct(float(g.head(10)["v"].sum()), tot), "isins": len(isins)}
 
+    def _breakdown_base(self, mp: dict, iso: str) -> pd.DataFrame:
+        """Encours (Montant EUR) à la date de la photo, agrégé par part × pays × classification × teneur : des sommes par
+        groupe, sans aucun nom de client. Calculé une fois par photo, puis filtré fonds par fonds."""
+        key = ("breakdown", iso)
+        cache = getattr(self, "_bk", None)
+        if cache and cache[0] == key:
+            return cache[1]
+        g = self.reader.group("position", mp, {"isin": ("id", "isin"), "pays": ("text", "pays"), "classification": ("text", "classification"),
+                                               "teneur": ("text", "teneur"), "devise": ("text", "devise")},
+                              {"n": ("count", None), "v": ("sum", "montant_eur")}, [("date_eq", "date", iso)])
+        g = g.copy() if g is not None else pd.DataFrame(columns=["isin", "pays", "classification", "teneur", "devise", "n", "v"])
+        g["v"] = pd.to_numeric(g["v"], errors="coerce").fillna(0.0)
+        g["isin"] = g["isin"].map(lambda x: str(x).strip().upper().replace(" ", "") if x is not None and str(x).strip() else None)
+        g["fund"] = g["isin"].map(lambda x: self.isin_to_fund.get(x) if x else None)
+        self._bk = (key, g)
+        return g
+
+    def fund_breakdown(self, fund_id: str) -> dict:
+        """Où est détenu un fonds, d'après les positions du passif à la date de la photo : pays du porteur, segment de
+        clientèle, teneur de compte, part et devise — en Montant EUR et en part de l'encours suivi au passif.
+        Le pays est celui du compte porteur (pas le pays d'autorisation de la part)."""
+        ready = self._ready()
+        if ready is None:
+            return {"available": False, "reason": "Positions du passif non publiées."}
+        d, maps, iso = ready
+        mp = maps["position"]
+        if mp["fields"]["montant_eur"]["col"] is None:
+            return {"available": False, "reason": "Colonne Montant EUR absente de la table Position."}
+        g = self._breakdown_base(mp, iso)
+        g = g[g["fund"] == fund_id]
+        tot = float(g["v"].sum())
+        if g.empty or tot <= 0:
+            return {"available": True, "fund": fund_id, "as_of": iso, "total": 0.0, "countries": [], "segments": [], "teneurs": [], "parts": [],
+                    "currencies": [], "reason": "Aucune position de ce fonds au passif à la date de la photo."}
+
+        def rows(col: str, label=_label, top: int | None = None) -> list[dict]:
+            x = g.assign(k=g[col].map(label)).groupby("k").agg(v=("v", "sum"), n=("n", "sum")).reset_index().sort_values("v", ascending=False)
+            out = [{"key": r.k, "encours": float(r.v), "pct": _pct(float(r.v), tot), "positions": int(r.n)} for r in x.itertuples(index=False)]
+            if top and len(out) > top:
+                rest = out[top:]
+                out = out[:top] + [{"key": f"{len(rest)} autres", "encours": sum(r["encours"] for r in rest),
+                                    "pct": _pct(sum(r["encours"] for r in rest), tot), "positions": sum(r["positions"] for r in rest), "other": True}]
+            return out
+
+        countries = [{**r, "iso": (L.country(r["key"])[1] if r["key"] != NOT_SET and not r.get("other") else None)} for r in rows("pays")]
+        parts = [{**r, "isin": r["key"], "share": self.share_names.get(r["key"] or "", None)} for r in rows("isin", label=lambda v: v or NOT_SET)]
+        return {"available": True, "fund": fund_id, "name": self.fund_names.get(fund_id), "as_of": iso, "total": tot,
+                "measure": "Montant EUR des positions au passif", "countries": countries,
+                "segments": rows("classification", label=lambda v: SEGMENTS[segment_of(v)]), "teneurs": rows("teneur", top=8),
+                "parts": parts, "currencies": rows("devise"), "positions": int(g["n"].sum())}
+
     def client_search(self, q: str, limit: int = 25) -> dict:
         """Fonds détenus par les clients dont le nom contient `q` : part de chaque fonds détenue par le client."""
         q = (q or "").strip()

@@ -259,6 +259,9 @@ class _Obs:
         return int(ok[0]) if len(ok) else -1
 
 
+PERF_PERIODS = ["1M", "3M", "6M", "YTD", "1A", "3A"]
+
+
 def perf_block(m: Model, series: pd.Series, end: pd.Timestamp, first_date: pd.Timestamp, strict: bool = False) -> dict[str, float | None]:
     """Performances par période. `strict` (indice du fonds) : si l'indice est interrompu, pas de valeur de fin."""
     out: dict[str, float | None] = {}
@@ -266,7 +269,7 @@ def perf_block(m: Model, series: pd.Series, end: pd.Timestamp, first_date: pd.Ti
     v1 = o.at(end) if strict else o.valid_at(end)
     lp = o.valid_pos(end)
     last_obs = pd.Timestamp(o.t[lp]) if lp >= 0 else None
-    for p in ["1M", "3M", "YTD", "1A", "3A"]:
+    for p in ["1M", "3M", "6M", "YTD", "1A", "3A"]:
         start = m.period_start(end, p)
         if start is None or start < first_date or last_obs is None or last_obs <= start:
             out[p] = None
@@ -414,7 +417,7 @@ def fund_summary_rows(m: Model, end: pd.Timestamp) -> pd.DataFrame:
     """Une ligne par fonds avec les indicateurs de liste, à la date `end`."""
     aum_end = m.fund_aum.loc[end]
     rows = []
-    starts = {p: m.period_start(end, p) for p in ("1M", "YTD", "1A")}
+    starts = {p: m.period_start(end, p) for p in ("1M", "3M", "6M", "YTD", "1A", "3A")}
     attrs = (("range", "Fund_Range"), ("asset_class", "Asset_Class"), ("expertise", "Management_Expertise_Level_2"),
              ("manager", "Portfolio_Manager"), ("backup", "Portfolio_Manager_backup_1"), ("sfdr", "ESG_SFDR_Article"),
              ("sri", "Official_Risk_Scale"), ("domicile", "Domiciliation"), ("legal_form", "Legal_Form"),
@@ -451,13 +454,17 @@ def _clean_str(v: Any) -> Any:
 
 
 def add_perf(m: Model, df: pd.DataFrame, end: pd.Timestamp) -> pd.DataFrame:
-    perf_ytd, perf_1a, vol = [], [], []
+    """Performance de la part principale de chaque fonds sur chaque période (perf_1M … perf_3A) et volatilité 1 an."""
+    perfs: dict[str, list] = {p: [] for p in PERF_PERIODS}
+    vol = []
     for fid in df["id"]:
         jp = main_part(m, fid, end)
         p = share_performance(m, jp, end) if jp else None
-        perf_ytd.append(p["fund"]["YTD"] if p else None)
-        perf_1a.append(p["fund"]["1A"] if p else None)
+        for k in PERF_PERIODS:
+            perfs[k].append(p["fund"].get(k) if p else None)
         vol.append(p["risk"]["vol"] if p else None)
     df = df.copy()
-    df["perf_YTD"], df["perf_1A"], df["vol_1A"] = perf_ytd, perf_1a, vol
+    for k in PERF_PERIODS:
+        df[f"perf_{k}"] = perfs[k]
+    df["vol_1A"] = vol
     return df
