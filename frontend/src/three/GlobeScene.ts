@@ -28,6 +28,12 @@ export type GlobeOptions = {
   domColors: Record<string, string>;
   onHover: (c: MapCountry | null, x: number, y: number) => void;
   onSelect: (c: MapCountry | null) => void;
+  /** Format de la valeur affichée au sommet des colonnes (par défaut : le nombre brut). */
+  formatValue?: (v: number) => string;
+  /** Cadrage de départ : [longitude, latitude, distance] (par défaut, le monde vu depuis l'Europe). */
+  view?: [number, number, number];
+  /** Nombre d'étiquettes permanentes (les autres pays : au survol). */
+  labels?: number;
 };
 
 const R = 10;
@@ -141,7 +147,8 @@ export class GlobeScene {
     host.appendChild(this.renderer.domElement);
     this.camera = new THREE.PerspectiveCamera(30, w / h, 0.5, 400);
     if (w > 900) this.camera.setViewOffset(w, h, Math.min(190, w * 0.12), 0, w, h);
-    const start = toVec(8, 28, 46);
+    const [vl, vt, vd] = opts.view ?? [8, 28, 46];
+    const start = toVec(vl, vt, vd);
     this.camera.position.copy(opts.reduced ? start : start.clone().multiplyScalar(1.5));
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     Object.assign(this.controls, { enablePan: false, enableDamping: true, dampingFactor: 0.07, rotateSpeed: 0.45, zoomSpeed: 0.6,
@@ -335,7 +342,7 @@ export class GlobeScene {
       label.className = "globe__lab";
       label.innerHTML = `<span class="globe__lab-n"></span><span class="globe__lab-v num"></span>`;
       (label.firstChild as HTMLElement).textContent = c.country;
-      (label.lastChild as HTMLElement).textContent = String(v);
+      (label.lastChild as HTMLElement).textContent = this.opts.formatValue ? this.opts.formatValue(v) : String(v);
       label.dataset.rank = String(ranked.indexOf(c.iso));
       this.opts.labelLayer.appendChild(label);
       const p: Pillar = { c, mesh, ring, mat, dir, h, cur: this.opts.reduced ? 1 : 0, label };
@@ -462,7 +469,9 @@ export class GlobeScene {
     const camDir = this.camera.position.clone().normalize();
     const w = this.host.clientWidth, h = this.host.clientHeight;
     const v = new THREE.Vector3();
-    this.pillars.forEach((p) => {
+    const placed: [number, number][] = [];
+    const nLab = this.opts.labels ?? 4;
+    [...this.pillars].sort((a, b) => Number(a.label.dataset.rank) - Number(b.label.dataset.rank)).forEach((p) => {
       const s = Math.max(0.001, p.h * p.cur * (p.c.iso === (this.selected ?? this.hovered) ? 1.18 : 1));
       p.mesh.scale.y = s;
       const pulse = this.opts.reduced ? 1 : 1 + 0.35 * Math.sin(t * 2.2 + p.dir.x * 5);
@@ -471,13 +480,18 @@ export class GlobeScene {
       const worldDir = p.dir.clone().applyQuaternion(this.world.quaternion);
       const facing = worldDir.dot(camDir);
       const focus = p.c.iso === (this.selected ?? this.hovered);
-      const show = facing > 0.35 && (focus || Number(p.label.dataset.rank) < 4);
-      p.label.style.opacity = show ? String(Math.min(1, (facing - 0.35) * 4)) : "0";
-      p.label.classList.toggle("is-on", focus);
+      let show = facing > 0.35 && (focus || Number(p.label.dataset.rank) < nLab);
+      let x = 0, y = 0;
       if (show) {
         v.copy(p.dir).multiplyScalar(R * 1.004 + s).applyMatrix4(this.world.matrixWorld).project(this.camera);
-        p.label.style.transform = `translate(${(v.x * 0.5 + 0.5) * w}px, ${(-v.y * 0.5 + 0.5) * h}px) translate(-50%, -130%)`;
+        x = (v.x * 0.5 + 0.5) * w; y = (-v.y * 0.5 + 0.5) * h;
+        // une étiquette ne recouvre jamais une autre (les pays les plus importants d'abord ; le pays survolé toujours)
+        if (!focus && placed.some(([px, py]) => Math.abs(px - x) < 92 && Math.abs(py - y) < 40)) show = false;
+        if (show) placed.push([x, y]);
       }
+      p.label.style.opacity = show ? String(Math.min(1, (facing - 0.35) * 4)) : "0";
+      p.label.classList.toggle("is-on", focus);
+      if (show) p.label.style.transform = `translate(${x}px, ${y}px) translate(-50%, -130%)`;
     });
     if (this.q.bloom) this.composer.render(); else this.renderer.render(this.scene, this.camera);
   };

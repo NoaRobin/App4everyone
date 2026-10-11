@@ -56,7 +56,7 @@ export function Bridge({ v, end, height = 260, label = "Encours", compact = fals
           );
         })}
         <g className="bridge__cut" aria-hidden="true">
-          <path d={`M${W - m.r - 150} ${10} l5 -5 l5 5 l5 -5`} />
+          <path d={`M${W - m.r - (`échelle à partir de ${eur(base)}`.length * 6.1 + 26)} ${10} l5 -5 l5 5 l5 -5`} />
           <text x={W - m.r} y={10} textAnchor="end">échelle à partir de {eur(base)}</text>
         </g>
       </svg>

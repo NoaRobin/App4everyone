@@ -41,6 +41,16 @@ WEIGHTS = {("Valor", "Diversified"): 20, ("Conviction", "Fixed Income"): 16, ("R
            ("4Change", "Diversified"): 0.05, ("OPAL", "Alternative"): 0.03}
 PAYS = {"France": 70, "Belgique": 8, "Luxembourg": 6, "Suisse": 5, "Monaco": 3, "Espagne": 2, "Italie": 2, "Allemagne": 1.5, "Pays-Bas": 1,
         "Royaume-Uni": 1, "Portugal": 0.5}
+# Commerciaux : ceux de la page Démo (prénoms tels que donnés par l'équipe) et des commerciaux synthétiques. Chacun a
+# un portefeuille de comptes stable et une géographie propre ; les montants restent entièrement fictifs.
+COMMERCIAUX = {"Fausto": 11, "Alecio": 11, "Quentin": 16, "Alain Massiera": 4, "Commercial synthétique A": 14,
+               "Commercial synthétique B": 12, "Commercial synthétique C": 10, "Commercial synthétique D": 8, "Commercial synthétique E": 6}
+GEO = {
+    "Fausto": {"Italie": 38, "Suisse": 22, "Monaco": 14, "France": 14, "Luxembourg": 7, "Royaume-Uni": 5},
+    "Alecio": {"Espagne": 36, "Portugal": 16, "Luxembourg": 16, "Belgique": 14, "France": 12, "Allemagne": 6},
+    "Quentin": {"France": 72, "Belgique": 14, "Luxembourg": 8, "Pays-Bas": 6},
+    "Alain Massiera": {"France": 58, "Monaco": 16, "Suisse": 16, "Luxembourg": 6, "Belgique": 4},
+}
 SDG = {"Rothschild & Co Asset Management": 0.8, "Rothschild Martin Maurel": 0.2}
 TYPES = {"FCP": 0.55, "SICAV": 0.3, "Compartiment de SICAV": 0.15}
 SENS = ["Souscription", "Rachat", "Transfert entrant", "Transfert sortant"]
@@ -85,6 +95,8 @@ class PassifMock:
         rows = [{c: None for c in CPT_COLS}]                          # premier enregistrement vide de l'export
         self._acc_class: dict[str, str] = {}
         self._acc_client: dict[str, str] = {}
+        self._acc_comm: dict[str, str] = {}
+        self._acc_pays: dict[str, str] = {}
         for cls, (n0, parent_share) in TENEURS.items():
             n = max(5, int(n0 * r.uniform(0.7, 1.3))) * self.scale
             teneur = cls.split("/")[0].strip()
@@ -95,6 +107,10 @@ class PassifMock:
                 acc = f"CPT-{k:06d}"
                 self._acc_class[acc] = cls
                 self._acc_client[acc] = f"Client synthétique {client}"
+                # Commercial et pays du compte : stables d'une ligne à l'autre ; la banque privée revient surtout à Alain Massiera
+                comm = "Alain Massiera" if "privée" in cls.lower() and r.random() < 0.7 else self._pick(COMMERCIAUX)
+                self._acc_comm[acc] = comm
+                self._acc_pays[acc] = self._pick(GEO.get(comm, PAYS))
                 parent = f"CPT-{k - 1:06d}" if i and r.random() < parent_share else self._miss()
                 dissolved = r.random() < 0.02
                 rows.append({"_c0": teneur if r.random() > 0.01 else "nan", "_c1": acc, "_c2": f"Compte synthétique {k}", "_c3": parent,
@@ -115,8 +131,10 @@ class PassifMock:
     def _common(self, acc: str, desk: str, classe: str, isin: str) -> dict:
         cls = self._acc_class.get(acc, "TA/Client Actif")
         r = self.rng
-        return {"_c0": self._acc_client.get(acc, "Client synthétique"), "_c1": self._pick(PAYS) if r.random() > 0.02 else "nan", "_c2": cls.split("/")[0].strip(),
-                "_c3": acc, "_c4": f"Compte synthétique {acc[-4:]}", "_c5": cls, "_c6": "Commercial synthétique", "_c7": self._pick(SDG),
+        pays = self._acc_pays.get(acc) or self._pick(PAYS)
+        return {"_c0": self._acc_client.get(acc, "Client synthétique"), "_c1": pays if r.random() > 0.02 else "nan", "_c2": cls.split("/")[0].strip(),
+                "_c3": acc, "_c4": f"Compte synthétique {acc[-4:]}", "_c5": cls, "_c6": self._acc_comm.get(acc, "Commercial synthétique"),
+                "_c7": self._pick(SDG),
                 "_c8": self._pick(TYPES), "_c9": f"Fonds synthétique {isin[-3:]}", "_c10": isin, "_c11": classe, "_c12": desk}
 
     # ------------------------------------------------------------------ positions (photo du jour, et la veille)
@@ -147,19 +165,21 @@ class PassifMock:
                                      "_c19": us(max(last, first)), "_c20": us(first) if r.random() > 0.03 else self._miss()})
         return pd.DataFrame(rows, columns=POS_COLS)
 
-    # ------------------------------------------------------------------ transactions (60 jours ouvrés, et au-delà)
+    # ------------------------------------------------------------------ transactions (70 jours ouvrés détaillés, 19 mois en tout)
     def _transactions(self) -> pd.DataFrame:
         r, acc, k = self.rng, self._accounts(), 0
         rows = [{c: n for c, (_, n, _) in zip(TRX_COLS, SCHEMA["transaction"])}]   # ligne d'en-tête relue comme donnée
-        days = pd.bdate_range(end=self.as_of, periods=70)
+        days = pd.bdate_range(end=self.as_of, periods=410)
+        recent = days[-70]
         keys = list(WEIGHTS)
         for day in days:
-            active = r.choice(len(keys), size=int(r.integers(6, 14)), replace=False)
+            old = day < recent
+            active = r.choice(len(keys), size=int(r.integers(3, 7) if old else r.integers(6, 14)), replace=False)
             for j in active:
                 desk, classe = keys[j]
                 for sens in SENS[:2] + (SENS[2:] if desk == "RMM" and r.random() < 0.25 else []):
-                    n = int(r.choice([6, 12, 30, 110]) * r.uniform(0.6, 1.3))
-                    vol = WEIGHTS[keys[j]] * r.lognormal(0, 1.1) * 4e6
+                    n = int(r.choice([3, 6, 12] if old else [6, 12, 30, 110]) * r.uniform(0.6, 1.3))
+                    vol = WEIGHTS[keys[j]] * r.lognormal(0, 1.1) * 0.7e6 * (2.0 if old else 1.0) * (1.08 if sens == "Souscription" else 1.0)
                     late = r.random() < 0.3
                     for t in range(n):
                         k += 1

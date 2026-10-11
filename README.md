@@ -118,7 +118,7 @@ environnement géré (`%LOCALAPPDATA%\RCoFonds`, ou `%USERPROFILE%\venv-rco` ave
 Suivi : `GET /api/health` (état du serveur et du modèle, ne déclenche rien), `GET /api/health/fabric` (`SELECT 1`).
 Toutes les erreurs sont renvoyées en JSON `{error, message, hint}` : `fabric_config`, `fabric_driver`, `fabric_connection`,
 `fabric_auth`, `fabric_timeout`, `fabric_query` (table ou colonne nommée), `model_loading` (503 pendant le chargement).
-Les journaux indiquent, par table, la durée et le nombre de lignes, jamais leur contenu. L'historique (4 ans par défaut,
+Les journaux indiquent, par table, la durée et le nombre de lignes, jamais leur contenu. L'historique (6 ans par défaut, pour les vues « 5 ans »,
 `APP_HISTORY_YEARS`) est gardé en mémoire et jamais écrit sur disque.
 
 ### Rattachement JUMP ↔ Product Info

@@ -121,7 +121,7 @@ def test_indice_valeur_non_numerique():
 
 
 def test_performances_none_si_indice_interrompu():
-    m = SimpleNamespace(period_start=lambda end, p: end - pd.DateOffset(months={"1M": 1, "3M": 3, "6M": 6, "YTD": 2, "1A": 12, "3A": 36}[p]))
+    m = SimpleNamespace(period_start=lambda end, p: end - pd.DateOffset(months={"1M": 1, "3M": 3, "6M": 6, "YTD": 2, "1A": 12, "3A": 36, "5A": 60}[p]))
     s = _daily([100.0 + i * 0.1 for i in range(60)] + [np.nan] * 5)
     out = A.perf_block(m, s, s.index[-1], s.index[0], strict=True)
     assert out["1M"] is None and out["origine"] is None

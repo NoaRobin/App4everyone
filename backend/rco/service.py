@@ -1157,6 +1157,104 @@ class Service:
         return {"date": end.date().isoformat(), "entries": entries}
 
 
+    # ------------------------------------------------------------------ page Démo (côté JUMP et Product Info)
+    _DEMO_PERF = ("1M", "YTD", "1A", "3A", "5A")
+    _DEMO_FLOWS = ("1M", "3M", "YTD", "1A", "3A", "5A")
+
+    def demo_managers(self) -> dict[str, float]:
+        """Gérants tels qu'écrits dans Product Info (principal et suppléants), avec leur nombre de fonds."""
+        cols = [c for c in ("Portfolio_Manager", "Portfolio_Manager_backup_1", "Portfolio_Manager_backup_2", "Portfolio_Manager_backup_3") if c in self.m.funds]
+        out: dict[str, float] = {}
+        for c in cols:
+            for v in self.m.funds[c].dropna():
+                if isinstance(v, str) and v.strip():
+                    out[v.strip()] = out.get(v.strip(), 0) + (1.0 if c == "Portfolio_Manager" else 0.25)
+        return out
+
+    @lru_cache(maxsize=16)
+    def demo_manager(self, name: str, d: str | None) -> dict:
+        """Tableau de bord d'un gérant (fonds où il est gérant principal) : encours, performances 1 mois → 5 ans et écart
+        à l'indicateur, risque, collecte, revenus estimés, évolution des encours, principales lignes du portefeuille."""
+        m, end = self.m, self.end(d)
+        n = L.norm(name)
+        lead = m.funds.index[m.funds["Portfolio_Manager"].map(L.norm).eq(n).to_numpy()].tolist() if "Portfolio_Manager" in m.funds else []
+        co = [f for f in self._managed_by(name) if f not in lead]
+        table = self._fund_table(d)
+        rows = table[table["id"].isin(lead)].copy()
+        live = rows[rows["aum"].fillna(0) > 0].sort_values("aum", ascending=False)
+        ids = live["id"].tolist()
+        rev = {f["id"]: f for f in self.revenue(d)["funds"]}
+        funds = []
+        for r in live.to_dict("records"):
+            fid = r["id"]
+            jp = A.main_part(m, fid, end)
+            perf = A.share_performance(m, jp, end) if jp else None
+            bench = (perf or {}).get("bench") or {}
+            fperf = (perf or {}).get("fund") or {}
+            risk = (perf or {}).get("risk") or {}
+            comp = H.composition_summary(m, fid, end)
+            rv = rev.get(fid) or {}
+            funds.append({
+                "id": fid, "name": r["name"], "family": r["family"], "range": r.get("range"), "asset_class": r.get("asset_class"),
+                "aum": _num(r["aum"]), "sri": r.get("sri"), "sfdr": L.sfdr_short(r.get("sfdr")) or r.get("sfdr"), "n_parts": r.get("n_parts"),
+                "countries": len(r.get("countries") or []), "share": jp, "bench_name": (perf or {}).get("bench_name"),
+                "perf": {p: finite_or_none(fperf.get(p)) for p in self._DEMO_PERF},
+                "bench": {p: finite_or_none(bench.get(p)) for p in self._DEMO_PERF},
+                "flows": {p: _num(r.get(f"flows_{p}")) for p in self._DEMO_FLOWS},
+                "vol": finite_or_none(risk.get("vol")), "mdd": finite_or_none(risk.get("mdd")), "te": finite_or_none(risk.get("te")),
+                "revenue": rv.get("revenue"), "rate": rv.get("rate"),
+                "lines": comp.get("n_lines") if comp else None, "top10": comp.get("top10_weight") if comp else None,
+                "flows_off": bool(r.get("flows_off")),
+            })
+        out: dict[str, Any] = {"date": end.date().isoformat(), "name": name, "funds": funds,
+                               "co_managed": [{"id": f, "name": _str(m.funds.at[f, "name"])} for f in co if f in m.funds.index]}
+        if not ids:
+            return out
+        aum = m.fund_aum[ids].sum(axis=1, min_count=1)
+        fc = m.fund_flow_cum[[i for i in ids if i not in self._flows_off_funds()]].sum(axis=1)
+        out["aum"] = _num(aum.get(end))
+        out["var"] = {p: A.variation(aum, fc, m.period_start(end, p), end) for p in self._DEMO_FLOWS}
+        out["revenue"] = sum(f["revenue"] or 0 for f in funds) or None
+        out["countries"] = len(set().union(*[set(r) for r in live["countries"]])) if len(live) else 0
+        # Évolution des encours : fin de mois sur 5 ans (ou tout l'historique), total et par fonds
+        start = m.period_start(end, "5A") or m.dates[0]
+        pts = A.period_points(aum, fc, "M", start, end)
+        out["series"] = [{"d": r.d.date().isoformat(), "aum": _num(r.aum), "flows": _num(r.flows), "market": _num(r.market)} for r in pts.itertuples()]
+        me = m.fund_aum[ids][start:end]
+        me = me.groupby([me.index.year, me.index.month]).tail(1)
+        out["stack"] = {"dates": [x.date().isoformat() for x in me.index],
+                        "funds": [{"id": f, "values": [round(float(v), 0) if v == v else 0.0 for v in me[f].to_numpy(dtype=float)]} for f in ids]}
+        # Portefeuille du plus gros fonds : principales lignes et classes d'actifs
+        comp = H.fund_composition(m, ids[0], end)
+        if comp:
+            out["portfolio"] = {"fund": ids[0], "name": funds[0]["name"], "date": comp["date"], "n_lines": comp["n_lines"],
+                                "top10_weight": comp["top10_weight"], "cash_weight": comp["cash_weight"],
+                                "lines": comp["lines"][:10], "by_class": comp["by_class"][:8], "moves": comp["moves"][:6]}
+        return out
+
+    @lru_cache(maxsize=8)
+    def demo_flow_city(self, d: str | None) -> dict:
+        """La cité de la collecte : chaque fonds, sa collecte nette estimée (JUMP) sur 1 mois, YTD, 1, 3 et 5 ans."""
+        m, end = self.m, self.end(d)
+        df = self._fund_table(d)
+        off = self._flows_off_funds()
+        live = df[(df["aum"].fillna(0) > 0) & ~df["id"].isin(off)]
+        periods = ("1M", "YTD", "1A", "3A", "5A")
+        starts = {p: m.period_start(end, p) for p in periods}
+        funds = [{"id": r["id"], "name": r["name"], "family": r["family"], "aum": _num(r["aum"]), "manager": r.get("manager"),
+                  "flows": {p: (_num(r.get(f"flows_{p}")) if starts[p] is not None else None) for p in periods},
+                  "var": {p: (_num(r.get(f"var_{p}")) if starts[p] is not None else None) for p in periods}}
+                 for r in live.to_dict("records")]
+        tot = {}
+        for p in periods:
+            vals = [f["flows"][p] for f in funds if f["flows"][p] is not None]
+            tot[p] = {"available": starts[p] is not None, "start": starts[p].date().isoformat() if starts[p] is not None else None,
+                      "net": float(sum(vals)) if vals else None, "inflows": float(sum(v for v in vals if v > 0)) if vals else None,
+                      "outflows": float(sum(v for v in vals if v < 0)) if vals else None,
+                      "n_up": sum(1 for v in vals if v > 0), "n_down": sum(1 for v in vals if v < 0)}
+        return {"date": end.date().isoformat(), "first": m.dates[0].date().isoformat(), "periods": tot, "funds": funds,
+                "excluded": len(off)}
+
 def memo_nav_pos(m: Model) -> dict:
     """Positions (début, fin) des lignes de chaque part dans aum_raw (voir analytics.nav_rows)."""
     if "nav_pos" not in memo(m) and len(m.link):

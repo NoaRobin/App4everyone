@@ -296,6 +296,7 @@ class Model:
             "3M": (pd.Timestamp(e) - pd.DateOffset(months=3)).date(), "6M": (pd.Timestamp(e) - pd.DateOffset(months=6)).date(),
             "YTD": date(e.year - 1, 12, 31),
             "1A": (pd.Timestamp(e) - pd.DateOffset(years=1)).date(), "3A": (pd.Timestamp(e) - pd.DateOffset(years=3)).date(),
+            "5A": (pd.Timestamp(e) - pd.DateOffset(years=5)).date(),
         }
         if period == "1J":
             pos = self.date_index(e) - 1

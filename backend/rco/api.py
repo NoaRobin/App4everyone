@@ -273,6 +273,71 @@ def passif_clients(q: str = ""):
     return _ok(passif_obj().client_search(q))
 
 
+# ---------------------------------------------------------------- page Démo
+def _demo():
+    from .domain import demo as D
+    return D, D.DemoPassif(passif_obj())
+
+
+@app.get("/api/demo")
+def demo_people():
+    """Personnes de la démo, retrouvées telles qu'elles sont écrites dans la donnée (gérants : Product Info ; commerciaux
+    et banque privée : colonne Commercial du passif), avec les variantes proches à valider."""
+    svc = _api_service()
+    D, dp = _demo()
+    cfg = D.config()
+    managers = svc.demo_managers()
+    comms = dp.commercials()
+    return _ok({"date": svc.end(None).date().isoformat(), "mock": load_settings().data_source != "fabric",
+                "gerants": [{**g, "match": D.resolve(g["name"], managers)} for g in cfg["gerants"]],
+                "commerciaux": [{"name": c, "match": D.resolve(c, comms)} for c in cfg["commerciaux"]],
+                "banque_privee": {"name": cfg["banque_privee"], "match": D.resolve(cfg["banque_privee"], comms)},
+                "commercials_available": bool(comms)})
+
+
+@app.get("/api/demo/gerant")
+def demo_manager(nom: str, date: str | None = None):
+    """Tableau de bord d'un gérant : JUMP (encours, performances, collecte, portefeuille) et passif (zones, souscriptions)."""
+    svc = _api_service()
+    D, dp = _demo()
+    match = D.resolve(nom, svc.demo_managers())
+    if not match["found"]:
+        return _ok({"available": False, "match": match, "reason": f"« {nom} » n'apparaît pas comme gérant dans Product Info."})
+    out = dict(svc.demo_manager(match["found"], date))
+    out["passif"] = dp.funds_side([f["id"] for f in out["funds"]])
+    return _ok({"available": True, "match": match, **out})
+
+
+@app.get("/api/demo/collecte")
+def demo_flow_city(date: str | None = None):
+    """Collecte nette estimée (JUMP) de chaque fonds sur 1 mois, YTD, 1, 3 et 5 ans."""
+    return _ok(_api_service().demo_flow_city(date))
+
+
+@app.get("/api/demo/commercial")
+def demo_commercial(nom: str):
+    """Un commercial : collecte par zone et par période, encours de ses clients et ce qu'ils détiennent (vue nominative)."""
+    _api_service()
+    D, dp = _demo()
+    match = D.resolve(nom, dp.commercials())
+    if not match["found"]:
+        return _ok({"available": False, "match": match, "reason": f"« {nom} » n'apparaît pas dans la colonne Commercial du passif."})
+    return _ok({**dp.commercial(match["found"]), "match": match})
+
+
+@app.get("/api/demo/banque-privee")
+def demo_private_bank(nom: str = "", perimetre: str = "commercial"):
+    """Banque privée : ce que détiennent et ce qu'investissent les clients d'un commercial, ou de tout le segment."""
+    _api_service()
+    D, dp = _demo()
+    if perimetre not in ("commercial", "segment"):
+        raise HTTPException(400, "Périmètre inconnu")
+    match = D.resolve(nom, dp.commercials()) if nom else {"asked": "", "found": None, "alternatives": []}
+    if perimetre == "commercial" and not match["found"]:
+        return _ok({"available": False, "match": match, "reason": f"« {nom} » n'apparaît pas dans la colonne Commercial du passif."})
+    return _ok({**dp.private_bank(match["found"], perimetre), "match": match})
+
+
 # ---------------------------------------------------------------- erreurs JSON
 @app.exception_handler(ServiceUnavailable)
 def _unavailable(_: Request, e: ServiceUnavailable):

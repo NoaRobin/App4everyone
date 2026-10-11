@@ -15,6 +15,7 @@ const NAV = [
   { to: "/distribution", label: "Distribution" },
   { to: "/comparateur", label: "Comparateur" },
   { to: "/export", label: "Export" },
+  { to: "/demo", label: "Démo" },
 ];
 
 export function Header() {

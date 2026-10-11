@@ -66,7 +66,7 @@ def daily_points(series: pd.Series, end: pd.Timestamp, start: pd.Timestamp | Non
 
 # Granularités de la courbe des encours : code → alias de période pandas (None : chaque date de VL)
 FREQS = {"J": None, "S": "W", "M": "M", "T": "Q", "A": "Y"}
-SERIES_RANGES = ("1M", "3M", "YTD", "1A", "3A", "Tout")
+SERIES_RANGES = ("1M", "3M", "YTD", "1A", "3A", "5A", "Tout")
 
 
 def period_points(aum: pd.Series, flow_cum: pd.Series, freq: str, start: pd.Timestamp | None, end: pd.Timestamp) -> pd.DataFrame:
@@ -259,7 +259,7 @@ class _Obs:
         return int(ok[0]) if len(ok) else -1
 
 
-PERF_PERIODS = ["1M", "3M", "6M", "YTD", "1A", "3A"]
+PERF_PERIODS = ["1M", "3M", "6M", "YTD", "1A", "3A", "5A"]
 
 
 def perf_block(m: Model, series: pd.Series, end: pd.Timestamp, first_date: pd.Timestamp, strict: bool = False) -> dict[str, float | None]:
@@ -269,15 +269,16 @@ def perf_block(m: Model, series: pd.Series, end: pd.Timestamp, first_date: pd.Ti
     v1 = o.at(end) if strict else o.valid_at(end)
     lp = o.valid_pos(end)
     last_obs = pd.Timestamp(o.t[lp]) if lp >= 0 else None
-    for p in ["1M", "3M", "6M", "YTD", "1A", "3A"]:
+    for p in PERF_PERIODS:
         start = m.period_start(end, p)
         if start is None or start < first_date or last_obs is None or last_obs <= start:
             out[p] = None
             continue
         v0 = o.valid_at(start)
         r = return_between(v1, v0)
-        if r is not None and p == "3A":
-            r = (1 + r) ** (1 / 3) - 1 if 1 + r > 0 else None  # annualisée
+        if r is not None and p in ("3A", "5A"):
+            n = 3 if p == "3A" else 5
+            r = (1 + r) ** (1 / n) - 1 if 1 + r > 0 else None  # annualisée
         out[p] = finite_or_none(r)
     f0 = o.first_valid()
     out["origine"] = return_between(v1, o.v[f0]) if f0 >= 0 else None
@@ -417,7 +418,7 @@ def fund_summary_rows(m: Model, end: pd.Timestamp) -> pd.DataFrame:
     """Une ligne par fonds avec les indicateurs de liste, à la date `end`."""
     aum_end = m.fund_aum.loc[end]
     rows = []
-    starts = {p: m.period_start(end, p) for p in ("1M", "3M", "6M", "YTD", "1A", "3A")}
+    starts = {p: m.period_start(end, p) for p in ("1M", "3M", "6M", "YTD", "1A", "3A", "5A")}
     attrs = (("range", "Fund_Range"), ("asset_class", "Asset_Class"), ("expertise", "Management_Expertise_Level_2"),
              ("manager", "Portfolio_Manager"), ("backup", "Portfolio_Manager_backup_1"), ("sfdr", "ESG_SFDR_Article"),
              ("sri", "Official_Risk_Scale"), ("domicile", "Domiciliation"), ("legal_form", "Legal_Form"),

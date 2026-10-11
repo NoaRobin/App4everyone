@@ -19,7 +19,7 @@ import pandas as pd
 from . import schema as S
 
 AS_OF = date(2026, 9, 29)
-START = date(2022, 10, 3)
+START = date(2020, 10, 1)          # six ans d'historique : les vues « 5 ans » sont calculables
 _NS = uuid.UUID("7b0e9f5c-2d1a-4c9e-9a51-3f6f2a8d0c11")
 
 FAM_AID = "Actions internationales et gestion diversifiée"
@@ -33,6 +33,16 @@ MANAGERS = [
     "Élodie Chastel", "Antoine Varenne", "Camille Duret", "Victor Lambert", "Laure Mercier",
     "Olivier Tessier", "Mathilde Roche", "Karim Haddad",
 ]
+
+# Page Démo : gérants nommés par l'équipe, posés sur des fonds fictifs (gamme renommée pour la démonstration).
+# Les chiffres restent fictifs ; sur les données réelles, les fonds viennent de Product Info (Portfolio_Manager).
+DEMO_MANAGERS = {
+    "Patrimoine Équilibre": ("Yoan Ignatiew", "Valor"), "Patrimoine Dynamique": ("Yoan Ignatiew", "Valor"),
+    "Allocation Flexible Monde": ("Yoan Ignatiew", "Valor"), "Patrimoine Prudent": ("Yoan Ignatiew", "Valor"),
+    "Crédit Euro Investment Grade": ("Emmanuel Petit", None), "Obligations Haut Rendement": ("Emmanuel Petit", None),
+    "Crédit Court Terme": ("Emmanuel Petit", None), "Échéance 2028": ("Emmanuel Petit", None), "Échéance 2030": ("Emmanuel Petit", None),
+    "Obligations Convertibles Europe": ("Emmanuel Petit", None),
+}
 
 # (nom, famille, gamme, classe d'actifs, sous-expertise, indice, mu, sigma, aum cible M€, sfdr, domicile)
 FUNDS: list[tuple] = [
@@ -204,6 +214,9 @@ class MockLakehouse:
             pid = _uid("product", name)
             pm = MANAGERS[i % len(MANAGERS)]
             backup = MANAGERS[(i * 7 + 3) % len(MANAGERS)]
+            if name in DEMO_MANAGERS:
+                pm, demo_range = DEMO_MANAGERS[name]
+                rng_name = demo_range or rng_name
             self.products.append(dict(
                 name=name, fam=fam, range=rng_name, aclass=aclass, sub=sub, bench=bench, mu=mu, sig=sig,
                 aum=aum, sfdr=sfdr, dom=dom, pid=pid, pm=pm, backup=backup, idx=i,

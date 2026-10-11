@@ -284,12 +284,14 @@ class PandasReader:
         if op in ("text", "id"):
             x = self._of(name, c, k, op, idx)
             return x.astype(object).where(x.notna(), None)
-        if op in ("date", "year", "validdate"):
+        if op in ("date", "month", "year", "validdate"):
             d = self._of(name, c, k, "date", idx)
             if op == "validdate":
                 return d.notna().astype(int)
             if op == "date":
                 return d.dt.strftime("%Y-%m-%d").where(d.notna(), None)
+            if op == "month":
+                return d.dt.strftime("%Y-%m").where(d.notna(), None)
             return d.dt.year.astype("Int64").astype(object).where(d.notna(), None)
         if op == "notnull":
             return self._of(name, c, k, "text", idx).notna().astype(int)
@@ -310,9 +312,20 @@ class PandasReader:
             idx = idx[~(keys.duplicated() & has_ref).to_numpy()]
         return idx
 
-    def group(self, name: str, m: dict, dims: dict, meas: dict, where=(), dedup=None, m_compte: dict | None = None) -> pd.DataFrame:
+    def _within(self, name: str, c: dict[str, str], idx, inn: dict | None):
+        """Restreint aux lignes dont la valeur (texte nettoyé, ou identifiant normalisé) figure dans la liste donnée."""
+        for k, vals in (inn or {}).items():
+            if k not in c:
+                return idx[:0]
+            how = "id" if KIND[name].get(k) in ("id", "isin") else "text"
+            x = self._of(name, c, k, how, idx)
+            idx = idx[x.isin(set(vals)).fillna(False).to_numpy()]
+        return idx
+
+    def group(self, name: str, m: dict, dims: dict, meas: dict, where=(), dedup=None, m_compte: dict | None = None,
+              inn: dict | None = None) -> pd.DataFrame:
         c = cols_of(m)
-        idx = self._index(name, m, where, dedup)
+        idx = self._within(name, c, self._index(name, m, where, dedup), inn)
         ctx = {"ids": self._ids(m_compte) if m_compte and any(op == "matched" for op, _ in dims.values()) else set()}
         g = pd.DataFrame({a: self._col(name, idx, c, op, k, ctx) for a, (op, k) in dims.items()}, index=idx)
         aggs = {}
@@ -421,6 +434,22 @@ class PandasReader:
         df = df[df["client"].isin(set(keep))]
         return df.groupby(["client", "isin"], dropna=False).agg(n=("v", "size"), v=("v", "sum"), comptes=("compte", "nunique")).reset_index()
 
+    def rows(self, name: str, m: dict, fields: tuple, where=(), inn: dict | None = None, order: str = "montant_eur", cap: int = 1000) -> pd.DataFrame:
+        """Lignes détaillées (vue nominative, à la demande), filtrées, triées par `order` décroissant, au plus `cap`."""
+        c = cols_of(m)
+        idx = self._within(name, c, self._index(name, m, where), inn)
+        df = pd.DataFrame({a: (self._of(name, c, k, how, idx) if k in c else pd.Series(None, index=idx, dtype=object)) for a, k, how in fields}, index=idx)
+        okey = next((a for a, k, _ in fields if k == order), None)
+        if okey is not None and len(df):
+            df = df.sort_values(okey, ascending=False, na_position="last")
+        df = df.head(int(cap))
+        for a, _, how in fields:
+            if how == "date":
+                df[a] = pd.to_datetime(df[a]).dt.strftime("%Y-%m-%d").where(df[a].notna(), None) if len(df) else df[a]
+            elif how != "num":
+                df[a] = df[a].astype(object).where(df[a].notna(), None)
+        return df.reset_index(drop=True)
+
     def positions(self, name: str, m: dict, isins: list[str], where=(), eq: tuple[str, str | None] | None = None, cap: int = 5000) -> pd.DataFrame:
         """Positions d'un fonds, ligne à ligne, triées par Montant EUR décroissant (vue nominative, à la demande)."""
         c = cols_of(m)
@@ -507,6 +536,7 @@ class SqlReader:
             return "CAST(NULL AS VARCHAR(10))"
         x = self._q(name, c[k])
         return {"text": _sql_text(x), "id": _sql_id(x), "date": f"CONVERT(VARCHAR(10), {_sql_date(x)}, 23)", "year": f"YEAR({_sql_date(x)})",
+                "month": f"CONVERT(VARCHAR(7), {_sql_date(x)}, 23)",
                 "notnull": f"(CASE WHEN {_sql_text(x)} IS NULL THEN 0 ELSE 1 END)",
                 "validdate": f"(CASE WHEN {_sql_date(x)} IS NULL THEN 0 ELSE 1 END)",
                 "matched": f"(CASE WHEN r.k IS NULL THEN 0 ELSE 1 END)"}[op]
@@ -529,9 +559,26 @@ class SqlReader:
             return frm, "p.[_rn] = 1"
         return frm, " AND ".join(conds)
 
-    def group(self, name: str, m: dict, dims: dict, meas: dict, where=(), dedup=None, m_compte: dict | None = None) -> pd.DataFrame:
+    def _within(self, name: str, c: dict[str, str], inn: dict | None) -> tuple[list[str], list]:
+        """Conditions « valeur dans la liste », en paramètres (jamais dans le texte de la requête)."""
+        conds, params = [], []
+        for k, vals in (inn or {}).items():
+            vals = [v for v in vals if v is not None]
+            if k not in c or not vals:
+                conds.append("1 = 0")
+                continue
+            e = _sql_id(self._q(name, c[k])) if KIND[name].get(k) in ("id", "isin") else _sql_text(self._q(name, c[k]))
+            conds.append(f"{e} IN ({', '.join('?' for _ in vals)})")
+            params += list(vals)
+        return conds, params
+
+    def group(self, name: str, m: dict, dims: dict, meas: dict, where=(), dedup=None, m_compte: dict | None = None,
+              inn: dict | None = None) -> pd.DataFrame:
         c = cols_of(m)
         frm, cond = self._from(name, m, where, dedup)
+        extra, params = self._within(name, c, inn)
+        if extra:
+            cond = " AND ".join([cond, *extra])
         if any(op == "matched" for op, _ in dims.values()) and m_compte:
             cc = cols_of(m_compte)
             ids = _sql_id("q.[" + cc["id_compte"].replace("]", "]]") + "]")
@@ -555,6 +602,8 @@ class SqlReader:
             elif op == "distinct":
                 sel.append(f"COUNT(DISTINCT {_sql_id(self._q(name, c[k]))}) AS [{a}]")
         sql = f"SELECT {', '.join(sel)} FROM {frm} WHERE {cond}" + (f" GROUP BY {', '.join(grp)}" if grp else "")
+        if params:
+            return self.src.query(sql, params, label=f"passif {name} (agrégats filtrés)")
         return self.src.query(sql, label=f"passif {name} (agrégats)")
 
     def stats(self, name: str, m: dict) -> dict:
@@ -674,6 +723,26 @@ class SqlReader:
                f"FROM {frm} JOIN (SELECT TOP {n} {cl} AS [k] FROM {frm} WHERE {cond} AND {cl} IS NOT NULL GROUP BY {cl} ORDER BY SUM({v}) DESC) t "
                f"ON t.[k] = {cl} WHERE {cond} GROUP BY {cl}, {isin}")
         return self.src.query(sql, [], label="passif carnet des clients")
+
+    def rows(self, name: str, m: dict, fields: tuple, where=(), inn: dict | None = None, order: str = "montant_eur", cap: int = 1000) -> pd.DataFrame:
+        """Lignes détaillées : filtres en paramètres, TOP borné, tri dans Fabric."""
+        c = cols_of(m)
+        frm, cond = self._from(name, m, where)
+        extra, params = self._within(name, c, inn)
+
+        def expr(k: str, how: str) -> str:
+            if k not in c:
+                return "CAST(NULL AS VARCHAR(10))"
+            x = self._q(name, c[k])
+            return {"text": _sql_text(x), "id": _sql_id(x), "num": _sql_num(x), "date": f"CONVERT(VARCHAR(10), {_sql_date(x)}, 23)"}[how]
+        how_of = {k: how for _, k, how in fields}
+        okey = expr(order, "date" if KIND[name].get(order) == "date" else how_of.get(order, "num")) if order in c else "(SELECT NULL)"
+        if order in c and KIND[name].get(order) == "date":
+            okey = _sql_date(self._q(name, c[order]))
+        sel = ", ".join(f"{expr(k, how)} AS [{a}]" for a, k, how in fields)
+        n = max(1, min(int(cap), 20000))
+        q = f"SELECT TOP {n} {sel} FROM {frm} WHERE {' AND '.join([cond, *extra])} ORDER BY {okey} DESC"
+        return self.src.query(q, params, label=f"passif {name} (lignes)")
 
     def positions(self, name: str, m: dict, isins: list[str], where=(), eq: tuple[str, str | None] | None = None, cap: int = 5000) -> pd.DataFrame:
         """Positions d'un fonds, ligne à ligne : ISIN et filtre en paramètres, TOP borné, tri par Montant EUR dans Fabric."""
