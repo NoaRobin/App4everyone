@@ -21,7 +21,7 @@ from . import labels as L
 from .passif import ENTREES, NOT_SET, SEGMENTS, SORTIES, _label, allowed_statuts, fold, segment_of, sens_label
 
 DEFAULT_GERANTS = (("valor", "Valor", "Yoan Ignatiew"), ("fi", "Fixed Income", "Emmanuel Petit"))
-DEFAULT_COMMERCIAUX = ("Fausto", "Alecio", "Quentin")
+DEFAULT_COMMERCIAUX = ("Fausto Trevisian", "Alessio Coppola", "Quentin Piloy")
 DEFAULT_BANQUE_PRIVEE = "Alain Massiera"
 
 
@@ -34,10 +34,20 @@ def config() -> dict:
         for i, part in enumerate(x for x in g.split(";") if x.strip()):
             lab, _, n = part.partition(":")
             gerants.append({"key": f"g{i}", "label": lab.strip(), "name": (n or lab).strip()})
+    # APP_DEMO_COMMERCIAUX = « Nom, Nom » ou « Thème:Nom, Thème:Nom » (sans thème : il est tiré de la donnée)
     c = os.environ.get("APP_DEMO_COMMERCIAUX", "").strip()
-    comms = [x.strip() for x in c.split(",") if x.strip()] if c else list(DEFAULT_COMMERCIAUX)
+    comms = []
+    for part in ([x.strip() for x in c.split(",") if x.strip()] if c else list(DEFAULT_COMMERCIAUX)):
+        theme, sep, n = part.partition(":")
+        comms.append({"theme": theme.strip() if sep else None, "name": (n if sep else theme).strip()})
     bp = os.environ.get("APP_DEMO_BANQUE_PRIVEE", "").strip() or DEFAULT_BANQUE_PRIVEE
     return {"gerants": gerants, "commerciaux": comms, "banque_privee": bp}
+
+
+def slug(s: str) -> str:
+    """« Italie & Suisse » → « italie-suisse »."""
+    import re
+    return re.sub(r"[^a-z0-9]+", "-", fold(s)).strip("-") or "page"
 
 
 # ------------------------------------------------------------------ retrouver un nom tel qu'il est écrit dans la donnée
@@ -167,6 +177,47 @@ class DemoPassif:
         for r in g.itertuples(index=False):
             if r.c:
                 out[str(r.c)] = out.get(str(r.c), 0.0) + _f(r.v)
+        return out
+
+    # -- thème d'un commercial, tiré de la donnée : les pays où ses clients détiennent le plus d'encours
+    def themes(self, names: list[str]) -> dict[str, str]:
+        """Nom → « Italie & Suisse » : premier pays de son portefeuille (pays du compte porteur), et le deuxième s'il
+        pèse au moins un quart ou s'il faut départager deux commerciaux. Jamais inventé : sans positions, pas de thème."""
+        ctx = self._ctx()
+        names = [n for n in names if n]
+        if ctx is None or not names:
+            return {}
+        mp = ctx["maps"]["position"]
+        g = self.p.reader.group("position", mp, {"c": ("text", "commercial"), "pays": ("text", "pays")}, {"v": ("sum", "montant_eur")},
+                                [("date_eq", "date", ctx["as_of"])], inn={"commercial": names})
+        if g is None or g.empty:
+            return {}
+        g = g.assign(v=pd.to_numeric(g["v"], errors="coerce").fillna(0.0), cn=g["pays"].map(lambda v: country_info(v)[0]))
+        g = g[g["cn"] != NOT_SET]
+        ranked: dict[str, list[tuple[str, float]]] = {}
+        for n in names:
+            x = g[g["c"] == n].groupby("cn")["v"].sum().sort_values(ascending=False)
+            tot = float(x.sum())
+            ranked[n] = [(k, float(v) / tot if tot else 0.0) for k, v in x.items()]
+        out: dict[str, str] = {}
+        for n, r in ranked.items():
+            if not r:
+                continue
+            out[n] = r[0][0] + (f" & {r[1][0]}" if len(r) > 1 and r[1][1] >= 0.25 else "")
+        # départager deux thèmes identiques avec le pays suivant
+        for _ in range(2):
+            seen: dict[str, list[str]] = {}
+            for n, t in out.items():
+                seen.setdefault(t, []).append(n)
+            dup = [ns for ns in seen.values() if len(ns) > 1]
+            if not dup:
+                break
+            for ns in dup:
+                for n in ns:
+                    parts = out[n].split(" & ")
+                    nxt = [k for k, _ in ranked[n] if k not in parts]
+                    if nxt:
+                        out[n] = " & ".join(parts + nxt[:1])
         return out
 
     # -- positions et transactions d'un périmètre (un ou plusieurs commerciaux, ou des ISIN)
@@ -404,7 +455,7 @@ class DemoPassif:
             out.update({"flows_available": True, "flows_end": end,
                         "periods": {k: {"start": s, **self._sums(f[f["d"].astype(str) >= s])} for k, s in st.items()},
                         "monthly": self._monthly(f, end),
-                        "rotation": self._funds_rows(f, 8),
+                        "rotation": self._funds_rows(f, 5),
                         "flow_classes": self._by(f, "classe", _label),
                         "latest": self._latest(ctx, inn, st["3M"], scope_clients=set(pos["client"].dropna()) if scope == "segment" else None)})
         return out

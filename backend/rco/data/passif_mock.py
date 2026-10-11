@@ -41,14 +41,14 @@ WEIGHTS = {("Valor", "Diversified"): 20, ("Conviction", "Fixed Income"): 16, ("R
            ("4Change", "Diversified"): 0.05, ("OPAL", "Alternative"): 0.03}
 PAYS = {"France": 70, "Belgique": 8, "Luxembourg": 6, "Suisse": 5, "Monaco": 3, "Espagne": 2, "Italie": 2, "Allemagne": 1.5, "Pays-Bas": 1,
         "Royaume-Uni": 1, "Portugal": 0.5}
-# Commerciaux : ceux de la page Démo (prénoms tels que donnés par l'équipe) et des commerciaux synthétiques. Chacun a
+# Commerciaux : ceux de la page Démo (noms tels que donnés par l'équipe) et des commerciaux synthétiques. Chacun a
 # un portefeuille de comptes stable et une géographie propre ; les montants restent entièrement fictifs.
-COMMERCIAUX = {"Fausto": 11, "Alecio": 11, "Quentin": 16, "Alain Massiera": 4, "Commercial synthétique A": 14,
+COMMERCIAUX = {"Fausto Trevisian": 11, "Alessio Coppola": 11, "Quentin Piloy": 16, "Alain Massiera": 4, "Commercial synthétique A": 14,
                "Commercial synthétique B": 12, "Commercial synthétique C": 10, "Commercial synthétique D": 8, "Commercial synthétique E": 6}
 GEO = {
-    "Fausto": {"Italie": 38, "Suisse": 22, "Monaco": 14, "France": 14, "Luxembourg": 7, "Royaume-Uni": 5},
-    "Alecio": {"Espagne": 36, "Portugal": 16, "Luxembourg": 16, "Belgique": 14, "France": 12, "Allemagne": 6},
-    "Quentin": {"France": 72, "Belgique": 14, "Luxembourg": 8, "Pays-Bas": 6},
+    "Fausto Trevisian": {"Italie": 38, "Suisse": 22, "Monaco": 14, "France": 14, "Luxembourg": 7, "Royaume-Uni": 5},
+    "Alessio Coppola": {"Espagne": 36, "Portugal": 16, "Luxembourg": 16, "Belgique": 14, "France": 12, "Allemagne": 6},
+    "Quentin Piloy": {"France": 72, "Belgique": 14, "Luxembourg": 8, "Pays-Bas": 6},
     "Alain Massiera": {"France": 58, "Monaco": 16, "Suisse": 16, "Luxembourg": 6, "Belgique": 4},
 }
 SDG = {"Rothschild & Co Asset Management": 0.8, "Rothschild Martin Maurel": 0.2}

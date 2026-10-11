@@ -279,6 +279,21 @@ def _demo():
     return D, D.DemoPassif(passif_obj())
 
 
+def _demo_sales(D, dp, people: list[dict], comms: dict[str, float]) -> list[dict]:
+    """Commerciaux de la démo : nom retrouvé dans la donnée et thème de leur page (donné, ou tiré de leurs pays)."""
+    rows = [{**c, "match": D.resolve(c["name"], comms)} for c in people]
+    derived = dp.themes([r["match"]["found"] for r in rows if r["match"]["found"] and not r["theme"]])
+    out, used = [], set()
+    for i, r in enumerate(rows):
+        theme = r["theme"] or derived.get(r["match"]["found"] or "") or f"Ventes {i + 1}"
+        sl = D.slug(theme)
+        while sl in used:
+            sl += "-2"
+        used.add(sl)
+        out.append({"name": r["name"], "theme": theme, "theme_source": "configuration" if r["theme"] else "donnée", "slug": sl, "match": r["match"]})
+    return out
+
+
 @app.get("/api/demo")
 def demo_people():
     """Personnes de la démo, retrouvées telles qu'elles sont écrites dans la donnée (gérants : Product Info ; commerciaux
@@ -290,7 +305,7 @@ def demo_people():
     comms = dp.commercials()
     return _ok({"date": svc.end(None).date().isoformat(), "mock": load_settings().data_source != "fabric",
                 "gerants": [{**g, "match": D.resolve(g["name"], managers)} for g in cfg["gerants"]],
-                "commerciaux": [{"name": c, "match": D.resolve(c, comms)} for c in cfg["commerciaux"]],
+                "commerciaux": _demo_sales(D, dp, cfg["commerciaux"], comms),
                 "banque_privee": {"name": cfg["banque_privee"], "match": D.resolve(cfg["banque_privee"], comms)},
                 "commercials_available": bool(comms)})
 
@@ -308,10 +323,10 @@ def demo_manager(nom: str, date: str | None = None):
     return _ok({"available": True, "match": match, **out})
 
 
-@app.get("/api/demo/collecte")
-def demo_flow_city(date: str | None = None):
-    """Collecte nette estimée (JUMP) de chaque fonds sur 1 mois, YTD, 1, 3 et 5 ans."""
-    return _ok(_api_service().demo_flow_city(date))
+@app.get("/api/cite/collecte")
+def flow_city(date: str | None = None):
+    """Rothschild City, vue collecte : collecte nette estimée (JUMP) de chaque fonds sur 1 mois, YTD, 1, 3 et 5 ans."""
+    return _ok(_api_service().flow_city(date))
 
 
 @app.get("/api/demo/commercial")

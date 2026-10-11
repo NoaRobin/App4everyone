@@ -1,5 +1,5 @@
 /**
- * Démo — la cité de la collecte, en Three.js. Sobre : ni missions ni niveaux, une lecture.
+ * Rothschild City, vue collecte (Accueil), en Three.js. Sobre : ni missions ni niveaux, une lecture.
  *
  * Une tour = un fonds, posée sur une dalle de verre. Les fonds qui collectent s'élèvent en or au-dessus de la dalle ;
  * ceux qui décollectent descendent, grenat, sous la dalle (on les voit par transparence). Hauteur linéaire (comparable
@@ -27,6 +27,8 @@ export type FlowCityOptions = {
   formatEur: (v: number, signed?: boolean) => string;
   onHover: (f: FlowFund | null, x: number, y: number) => void;
   onSelect: (f: FlowFund) => void;
+  /** Décalage horizontal du cadrage sur grand écran, en part de la largeur (positif : la cité glisse à droite). */
+  offsetX?: number;
 };
 
 const ORDER = ["aid", "ae", "fi", "ao", "nc"];
@@ -326,7 +328,8 @@ export class FlowCityScene {
     this.camera.aspect = w / h;
     this.camera.fov = w < 700 ? 52 : 36;
     // sur grand écran, la cité se décale à droite du bloc de lecture (période, total)
-    if (w >= 1000) this.camera.setViewOffset(w, h, -w * 0.12, 0, w, h);
+    const off = this.o.offsetX ?? 0;
+    if (w >= 1000 && off) this.camera.setViewOffset(w, h, -w * off, 0, w, h);
     else this.camera.clearViewOffset();
     this.camera.updateProjectionMatrix();
     this.composer?.setSize(w, h);

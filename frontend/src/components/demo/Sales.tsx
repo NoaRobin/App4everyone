@@ -5,13 +5,13 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { fetchJson } from "../../lib/api";
+import { fetchJson, useApi } from "../../lib/api";
 import { useApp } from "../../lib/context";
 import { date as fdate, eur, pctRaw } from "../../lib/format";
 import { Flag } from "../Flag";
 import { Loading } from "../ui";
 import { ClientTable, Kpi, NameMatch, PeriodTabs, signed, SplitRows, tone, TwinBars, type Opt } from "./kit";
-import type { HoldZone, Match, SalesView } from "./types";
+import type { HoldZone, SalesPerson, SalesView } from "./types";
 
 type P = "1M" | "3M" | "YTD" | "1A";
 export const SALES_PERIODS: Opt<P>[] = [{ key: "1M", label: "1 mois" }, { key: "3M", label: "3 mois" }, { key: "YTD", label: "YTD" }, { key: "1A", label: "1 an" }];
@@ -29,54 +29,78 @@ function useMany<T>(urls: string[]): { data: (T | null)[]; loading: boolean } {
   return state;
 }
 
-export function Sales({ index, people }: { index: number; people: { name: string; match: Match }[] }) {
+/** Ventes · vue d'ensemble : les commerciaux côte à côte (une carte par thème), chacun mène à sa page. */
+export function SalesOverview({ index, people, pageOf }: { index: number; people: SalesPerson[]; pageOf: (p: SalesPerson) => string }) {
   const { api } = useApp();
+  useEffect(() => { document.title = "Ventes — Démo Jasmin"; }, []);
   const urls = useMemo(() => people.map((p) => api(`/api/demo/commercial?nom=${encodeURIComponent(p.match.found ?? p.name)}`)), [people, api]);
   const { data, loading } = useMany<SalesView>(urls);
   const [p, setP] = useState<P>("3M");
-  const [i, setI] = useState(0);
-  const cur = data[i];
-  const names = people.map((x, k) => data[k]?.match?.found ?? x.match.found ?? x.name);
+  const max = Math.max(1, ...data.map((d) => (d?.available ? Math.max(d.periods[p]?.subscriptions ?? 0, d.periods[p]?.redemptions ?? 0) : 0)));
   return (
-    <section className="dm-chap" id="commerciaux" aria-labelledby="h-commerciaux">
+    <section className="dm-chap" id="ventes" aria-labelledby="h-ventes">
       <header className="dm-chap__head">
         <span className="dm-chap__num" aria-hidden="true">{String(index).padStart(2, "0")}</span>
         <div className="dm-chap__title">
-          <div className="eyebrow dm-eyebrow">Commerciaux · passif</div>
-          <h2 className="dm-chap__name" id="h-commerciaux">{names.join(", ").replace(/, ([^,]*)$/, " et $1")}</h2>
-          <p className="dm-chap__lede">La collecte de leurs clients, zone par zone, et ce dans quoi ces clients sont investis. Souscriptions et rachats lus dans la table Transaction (statuts retenus), encours dans la table Position.</p>
+          <div className="eyebrow dm-eyebrow">Passif · vue nominative</div>
+          <h2 className="dm-chap__name" id="h-ventes">Ventes</h2>
+          <p className="dm-chap__lede">La collecte des clients de chaque commercial, zone par zone, et ce dans quoi ces clients sont investis. Une page par périmètre&nbsp;; souscriptions et rachats lus dans la table Transaction (statuts retenus), encours dans la table Position.</p>
         </div>
         <PeriodTabs value={p} onChange={setP} options={SALES_PERIODS} />
       </header>
-      {loading && !cur ? <Loading h={480} /> : (
-        <>
-          <div className="dm-trio" role="tablist" aria-label="Choisir un commercial">
-            {people.map((x, k) => {
-              const v = data[k];
-              const f = v?.available ? v.periods[p] : null;
-              const max = Math.max(1, ...data.map((d) => (d?.available ? Math.max(d.periods[p]?.subscriptions ?? 0, d.periods[p]?.redemptions ?? 0) : 0)));
-              return (
-                <button key={x.name} type="button" role="tab" aria-selected={i === k} className={`dm-trio__c${i === k ? " is-on" : ""}`} onClick={() => setI(k)}>
-                  <span className="dm-trio__n">{names[k]}</span>
-                  {!v?.available ? <span className="small muted">{v?.reason ?? "Introuvable dans le passif."}</span> : (
-                    <>
-                      <b className={`dm-trio__v num ${(f?.net ?? 0) >= 0 ? "up-t" : "down-t"}`}>{signed(f?.net)}</b>
-                      <span className="dm-trio__bars" aria-hidden="true">
-                        <span className="dm-trio__out"><i style={{ width: `${((f?.redemptions ?? 0) / max) * 100}%` }} /></span>
-                        <span className="dm-trio__in"><i style={{ width: `${((f?.subscriptions ?? 0) / max) * 100}%` }} /></span>
-                      </span>
-                      <span className="dm-trio__s small">{eur(f?.subscriptions)} souscrits · {eur(f?.redemptions)} rachetés</span>
-                      <span className="dm-trio__s small muted">{v.clients_count} clients · {eur(v.encours)} d'encours</span>
-                    </>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          {cur?.match && <NameMatch match={cur.match} source="la colonne Commercial du passif" />}
-          {cur?.available ? <SalesDetail v={cur} p={p} /> : <div className="empty">{cur?.reason ?? "Commercial introuvable dans le passif."}</div>}
-        </>
+      {loading && !data.some(Boolean) ? <Loading h={420} /> : (
+        <div className="dm-trio dm-trio--pages">
+          {people.map((x, k) => {
+            const v = data[k];
+            const f = v?.available ? v.periods[p] : null;
+            const zones = (f?.zones ?? []).filter((z) => z.key !== "Non renseigné").slice(0, 3);
+            return (
+              <Link key={x.slug} to={pageOf(x)} className="dm-trio__c">
+                <span className="dm-trio__k">{x.theme_source === "donnée" ? "Périmètre · d'après ses clients" : "Périmètre"}</span>
+                <span className="dm-trio__n">{x.theme}</span>
+                <span className="dm-trio__s small muted">{x.match.found ?? x.name}</span>
+                {!v?.available ? <span className="small muted">{v?.reason ?? "Introuvable dans le passif."}</span> : (
+                  <>
+                    <b className={`dm-trio__v num ${(f?.net ?? 0) >= 0 ? "up-t" : "down-t"}`}>{signed(f?.net)}</b>
+                    <span className="dm-trio__bars" aria-hidden="true">
+                      <span className="dm-trio__out"><i style={{ width: `${((f?.redemptions ?? 0) / max) * 100}%` }} /></span>
+                      <span className="dm-trio__in"><i style={{ width: `${((f?.subscriptions ?? 0) / max) * 100}%` }} /></span>
+                    </span>
+                    <span className="dm-trio__s small">{eur(f?.subscriptions)} souscrits · {eur(f?.redemptions)} rachetés</span>
+                    <ul className="dm-trio__z">{zones.map((z) => <li key={z.key}><span>{z.key}</span><b className={`num ${z.net >= 0 ? "up-t" : "down-t"}`}>{signed(z.net)}</b></li>)}</ul>
+                    <span className="dm-trio__s small muted">{v.clients_count} clients · {eur(v.encours)} d'encours</span>
+                  </>
+                )}
+                <span className="dm-trio__go">Ouvrir la page <span aria-hidden="true">→</span></span>
+              </Link>
+            );
+          })}
+        </div>
       )}
+    </section>
+  );
+}
+
+/** Ventes · une page par commercial, titrée par son périmètre (thème), jamais par son nom. */
+export function SalesPage({ index, person }: { index: number; person: SalesPerson }) {
+  const { api } = useApp();
+  const who = person.match.found ?? person.name;
+  const { data: v, loading } = useApi<SalesView>(api(`/api/demo/commercial?nom=${encodeURIComponent(who)}`));
+  const [p, setP] = useState<P>("3M");
+  useEffect(() => { document.title = `Ventes · ${person.theme} — Démo Jasmin`; }, [person.theme]);
+  return (
+    <section className="dm-chap" id={`ventes-${person.slug}`} aria-labelledby={`h-v-${person.slug}`}>
+      <header className="dm-chap__head">
+        <span className="dm-chap__num" aria-hidden="true">{String(index).padStart(2, "0")}</span>
+        <div className="dm-chap__title">
+          <div className="eyebrow dm-eyebrow">Ventes · {person.theme_source === "donnée" ? "périmètre d'après les pays de ses clients" : "périmètre"}</div>
+          <h2 className="dm-chap__name" id={`h-v-${person.slug}`}>{person.theme}</h2>
+          <p className="dm-person">Commercial&nbsp;: <b>{who}</b></p>
+          <NameMatch match={v?.match ?? person.match} source="la colonne Commercial du passif" />
+        </div>
+        <PeriodTabs value={p} onChange={setP} options={SALES_PERIODS} />
+      </header>
+      {loading && !v ? <Loading h={480} /> : v?.available ? <SalesDetail v={v} p={p} /> : <div className="empty">{v?.reason ?? "Commercial introuvable dans le passif."}</div>}
     </section>
   );
 }

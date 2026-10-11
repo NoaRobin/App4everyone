@@ -42,9 +42,11 @@ def test_zones():
 
 def test_configuration_par_variables(monkeypatch):
     monkeypatch.setenv("APP_DEMO_GERANTS", "Valor:Yoan Ignatiew;Taux:Emmanuel Petit")
-    monkeypatch.setenv("APP_DEMO_COMMERCIAUX", "Fausto, Alecio")
+    monkeypatch.setenv("APP_DEMO_COMMERCIAUX", "Italie:Fausto Trevisian, Alessio Coppola")
     c = D.config()
-    assert [g["label"] for g in c["gerants"]] == ["Valor", "Taux"] and c["commerciaux"] == ["Fausto", "Alecio"]
+    assert [g["label"] for g in c["gerants"]] == ["Valor", "Taux"]
+    assert c["commerciaux"] == [{"theme": "Italie", "name": "Fausto Trevisian"}, {"theme": None, "name": "Alessio Coppola"}]
+    assert D.slug("Italie & Suisse") == "italie-suisse"
 
 
 # ---------------------------------------------------------------- vues du passif (données fictives)
@@ -57,11 +59,20 @@ def dp():
 
 def test_commerciaux_lus_dans_le_passif(dp):
     names = dp.commercials()
-    assert {"Fausto", "Alecio", "Quentin", "Alain Massiera"} <= set(names)
+    assert {"Fausto Trevisian", "Alessio Coppola", "Quentin Piloy", "Alain Massiera"} <= set(names)
+
+
+def test_themes_tires_de_la_donnee_et_distincts(dp):
+    t = dp.themes(["Fausto Trevisian", "Alessio Coppola", "Quentin Piloy"])
+    assert set(t) == {"Fausto Trevisian", "Alessio Coppola", "Quentin Piloy"}
+    assert len(set(t.values())) == 3
+    assert t["Quentin Piloy"].startswith("France")
+    assert all("Trevisian" not in v and "Coppola" not in v for v in t.values())     # un thème, jamais un nom
+    assert dp.themes(["Personne inconnue"]) == {}
 
 
 def test_vue_commercial_sommes_coherentes(dp):
-    v = dp.commercial("Fausto")
+    v = dp.commercial("Fausto Trevisian")
     assert v["available"] and v["nominatif"] and v["encours"] > 0
     assert sum(c["encours"] for c in v["clients"]) == pytest.approx(v["encours"])
     for c in v["clients"]:

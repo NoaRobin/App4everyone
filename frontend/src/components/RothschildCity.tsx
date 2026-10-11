@@ -1,10 +1,12 @@
 /**
- * Accueil, en bas de page — Rothschild City : la cité des revenus, à explorer comme un jeu.
+ * Accueil, en bas de page — Rothschild City : deux lectures de la maison, en 3D.
+ *  · Ce qu'elle rapporte (revenus) : la cité des revenus ci-dessous.
+ *  · Ce qu'elle collecte : CityFlows, collecte nette estimée sur 1 mois, YTD, 1, 3 et 5 ans.
  *
- * Une tour = un fonds (hauteur : revenus annuels estimés ; emprise : encours ; couronne : taux de frais), un quartier =
- * une famille de gestion. Mode exploration : plein écran, pilotage au clavier (ZQSD/WASD ou flèches, A/E pour tourner,
- * molette pour zoomer, Maj pour accélérer), mini-carte cliquable, inspecteur de tour, téléportation vers un fonds,
- * missions et niveaux (progression gardée dans le navigateur). Sans WebGL : le classement suffit, la section se replie.
+ * Revenus : une tour = un fonds (hauteur : revenus annuels estimés ; emprise : encours ; couronne : taux de frais), un
+ * quartier = une famille de gestion. Mode exploration : plein écran, pilotage au clavier (ZQSD/WASD ou flèches, A/E pour
+ * tourner, molette pour zoomer, Maj pour accélérer), mini-carte cliquable, fiche de la tour, recherche d'un fonds.
+ * Lecture sobre : ni missions ni niveaux. Sans WebGL : la section se replie.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -14,15 +16,11 @@ import { gsap, onVisible } from "../lib/gsap";
 import { prefersReducedMotion, useReducedMotion, webglAvailable } from "../lib/motion";
 import type { FamilyKey } from "../lib/types";
 import type { DriveInput, RevenueScene, RevFund } from "../three/RevenueScene";
+import { CityFlows, type CityPeriod } from "./CityFlows";
 import * as I from "./Icon";
 
 export type CityFund = { id: string; name: string; family: FamilyKey; range: string | null; aum: number; rate: number; revenue: number; share: number | null };
 type Props = { funds: CityFund[]; total: number; date: string; mock: boolean };
-
-const LEVELS = ["Visiteur", "Analyste", "Gérant", "Directeur", "Associé-gérant", "Maître de la City"];
-const STORE = "city-progress";
-type Progress = { seen: string[]; fams: string[]; flew: boolean; done: string[] };
-const load = (): Progress => { try { return { seen: [], fams: [], flew: false, done: [], ...JSON.parse(localStorage.getItem(STORE) ?? "{}") }; } catch { return { seen: [], fams: [], flew: false, done: [] }; } };
 
 export function RothschildCity({ funds, total, date, mock }: Props) {
   const host = useRef<HTMLDivElement>(null);
@@ -37,8 +35,8 @@ export function RothschildCity({ funds, total, date, mock }: Props) {
   const [hover, setHover] = useState<{ f: RevFund; x: number; y: number } | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [prog, setProg] = useState<Progress>(load);
-  const [toast, setToast] = useState<string | null>(null);
+  const [view, setView] = useState<"revenus" | "collecte">("revenus");
+  const [period, setPeriod] = useState<CityPeriod>("YTD");
   const cam = useRef({ x: 104, z: 126, tx: 0, tz: 0, yaw: 0 });
   const layout = useRef<{ id: string; family: string; x: number; z: number; w: number }[]>([]);
 
@@ -46,33 +44,12 @@ export function RothschildCity({ funds, total, date, mock }: Props) {
   const rank = useMemo(() => new Map(ranked.map((f, i) => [f.id, i + 1])), [ranked]);
   const byId = useMemo(() => new Map(ranked.map((f) => [f.id, f])), [ranked]);
   const famsPresent = useMemo(() => FAMILY_ORDER.filter((k) => ranked.some((f) => f.family === k)), [ranked]);
-  const maxRate = useMemo(() => ranked.reduce((m, f) => (f.rate > (m?.rate ?? -1) ? f : m), null as CityFund | null), [ranked]);
-
-  // ------------------------------------------------------------ missions
-  const missions = [
-    { id: "top", label: "Trouver la tour qui rapporte le plus", done: !!ranked[0] && prog.seen.includes(ranked[0].id) },
-    { id: "fams", label: `Visiter les ${famsPresent.length} quartiers`, done: famsPresent.every((k) => prog.fams.includes(k)), n: `${famsPresent.filter((k) => prog.fams.includes(k)).length}/${famsPresent.length}` },
-    { id: "ten", label: "Inspecter 10 tours", done: prog.seen.length >= 10, n: `${Math.min(10, prog.seen.length)}/10` },
-    { id: "rate", label: "Repérer le taux de frais le plus élevé", done: !!maxRate && prog.seen.includes(maxRate.id) },
-    { id: "fly", label: "Piloter la caméra au clavier", done: prog.flew },
-  ];
-  const xp = missions.filter((m) => m.done).length;
-  const level = LEVELS[Math.min(LEVELS.length - 1, xp)];
-  useEffect(() => {
-    try { localStorage.setItem(STORE, JSON.stringify(prog)); } catch { /* stockage indisponible */ }
-    const fresh = missions.filter((m) => m.done && !prog.done.includes(m.id));
-    if (fresh.length) {
-      setProg((p) => ({ ...p, done: [...p.done, ...fresh.map((m) => m.id)] }));
-      setToast(fresh[0].label);
-    }
-  }, [prog]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!toast) return; const t = window.setTimeout(() => setToast(null), 3400); return () => window.clearTimeout(t); }, [toast]);
 
   const pick = (f: CityFund | null, fly = true) => {
     setSel(f);
     scene.current?.select(f?.id ?? null, fly);
-    if (f) setProg((p) => ({ ...p, seen: p.seen.includes(f.id) ? p.seen : [...p.seen, f.id], fams: p.fams.includes(f.family) ? p.fams : [...p.fams, f.family] }));
   };
+  const switchView = (v: "revenus" | "collecte") => { setGame(false); setSel(null); setHover(null); setView(v); };
 
   // ------------------------------------------------------------ scène (construite à l'approche de la section, pas au chargement)
   const [near, setNear] = useState(false);
@@ -83,7 +60,7 @@ export function RothschildCity({ funds, total, date, mock }: Props) {
   }, [near]);
   useEffect(() => {
     const el = host.current, lab = labels.current;
-    if (!el || !lab || !gl || !ranked.length || !near) return;
+    if (!el || !lab || !gl || !ranked.length || !near || view !== "revenus") return;
     let alive = true, s: RevenueScene | null = null, stop = () => undefined as void;
     import("../three/RevenueScene").then(({ RevenueScene }) => {
       if (!alive) return;
@@ -101,7 +78,7 @@ export function RothschildCity({ funds, total, date, mock }: Props) {
       stop = onVisible(el, () => s?.play(), "0px 0px -25% 0px");
     });
     return () => { alive = false; stop(); s?.dispose(); scene.current = null; };
-  }, [ranked, gl, reduced, near]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ranked, gl, reduced, near, view]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { scene.current?.setFocus(focus); }, [focus]);
 
   // ------------------------------------------------------------ mini-carte
@@ -134,7 +111,7 @@ export function RothschildCity({ funds, total, date, mock }: Props) {
     };
     draw();
     return () => cancelAnimationFrame(raf);
-  }, [gl, focus, sel]);
+  }, [gl, focus, sel, view]);
   const onMap = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect(), k = 320 / r.width;
     scene.current?.goTo((e.clientX - r.left) * k - 160, (e.clientY - r.top) * k - 160);
@@ -156,7 +133,6 @@ export function RothschildCity({ funds, total, date, mock }: Props) {
         boost: keys.has("shift"),
       };
       scene.current?.setInput(inp);
-      if (inp.f || inp.r || inp.turn) setProg((p) => (p.flew ? p : { ...p, flew: true }));
     };
     const typing = (e: KeyboardEvent) => (e.target as HTMLElement)?.tagName === "INPUT";
     const down = (e: KeyboardEvent) => {
@@ -186,7 +162,7 @@ export function RothschildCity({ funds, total, date, mock }: Props) {
     }, el);
     return () => ctx.revert();
   }, []);
-  // Compteur du trésor
+  // Compteur des revenus
   const treasure = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     const el = treasure.current;
@@ -197,39 +173,42 @@ export function RothschildCity({ funds, total, date, mock }: Props) {
     let tw: gsap.core.Tween | null = null;
     const stop = onVisible(el, () => { tw = gsap.to(o, { v: total, duration: 2.6, ease: "expo.out", delay: 0.6, onUpdate: () => { el.textContent = fmt(o.v); } }); });
     return () => { stop(); tw?.kill(); el.textContent = fmt(total); };
-  }, [total]);
-  // Notification de mission
-  const toastRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!toast || !toastRef.current || prefersReducedMotion()) return;
-    gsap.fromTo(toastRef.current, { y: -30, opacity: 0, scale: 0.96 }, { y: 0, opacity: 1, scale: 1, duration: 0.6, ease: "back.out(1.6)" });
-  }, [toast]);
+  }, [total, view]);
 
   if (!gl || !ranked.length) return null;
   const hits = q.trim() ? ranked.filter((f) => f.name.toLowerCase().includes(q.toLowerCase())).slice(0, 6) : [];
   const sr = sel ? rank.get(sel.id) : null;
   return (
-    <section ref={root} className={`c3${game ? " is-game" : ""}`} aria-labelledby="h-city">
-      <div className="c3__scene" ref={host} aria-hidden="true" />
-      <div className="c3__labels" ref={labels} aria-hidden="true" />
+    <section ref={root} className={`c3${game ? " is-game" : ""}${view === "collecte" ? " is-flows" : ""}`} aria-labelledby="h-city">
+      {view === "revenus" ? (
+        <>
+          <div className="c3__scene" ref={host} aria-hidden="true" />
+          <div className="c3__labels" ref={labels} aria-hidden="true" />
+        </>
+      ) : <CityFlows period={period} onPeriod={setPeriod} />}
       <div className="c3__vignette" aria-hidden="true" />
       <i className="c3__scan" aria-hidden="true" />
 
       <header className="c3__head">
         <div className="eyebrow c3__eyebrow">Rothschild City · au {new Date(`${date}T00:00:00Z`).toLocaleDateString("fr-FR", { timeZone: "UTC" })}{mock ? " · données fictives" : ""}</div>
         <h2 className="c3__title" id="h-city"><span>Rothschild</span> <span>City.</span></h2>
-        <p className="c3__lede">Une tour par fonds&nbsp;: sa hauteur, ce qu'il rapporte chaque année&nbsp;; son emprise, son encours&nbsp;; sa couronne, son taux de frais. Un quartier par famille de gestion.</p>
+        <p className="c3__lede">{view === "revenus"
+          ? <>Une tour par fonds&nbsp;: sa hauteur, ce qu'il rapporte chaque année&nbsp;; son emprise, son encours&nbsp;; sa couronne, son taux de frais. Un quartier par famille de gestion.</>
+          : <>Une tour par fonds&nbsp;: au-dessus de la dalle, ce qu'il a collecté sur la période&nbsp;; en dessous, ce qu'il a perdu. Son emprise, son encours. Un quartier par famille de gestion.</>}</p>
+        {!game && (
+          <div className="c3__views" role="tablist" aria-label="Lecture de la cité">
+            <button type="button" role="tab" aria-selected={view === "revenus"} onClick={() => switchView("revenus")}>Ce qu'elle rapporte</button>
+            <button type="button" role="tab" aria-selected={view === "collecte"} onClick={() => switchView("collecte")}>Ce qu'elle collecte</button>
+          </div>
+        )}
       </header>
+      {view === "revenus" && (<>
 
       <div className="c3__hud">
         <div className="c3__score">
-          <span className="c3__k">Trésor de la cité</span>
+          <span className="c3__k">Revenus estimés de la maison</span>
           <b className="num"><span ref={treasure}>{(total / 1e6).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}</span><i> M€ / an</i></b>
           <span className="c3__k2">{ranked.length} tours · {famsPresent.length} quartiers</span>
-        </div>
-        <div className="c3__lvl" aria-label={`Niveau : ${level}, ${xp} missions sur ${missions.length}`}>
-          <span className="c3__k">Niveau {xp} · <b>{level}</b></span>
-          <span className="c3__xp" aria-hidden="true">{missions.map((m) => <i key={m.id} className={m.done ? "on" : ""} />)}</span>
         </div>
       </div>
 
@@ -238,13 +217,6 @@ export function RothschildCity({ funds, total, date, mock }: Props) {
         <span className="c3__k">Mini-carte</span>
       </div>
 
-      <aside className="c3__quests" aria-label="Missions">
-        <div className="c3__k">Missions</div>
-        <ul>{missions.map((m) => (
-          <li key={m.id} className={m.done ? "is-done" : ""}><span className="c3__box" aria-hidden="true">{m.done && <I.Check size={11} />}</span>{m.label}{m.n && !m.done && <em className="num">{m.n}</em>}</li>
-        ))}</ul>
-        {xp > 0 && <button type="button" className="c3__reset" onClick={() => { setProg({ seen: [], fams: [], flew: false, done: [] }); pick(null, false); }}>Recommencer</button>}
-      </aside>
 
       {sel && (
         <aside className="c3__card" aria-live="polite">
@@ -273,7 +245,7 @@ export function RothschildCity({ funds, total, date, mock }: Props) {
           ))}
         </ul>
         <div className="c3__tele">
-          <label className="c3__search"><I.Search size={14} /><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Se téléporter vers un fonds…" aria-label="Se téléporter vers un fonds" /></label>
+          <label className="c3__search"><I.Search size={14} /><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Aller à un fonds…" aria-label="Aller à un fonds" /></label>
           {hits.length > 0 && (
             <ul className="c3__hits">{hits.map((f) => <li key={f.id}><button type="button" onClick={() => { pick(f); setQ(""); }}><span className="dot" style={{ background: famVar(f.family, true) }} />{f.name}<span className="num">n° {rank.get(f.id)}</span></button></li>)}</ul>
           )}
@@ -294,7 +266,7 @@ export function RothschildCity({ funds, total, date, mock }: Props) {
           <span className="num">{eur(hover.f.revenue)} / an · n° {rank.get(hover.f.id)}</span>
         </div>
       )}
-      {toast && <div ref={toastRef} className="c3__toast" role="status"><span className="c3__k">Mission accomplie</span><b>{toast}</b><span className="num">Niveau {xp} · {level}</span></div>}
+      </>)}
     </section>
   );
 }

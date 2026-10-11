@@ -1233,8 +1233,8 @@ class Service:
         return out
 
     @lru_cache(maxsize=8)
-    def demo_flow_city(self, d: str | None) -> dict:
-        """La cité de la collecte : chaque fonds, sa collecte nette estimée (JUMP) sur 1 mois, YTD, 1, 3 et 5 ans."""
+    def flow_city(self, d: str | None) -> dict:
+        """Rothschild City, vue collecte : chaque fonds, sa collecte nette estimée (JUMP) sur 1 mois, YTD, 1, 3 et 5 ans."""
         m, end = self.m, self.end(d)
         df = self._fund_table(d)
         off = self._flows_off_funds()

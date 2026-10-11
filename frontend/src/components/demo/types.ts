@@ -1,10 +1,11 @@
 import type { FamilyKey, Variation } from "../../lib/types";
 
 export type Match = { asked: string; found: string | null; exact: boolean; ambiguous?: boolean; score?: number; alternatives: { name: string; score: number }[] };
+export type SalesPerson = { name: string; theme: string; theme_source: "configuration" | "donnée"; slug: string; match: Match };
 export type DemoPeople = {
   date: string; mock: boolean; commercials_available: boolean;
   gerants: { key: string; label: string; name: string; match: Match }[];
-  commerciaux: { name: string; match: Match }[];
+  commerciaux: SalesPerson[];
   banque_privee: { name: string; match: Match };
 };
 
@@ -39,13 +40,6 @@ export type ManagerBoard = {
     lines: { key: string; name: string; isin: string | null; asset_class: string | null; weight: number | null; is_new?: boolean; prev_weight?: number | null }[];
     by_class: { label: string; weight: number }[]; moves: { key: string; name: string; kind: string; weight: number; change: number }[] };
   passif?: PassifSide;
-};
-
-export type CityPeriod = "1M" | "YTD" | "1A" | "3A" | "5A";
-export type FlowCityData = {
-  date: string; first: string; excluded: number;
-  periods: Record<CityPeriod, { available: boolean; start: string | null; net: number | null; inflows: number | null; outflows: number | null; n_up: number; n_down: number }>;
-  funds: { id: string; name: string; family: FamilyKey; aum: number; manager: string | null; flows: Record<CityPeriod, number | null>; var: Record<CityPeriod, number | null> }[];
 };
 
 export type ClientRow = {

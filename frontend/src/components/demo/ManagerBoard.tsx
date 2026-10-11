@@ -25,6 +25,7 @@ const RANGES = [{ key: "1A", label: "1 an", months: 13 }, { key: "3A", label: "3
 type RangeKey = (typeof RANGES)[number]["key"];
 
 export function ManagerBoard({ index, label, name, match }: { index: number; label: string; name: string; match: Match }) {
+  useEffect(() => { document.title = `${label} — Démo Jasmin`; }, [label]);
   const { api } = useApp();
   const who = match.found ?? name;
   const { data, loading } = useApi<Board>(api(`/api/demo/gerant?nom=${encodeURIComponent(who)}`));
@@ -34,8 +35,9 @@ export function ManagerBoard({ index, label, name, match }: { index: number; lab
       <header className="dm-chap__head">
         <span className="dm-chap__num" aria-hidden="true">{String(index).padStart(2, "0")}</span>
         <div className="dm-chap__title">
-          <div className="eyebrow dm-eyebrow">Gestion · {label}</div>
-          <h2 className="dm-chap__name" id={`h-${id}`}>{who}</h2>
+          <div className="eyebrow dm-eyebrow">Gestion</div>
+          <h2 className="dm-chap__name" id={`h-${id}`}>{label}</h2>
+          <p className="dm-person">Gérant principal&nbsp;: <b>{who}</b></p>
           <NameMatch match={data?.match ?? match} source="Product Info (gérant principal)" />
         </div>
         {data?.available && data.aum != null && (

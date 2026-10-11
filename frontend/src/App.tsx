@@ -60,7 +60,7 @@ export function App() {
             <Route path="/passif" element={<Passif />} />
             <Route path="/comparateur" element={<Compare />} />
             <Route path="/export" element={<ExportStudio />} />
-            <Route path="/demo" element={<Demo />} />
+            <Route path="/demo/*" element={<Demo />} />
             <Route path="/risques" element={<Navigate to="/fonds#risques" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

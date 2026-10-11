@@ -3,7 +3,7 @@
  * banque privée). Détention : classes d'actifs, fonds, zones, matrice clients × fonds, ancienneté des positions.
  * Investissement : souscriptions et rachats mois par mois, rotation entre fonds et classes d'actifs, dernières opérations.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { scaleBand, scaleLinear } from "d3-scale";
 import { useApi } from "../../lib/api";
@@ -19,6 +19,7 @@ import type { Match, PrivateBankView } from "./types";
 export function PrivateBank({ index, name, match }: { index: number; name: string; match: Match }) {
   const { api } = useApp();
   const [scope, setScope] = useState<"commercial" | "segment">("commercial");
+  useEffect(() => { document.title = "Banque privée — Démo Jasmin"; }, []);
   const who = match.found ?? name;
   const { data, loading } = useApi<PrivateBankView>(api(`/api/demo/banque-privee?nom=${encodeURIComponent(who)}&perimetre=${scope}`));
   return (
@@ -26,12 +27,13 @@ export function PrivateBank({ index, name, match }: { index: number; name: strin
       <header className="dm-chap__head">
         <span className="dm-chap__num" aria-hidden="true">{String(index).padStart(2, "0")}</span>
         <div className="dm-chap__title">
-          <div className="eyebrow dm-eyebrow">Banque privée · passif</div>
-          <h2 className="dm-chap__name" id="h-bp">{scope === "commercial" ? who : "Toute la banque privée"}</h2>
+          <div className="eyebrow dm-eyebrow">Passif · vue nominative</div>
+          <h2 className="dm-chap__name" id="h-bp">Banque privée</h2>
+          <p className="dm-person">{scope === "commercial" ? <>Commercial&nbsp;: <b>{who}</b></> : <>Tout le segment banque privée (classification des comptes)</>}</p>
           {scope === "commercial" && <NameMatch match={data?.match ?? match} source="la colonne Commercial du passif" />}
           <p className="dm-chap__lede">Ce que ses clients détiennent, ce qu'ils achètent et vendent, depuis quand ils sont là.</p>
         </div>
-        <PeriodTabs value={scope} onChange={setScope} label="Périmètre" options={[{ key: "commercial", label: `Clients de ${who.split(" ")[0]}` }, { key: "segment", label: "Segment banque privée" }]} />
+        <PeriodTabs value={scope} onChange={setScope} label="Périmètre" options={[{ key: "commercial", label: `Clients de ${who}` }, { key: "segment", label: "Tout le segment" }]} />
       </header>
       {loading && !data ? <Loading h={520} /> : !data?.available ? <div className="empty">{data?.reason ?? "Données indisponibles."}</div> : <Body v={data} />}
     </section>
