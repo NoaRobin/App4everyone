@@ -342,15 +342,24 @@ def demo_commercial(nom: str):
 
 @app.get("/api/demo/banque-privee")
 def demo_private_bank(nom: str = "", perimetre: str = "commercial"):
-    """Banque privée : ce que détiennent et ce qu'investissent les clients d'un commercial, ou de tout le segment."""
-    _api_service()
+    """Banque privée : les porteurs des fonds Rothschild Martin Maurel (clients d'un commercial, ou tous) — ce qu'ils
+    détiennent et ce qu'ils investissent dans ces fonds."""
+    svc = _api_service()
     D, dp = _demo()
-    if perimetre not in ("commercial", "segment"):
+    if perimetre not in ("commercial", "tous"):
         raise HTTPException(400, "Périmètre inconnu")
     match = D.resolve(nom, dp.commercials()) if nom else {"asked": "", "found": None, "alternatives": []}
     if perimetre == "commercial" and not match["found"]:
         return _ok({"available": False, "match": match, "reason": f"« {nom} » n'apparaît pas dans la colonne Commercial du passif."})
-    return _ok({**dp.private_bank(match["found"], perimetre), "match": match})
+    if not svc.rmm:
+        return _ok({"available": False, "match": match, "reason": "Aucun fonds Rothschild Martin Maurel repéré dans Product Info (règle du filtre RMM)."})
+    return _ok({**dp.private_bank(match["found"], perimetre, sorted(svc.rmm)), "match": match})
+
+
+@app.get("/api/demo/fonds-rmm")
+def demo_rmm_funds(date: str | None = None):
+    """Les fonds Rothschild Martin Maurel : performances 1 mois → 5 ans, encours, collecte, évolution, portefeuille."""
+    return _ok(_api_service().demo_rmm(date))
 
 
 # ---------------------------------------------------------------- erreurs JSON

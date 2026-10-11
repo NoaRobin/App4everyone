@@ -89,8 +89,11 @@ def test_banque_privee(dp):
     assert v["available"] and v["encours"] > 0 and v["flows_available"]
     assert sum(c["encours"] for c in v["classes"]) == pytest.approx(v["encours"])
     assert all(r["sens"] in P.ENTREES | P.SORTIES for r in v["latest"])
-    seg = dp.private_bank(None, "segment")
-    assert seg["encours"] > 0 and all(s["segment"] == P.SEGMENTS["prive"] for s in seg["segments"])
+    tous = dp.private_bank(None, "tous", ["PR1"])                 # tous les porteurs d'un ensemble de fonds
+    assert tous["encours"] > 0 and {f["fund"] for f in tous["by_fund"]} == {"PR1"}
+    mine = dp.private_bank("Alain Massiera", "commercial", ["PR1"])
+    assert mine["encours"] <= tous["encours"] + 1e-6
+    assert dp.private_bank(None, "tous", ["INCONNU"])["available"] is False
 
 
 def test_requetes_demo_parametrees():

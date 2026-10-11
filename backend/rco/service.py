@@ -1175,10 +1175,25 @@ class Service:
     def demo_manager(self, name: str, d: str | None) -> dict:
         """Tableau de bord d'un gérant (fonds où il est gérant principal) : encours, performances 1 mois → 5 ans et écart
         à l'indicateur, risque, collecte, revenus estimés, évolution des encours, principales lignes du portefeuille."""
-        m, end = self.m, self.end(d)
+        m = self.m
         n = L.norm(name)
         lead = m.funds.index[m.funds["Portfolio_Manager"].map(L.norm).eq(n).to_numpy()].tolist() if "Portfolio_Manager" in m.funds else []
         co = [f for f in self._managed_by(name) if f not in lead]
+        out = dict(self._funds_board(tuple(lead), d))
+        out.update({"name": name, "co_managed": [{"id": f, "name": _str(m.funds.at[f, "name"])} for f in co if f in m.funds.index]})
+        return out
+
+    @lru_cache(maxsize=8)
+    def demo_rmm(self, d: str | None) -> dict:
+        """Les fonds Rothschild Martin Maurel (règle du filtre RMM : colonnes et motif de Product Info), même tableau de bord."""
+        out = dict(self._funds_board(tuple(sorted(self.rmm)), d))
+        out.update({"rule": {"columns": list(self.rmm_columns), "pattern": self.rmm_pattern}, "co_managed": []})
+        return out
+
+    @lru_cache(maxsize=32)
+    def _funds_board(self, fund_ids: tuple[str, ...], d: str | None) -> dict:
+        m, end = self.m, self.end(d)
+        lead = list(fund_ids)
         table = self._fund_table(d)
         rows = table[table["id"].isin(lead)].copy()
         live = rows[rows["aum"].fillna(0) > 0].sort_values("aum", ascending=False)
@@ -1206,8 +1221,7 @@ class Service:
                 "lines": comp.get("n_lines") if comp else None, "top10": comp.get("top10_weight") if comp else None,
                 "flows_off": bool(r.get("flows_off")),
             })
-        out: dict[str, Any] = {"date": end.date().isoformat(), "name": name, "funds": funds,
-                               "co_managed": [{"id": f, "name": _str(m.funds.at[f, "name"])} for f in co if f in m.funds.index]}
+        out: dict[str, Any] = {"date": end.date().isoformat(), "funds": funds}
         if not ids:
             return out
         aum = m.fund_aum[ids].sum(axis=1, min_count=1)

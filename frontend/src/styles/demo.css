@@ -361,3 +361,9 @@
 .dm-next__t { font-family: var(--serif); font-size: clamp(30px, 3.2vw, 48px); line-height: 1; }
 .dm-next a:hover .dm-next__t { color: var(--gold-ink); }
 .dm-next a:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+.dm-ctl { display: flex; flex-wrap: wrap; gap: 8px; }
+.dm-scope { margin: 10px 0 18px; }
+.dm-scope b { color: var(--ink); }
+.dm-sact { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 18px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.dm-sact__t { font-family: var(--serif); font-weight: 400; font-size: 30px; margin: 0; letter-spacing: -.01em; }
+.dm-chap > .dm-grid + .dm-act, .dm-chap > .dm-note + .dm-act { margin-top: 56px; }

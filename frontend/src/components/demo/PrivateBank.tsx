@@ -12,29 +12,50 @@ import { CATEGORICAL, OTHER } from "../../lib/families";
 import { date as fdate, eur, pctRaw } from "../../lib/format";
 import { useWidth } from "../charts";
 import { Loading } from "../ui";
-import { ClientTable, Kpi, NameMatch, Ops, PeriodTabs, ShareBar, signed, SplitRows, tone, TwinBars } from "./kit";
+import { ClientTable, Kpi, NameMatch, Ops, PerfVal, PeriodTabs, ShareBar, signed, SplitRows, tone, TwinBars } from "./kit";
+import { BoardBody } from "./ManagerBoard";
 import { HoldZones, SALES_PERIODS } from "./Sales";
-import type { Match, PrivateBankView } from "./types";
+import type { ManagerBoard as ManagerBoardData, Match, PrivateBankView } from "./types";
 
 export function PrivateBank({ index, name, match }: { index: number; name: string; match: Match }) {
   const { api } = useApp();
-  const [scope, setScope] = useState<"commercial" | "segment">("commercial");
+  const [scope, setScope] = useState<"commercial" | "tous">("commercial");
   useEffect(() => { document.title = "Banque privée — Démo Jasmin"; }, []);
   const who = match.found ?? name;
+  const rmm = useApi<ManagerBoardData>(api("/api/demo/fonds-rmm"));
   const { data, loading } = useApi<PrivateBankView>(api(`/api/demo/banque-privee?nom=${encodeURIComponent(who)}&perimetre=${scope}`));
+  const b = rmm.data;
   return (
     <section className="dm-chap" id="banque-privee" aria-labelledby="h-bp">
       <header className="dm-chap__head">
         <span className="dm-chap__num" aria-hidden="true">{String(index).padStart(2, "0")}</span>
         <div className="dm-chap__title">
-          <div className="eyebrow dm-eyebrow">Passif · vue nominative</div>
+          <div className="eyebrow dm-eyebrow">Rothschild Martin Maurel</div>
           <h2 className="dm-chap__name" id="h-bp">Banque privée</h2>
-          <p className="dm-person">{scope === "commercial" ? <>Commercial&nbsp;: <b>{who}</b></> : <>Tout le segment banque privée (classification des comptes)</>}</p>
-          {scope === "commercial" && <NameMatch match={data?.match ?? match} source="la colonne Commercial du passif" />}
-          <p className="dm-chap__lede">Ce que ses clients détiennent, ce qu'ils achètent et vendent, depuis quand ils sont là.</p>
+          <p className="dm-person">Les fonds Rothschild Martin Maurel · commercial&nbsp;: <b>{who}</b></p>
+          <NameMatch match={data?.match ?? match} source="la colonne Commercial du passif" />
         </div>
-        <PeriodTabs value={scope} onChange={setScope} label="Périmètre" options={[{ key: "commercial", label: `Clients de ${who}` }, { key: "segment", label: "Tout le segment" }]} />
+        {b && b.aum != null && (
+          <dl className="dm-kpis">
+            <Kpi label="Encours des fonds RMM" value={eur(b.aum)} sub={`${b.funds.length} fonds · ${b.countries ?? 0} pays d'autorisation`} />
+            <Kpi label="Collecte YTD" value={signed(b.var?.YTD?.flows)} tone={tone(b.var?.YTD?.flows)} sub={`1 an : ${signed(b.var?.["1A"]?.flows)}`} />
+            <Kpi label="Variation YTD" value={b.var?.YTD?.pct == null ? "—" : <PerfVal v={b.var.YTD.pct} />} sub={`marché : ${signed(b.var?.YTD?.market)}`} />
+            <Kpi label="Revenus estimés" value={eur(b.revenue)} sub="par an, encours × frais" />
+          </dl>
+        )}
       </header>
+
+      <div className="dm-act"><span className="dm-act__n">I</span><h3 className="dm-act__t">Les fonds</h3></div>
+      {rmm.loading && !b ? <Loading h={360} /> : !b?.funds.length ? <div className="empty">Aucun fonds Rothschild Martin Maurel repéré dans Product Info.</div> : (
+        <>
+          <BoardBody b={b} compact />
+          {b.rule && <p className="small muted dm-note">Fonds Rothschild Martin Maurel : fonds de Product Info dont l'une des colonnes {b.rule.columns.join(", ")} contient « RMM » ou « Martin Maurel » (même règle que le filtre RMM de Distribution).</p>}
+        </>
+      )}
+
+      <div className="dm-act"><span className="dm-act__n">II</span><h3 className="dm-act__t">Les porteurs</h3>
+        <PeriodTabs value={scope} onChange={setScope} label="Porteurs" options={[{ key: "commercial", label: `Clients de ${who}` }, { key: "tous", label: "Tous les porteurs" }]} /></div>
+      <p className="small muted dm-note dm-scope">{scope === "commercial" ? <>Positions et opérations des clients de <b>{who}</b> dans les fonds Rothschild Martin Maurel.</> : <>Positions et opérations de tous les porteurs des fonds Rothschild Martin Maurel.</>}</p>
       {loading && !data ? <Loading h={520} /> : !data?.available ? <div className="empty">{data?.reason ?? "Données indisponibles."}</div> : <Body v={data} />}
     </section>
   );
@@ -55,7 +76,7 @@ function Body({ v }: { v: PrivateBankView }) {
         <Kpi label="Concentration" value={pctRaw(v.concentration.top5, 0)} sub={`de l'encours chez les 5 premiers clients`} />
       </dl>
 
-      <div className="dm-span-12 dm-act"><span className="dm-act__n">I</span><h3 className="dm-act__t">Ce qu'ils détiennent</h3></div>
+      <div className="dm-span-12 dm-sact"><h4 className="dm-sact__t">Ce qu'ils détiennent</h4></div>
       <article className="dm-card dm-span-7">
         <div className="dm-card__head"><div><div className="eyebrow">Classes d'actifs</div><h3 className="dm-h3">Allocation de l'encours</h3></div></div>
         <ShareBar items={cls} label="Encours par classe d'actifs" />
@@ -85,7 +106,7 @@ function Body({ v }: { v: PrivateBankView }) {
       <article className="dm-card dm-span-12"><Matrix v={v} /></article>
       <article className="dm-card dm-span-12"><Vintage v={v} /></article>
 
-      <div className="dm-span-12 dm-act"><span className="dm-act__n">II</span><h3 className="dm-act__t">Ce qu'ils investissent</h3>
+      <div className="dm-span-12 dm-sact"><h4 className="dm-sact__t">Ce qu'ils investissent</h4>
         {v.flows_available && <PeriodTabs value={p} onChange={setP} options={SALES_PERIODS} />}</div>
       {!v.flows_available || !f ? <div className="empty dm-span-12">Transactions du passif non publiées.</div> : (
         <>
@@ -100,7 +121,7 @@ function Body({ v }: { v: PrivateBankView }) {
           </article>
           <article className="dm-card dm-span-5">
             <div className="dm-card__head"><div><div className="eyebrow">Dernières opérations</div><h3 className="dm-h3">Trois derniers mois</h3></div></div>
-            <Ops ops={v.latest ?? []} showCommercial={v.scope === "segment"} />
+            <Ops ops={v.latest ?? []} showCommercial={v.scope === "tous"} />
           </article>
           <article className="dm-card dm-span-7">
             <div className="dm-card__head"><div><div className="eyebrow">Rotation · sur un an</div><h3 className="dm-h3">Les fonds qu'ils renforcent, ceux qu'ils allègent</h3></div></div>
@@ -113,7 +134,7 @@ function Body({ v }: { v: PrivateBankView }) {
         </>
       )}
 
-      <div className="dm-span-12 dm-act"><span className="dm-act__n">III</span><h3 className="dm-act__t">Ses clients</h3></div>
+      <div className="dm-span-12 dm-sact"><h4 className="dm-sact__t">Les clients</h4></div>
       <article className="dm-card dm-span-12"><ClientTable clients={v.clients} /></article>
     </div>
   );

@@ -402,14 +402,20 @@ class DemoPassif:
         return out[:limit]
 
     # ------------------------------------------------------------------ banque privée : ce qu'ils détiennent, ce qu'ils investissent
-    def private_bank(self, name: str | None, scope: str = "commercial") -> dict:
+    def private_bank(self, name: str | None, scope: str = "commercial", fund_ids: list[str] | None = None) -> dict:
+        """Ce que détiennent et investissent les porteurs d'un ensemble de fonds (les fonds Rothschild Martin Maurel),
+        clients d'un commercial (`scope="commercial"`) ou tous les porteurs (`scope="tous"`)."""
         ctx = self._ctx()
         if ctx is None:
             return {"available": False, "reason": "Passif non publié."}
-        inn = {"commercial": [name]} if scope == "commercial" and name else {}
+        inn: dict = {"commercial": [name]} if scope == "commercial" and name else {}
+        if fund_ids is not None:
+            ids = set(fund_ids)
+            isins = sorted(i for i, f in self.p.isin_to_fund.items() if f in ids)
+            if not isins:
+                return {"available": False, "reason": "Aucune part de ces fonds dans le référentiel (ISIN)."}
+            inn["isin"] = isins
         pos = self._positions(ctx, inn)
-        if scope == "segment":
-            pos = pos[pos["classification"].map(lambda v: segment_of(v) == "prive")]
         tot = float(pos["v"].sum())
         p = pos.assign(isin=pos["isin"].map(_norm_isin))
         p["fund"] = p["isin"].map(lambda i: self._fund(i)[0])
@@ -449,15 +455,12 @@ class DemoPassif:
             end = trx["last"]
             st = self._starts(end)
             f = self._flows(ctx, inn, st["1A"])
-            if scope == "segment":
-                cls = set(pos["client"].dropna())
-                f = f[f["client"].isin(cls)]
             out.update({"flows_available": True, "flows_end": end,
                         "periods": {k: {"start": s, **self._sums(f[f["d"].astype(str) >= s])} for k, s in st.items()},
                         "monthly": self._monthly(f, end),
                         "rotation": self._funds_rows(f, 5),
                         "flow_classes": self._by(f, "classe", _label),
-                        "latest": self._latest(ctx, inn, st["3M"], scope_clients=set(pos["client"].dropna()) if scope == "segment" else None)})
+                        "latest": self._latest(ctx, inn, st["3M"])})
         return out
 
     def _latest(self, ctx: dict, inn: dict, start: str, limit: int = 14, scope_clients: set | None = None, only_subs: bool = False) -> list[dict]:

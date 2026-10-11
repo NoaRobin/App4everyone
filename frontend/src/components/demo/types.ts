@@ -32,7 +32,8 @@ export type PassifSide = {
   periods?: Record<string, PeriodFlows>; monthly?: Monthly[];
 };
 export type ManagerBoard = {
-  available: boolean; reason?: string; match: Match; date: string; name: string; funds: ManagerFund[]; co_managed: { id: string; name: string }[];
+  available?: boolean; reason?: string; match?: Match; date: string; name?: string; funds: ManagerFund[]; co_managed?: { id: string; name: string }[];
+  rule?: { columns: string[]; pattern: string };
   aum?: number; var?: Record<FlowKey, Variation>; revenue?: number | null; countries?: number;
   series?: { d: string; aum: number | null; flows: number | null; market: number | null }[];
   stack?: { dates: string[]; funds: { id: string; values: number[] }[] };
@@ -55,7 +56,7 @@ export type SalesView = {
   periods: Record<"1M" | "3M" | "YTD" | "1A", PeriodFlows>; monthly: Monthly[]; holdings_zones: HoldZone[]; clients: ClientRow[]; segments: Segment[];
 };
 export type PrivateBankView = {
-  available: boolean; reason?: string; match: Match; scope: "commercial" | "segment"; name: string | null; as_of: string; encours: number;
+  available: boolean; reason?: string; match: Match; scope: "commercial" | "tous"; name: string | null; as_of: string; encours: number;
   clients_count: number; positions: number; funds_count: number;
   by_fund: { fund: string | null; name: string; encours: number; pct: number | null; clients: number; classe: string }[];
   classes: { key: string; encours: number; pct: number | null }[]; zones: HoldZone[]; segments: Segment[];

@@ -56,7 +56,7 @@ export function ManagerBoard({ index, label, name, match }: { index: number; lab
   );
 }
 
-function BoardBody({ b }: { b: Board }) {
+export function BoardBody({ b, compact = false }: { b: Board; compact?: boolean }) {
   const color = useMemo(() => {
     const m = new Map<string, string>();
     b.funds.forEach((f, i) => m.set(f.id, i < CATEGORICAL.length ? CATEGORICAL[i] : OTHER));
@@ -67,33 +67,38 @@ function BoardBody({ b }: { b: Board }) {
       <article className="dm-card dm-span-12"><PerfTable funds={b.funds} color={color} /></article>
       <article className="dm-card dm-span-8"><AumStack b={b} color={color} /></article>
       <article className="dm-card dm-span-4"><Variation b={b} /></article>
-      <article className="dm-card dm-span-6"><FundFlows funds={b.funds} color={color} />
+      <article className={`dm-card ${compact ? "dm-span-12" : "dm-span-6"}`}><FundFlows funds={b.funds} color={color} />
         <div className="eyebrow dm-sub">Collecte nette estimée, mois par mois (JUMP)</div>
         <FlowBars points={(b.series ?? []).slice(-13).filter((x) => x.flows != null).map((x) => ({ d: x.d, v: x.flows as number }))} height={200} ariaLabel="Collecte nette estimée par mois, 13 derniers mois" />
       </article>
-      <article className="dm-card dm-span-6"><Subscriptions b={b} /></article>
-      {b.passif?.available && b.passif.zones.length > 0 && <article className="dm-card dm-span-12 dm-card--flush"><Zones b={b} color={color} /></article>}
-      {b.portfolio && <article className="dm-card dm-span-12"><Portfolio p={b.portfolio} /></article>}
-      {b.co_managed.length > 0 && (
-        <p className="small muted dm-span-12 dm-co">Également gérant suppléant de : {b.co_managed.map((f, i) => <Fragment key={f.id}>{i ? ", " : ""}<Link to={`/fonds/${encodeURIComponent(f.id)}`}>{f.name}</Link></Fragment>)}.</p>
+      {!compact && <article className="dm-card dm-span-6"><Subscriptions b={b} /></article>}
+      {!compact && b.passif?.available && b.passif.zones.length > 0 && <article className="dm-card dm-span-12 dm-card--flush"><Zones b={b} color={color} /></article>}
+      {!compact && b.portfolio && <article className="dm-card dm-span-12"><Portfolio p={b.portfolio} /></article>}
+      {(b.co_managed?.length ?? 0) > 0 && (
+        <p className="small muted dm-span-12 dm-co">Également gérant suppléant de : {(b.co_managed ?? []).map((f, i) => <Fragment key={f.id}>{i ? ", " : ""}<Link to={`/fonds/${encodeURIComponent(f.id)}`}>{f.name}</Link></Fragment>)}.</p>
       )}
     </div>
   );
 }
 
 // ------------------------------------------------------------------ performances
-function PerfTable({ funds, color }: { funds: ManagerFund[]; color: Map<string, string> }) {
+/** 3 et 5 ans : la performance est fournie annualisée ; la cumulée s'en déduit exactement, (1 + r)^n − 1. */
+const YEARS: Partial<Record<PerfKey, number>> = { "3A": 3, "5A": 5 };
+const onBase = (v: number | null, k: PerfKey, base: "cum" | "ann") => (v == null || base === "ann" || !YEARS[k] ? v : Math.pow(1 + v, YEARS[k]!) - 1);
+
+export function PerfTable({ funds, color }: { funds: ManagerFund[]; color: Map<string, string> }) {
   const [mode, setMode] = useState<"perf" | "rel">("perf");
+  const [base, setBase] = useState<"cum" | "ann">("cum");
   const cell = (f: ManagerFund, p: (typeof PERF)[number]) => {
-    const v = f.perf[p.key], bv = f.bench[p.key];
+    const v = onBase(f.perf[p.key], p.key, base), bv = onBase(f.bench[p.key], p.key, base);
     const shown = mode === "perf" ? v : v != null && bv != null ? v - bv : null;
-    const span = mode === "perf" ? 0.15 : 0.04;
+    const span = (mode === "perf" ? 0.15 : 0.04) * (base === "cum" && YEARS[p.key] ? Math.sqrt(YEARS[p.key]!) : 1);
     const k = shown == null ? 0 : Math.min(1, Math.abs(shown) / span);
     const bg = shown == null ? undefined : `color-mix(in srgb, ${shown >= 0 ? "var(--up)" : "var(--down)"} ${Math.round(6 + k * 22)}%, transparent)`;
-    const title = `${f.name} · ${p.label}${p.annual ? " (annualisée)" : ""} : fonds ${v == null ? "—" : pctRaw(v * 100, 2)}, indicateur ${bv == null ? "—" : pctRaw(bv * 100, 2)}`;
+    const title = `${f.name} · ${p.label}${p.annual ? (base === "ann" ? " (annualisée)" : " (cumulée)") : ""} : fonds ${v == null ? "—" : pctRaw(v * 100, 2)}, indicateur ${bv == null ? "—" : pctRaw(bv * 100, 2)}`;
     return (
       <td key={p.key} className="n dm-pt__c" style={{ background: bg }} title={title}>
-        {mode === "perf" ? <PerfVal v={shown} /> : shown == null ? <span className="muted">—</span>
+        {mode === "perf" ? <PerfVal v={shown} annual={base === "ann" && p.annual} /> : shown == null ? <span className="muted">—</span>
           : <span className={shown >= 0 ? "up-t" : "down-t"}>{shown > 0 ? "+" : shown < 0 ? "−" : ""}{Math.abs(shown * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}&nbsp;pt</span>}
         {mode === "perf" && bv != null && <span className="dm-pt__b num">ind. {(bv * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}</span>}
       </td>
@@ -103,13 +108,16 @@ function PerfTable({ funds, color }: { funds: ManagerFund[]; color: Map<string, 
     <>
       <div className="dm-card__head">
         <div><div className="eyebrow">Performances · part principale</div><h3 className="dm-h3">Comment se comportent les fonds</h3></div>
-        <PeriodTabs value={mode} onChange={setMode} label="Lecture" options={[{ key: "perf", label: "Performance" }, { key: "rel", label: "Écart à l'indicateur" }]} />
+        <div className="dm-ctl">
+          <PeriodTabs value={base} onChange={setBase} label="Calcul sur 3 et 5 ans" options={[{ key: "cum", label: "Cumulée" }, { key: "ann", label: "Annualisée" }]} />
+          <PeriodTabs value={mode} onChange={setMode} label="Lecture" options={[{ key: "perf", label: "Performance" }, { key: "rel", label: "Écart à l'indicateur" }]} />
+        </div>
       </div>
       <div className="dm-scroll">
         <table className="t dm-pt">
           <thead><tr>
             <th>Fonds</th><th className="n">Encours</th>
-            {PERF.map((p) => <th key={p.key} className="n">{p.label}{p.annual ? <sup>a</sup> : null}</th>)}
+            {PERF.map((p) => <th key={p.key} className="n">{p.label}{p.annual && base === "ann" ? <sup>a</sup> : null}</th>)}
             <th className="n">Volatilité 1 an</th><th className="n">Perte max 1 an</th><th className="n">SRI</th>
           </tr></thead>
           <tbody>{funds.map((f) => (
@@ -125,7 +133,7 @@ function PerfTable({ funds, color }: { funds: ManagerFund[]; color: Map<string, 
           ))}</tbody>
         </table>
       </div>
-      <p className="small muted dm-note"><sup>a</sup> annualisée. Part principale de chaque fonds (la plus grosse en encours), coupons réinvestis ; « ind. » : son indicateur de référence sur la même période.
+      <p className="small muted dm-note">{base === "ann" ? <><sup>a</sup> annualisée (3 et 5 ans). </> : "Performances cumulées sur chaque période. "}Part principale de chaque fonds (la plus grosse en encours), coupons réinvestis ; « ind. » : son indicateur de référence sur la même période.
         {funds.some((f) => f.perf["5A"] == null) ? " — : historique insuffisant pour la période." : ""}</p>
     </>
   );
