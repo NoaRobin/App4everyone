@@ -65,3 +65,16 @@ def test_total_maison_egal_somme_des_familles(client):
 def test_introuvable(client):
     assert client.get("/api/funds/inexistant").status_code == 404
     assert client.get("/api/breakdown/inconnu").status_code == 404
+
+
+def test_demo_fixed_income_tous_les_fonds_obligataires(client):
+    """Fixed Income = la famille de gestion ET tous les fonds dont la classe d'actifs Product Info est obligataire :
+    un fonds obligataire d'une gamme « Sélection » (classé Architecture ouverte) y figure, et ses revenus aussi."""
+    r = client.get("/api/demo/gerant", params={"famille": "fi"})
+    while r.status_code == 503:
+        r = client.get("/api/demo/gerant", params={"famille": "fi"})
+    b = r.json()
+    names = {f["name"]: f for f in b["funds"]}
+    assert "Sélection Obligataire Monde" in names and names["Sélection Obligataire Monde"]["via_asset_class"]
+    assert b["perimeter"]["asset_class"] >= 1
+    assert b["revenue"] == pytest.approx(sum(f["revenue"] or 0 for f in b["funds"]))

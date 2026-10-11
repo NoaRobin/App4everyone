@@ -1186,9 +1186,21 @@ class Service:
     @lru_cache(maxsize=8)
     def demo_family(self, family: str, d: str | None) -> dict:
         """Tous les fonds d'une famille de gestion (Fixed Income…), même tableau de bord que pour un gérant."""
-        fam = self.m.funds["family"] if "family" in self.m.funds else pd.Series(dtype=object)
-        out = dict(self._funds_board(tuple(sorted(fam[fam == family].index)), d))
-        out.update({"name": self._family_label(family), "co_managed": []})
+        f = self.m.funds
+        fam = f["family"] if "family" in f else pd.Series(dtype=object)
+        ids = set(fam[fam == family].index)
+        # La famille vient de mots-clés testés champ par champ (gamme, expertise…) : un fonds obligataire d'une gamme
+        # « Sélection » ou « Multigestion » tombe en Architecture ouverte. Le périmètre reprend donc aussi tous les fonds
+        # dont la classe d'actifs de Product Info relève de la famille.
+        keys = L.FAMILY_BY_KEY.get(family, {}).get("keywords", [])
+        by_class: set[str] = set()
+        if keys and "Asset_Class" in f:
+            ac = f["Asset_Class"].map(L.norm)
+            by_class = set(ac[ac.map(lambda v: bool(v) and any(k in v for k in keys))].index) - ids
+        out = dict(self._funds_board(tuple(sorted(ids | by_class)), d))
+        out["funds"] = [{**x, "via_asset_class": x["id"] in by_class} for x in out["funds"]]  # le tableau en cache reste intact
+        out.update({"name": self._family_label(family), "co_managed": [],
+                    "perimeter": {"family": len(ids), "asset_class": len(by_class)}})
         return out
 
     @lru_cache(maxsize=1)

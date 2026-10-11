@@ -15,7 +15,7 @@ export type ManagerFund = {
   id: string; name: string; family: FamilyKey; range: string | null; asset_class: string | null; aum: number | null; sri: string | null; sfdr: string | null;
   n_parts: number | null; countries: number; share: string | null; bench_name: string | null;
   perf: Record<PerfKey, number | null>; bench: Record<PerfKey, number | null>; flows: Record<FlowKey, number | null>;
-  vol: number | null; mdd: number | null; te: number | null; revenue: number | null; rate: number | null; lines: number | null; top10: number | null; flows_off: boolean;
+  vol: number | null; mdd: number | null; te: number | null; via_asset_class?: boolean; revenue: number | null; rate: number | null; lines: number | null; top10: number | null; flows_off: boolean;
 };
 export type CountryRow = { country: string; iso: string | null; encours: number; pct: number | null; positions?: number; clients?: number };
 export type ZoneHold = { zone: string; encours: number; pct: number | null; positions?: number; clients?: number; funds?: Record<string, number>; countries: CountryRow[] };
@@ -33,7 +33,7 @@ export type PassifSide = {
 };
 export type ManagerBoard = {
   available?: boolean; reason?: string; match?: Match; date: string; name?: string; funds: ManagerFund[]; co_managed?: { id: string; name: string }[];
-  rule?: { columns: string[]; pattern: string };
+  rule?: { columns: string[]; pattern: string }; perimeter?: { family: number; asset_class: number };
   aum?: number; var?: Record<FlowKey, Variation>; revenue?: number | null; countries?: number;
   series?: { d: string; aum: number | null; flows: number | null; market: number | null }[];
   stack?: { dates: string[]; funds: { id: string; values: number[] }[] };

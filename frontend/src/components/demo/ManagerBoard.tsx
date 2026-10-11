@@ -38,7 +38,7 @@ export function ManagerBoard({ index, label, name, match, role = "Gérant princi
         <div className="dm-chap__title">
           <div className="eyebrow dm-eyebrow">Gestion</div>
           <h2 className="dm-chap__name" id={`h-${id}`}>{label}</h2>
-          <p className="dm-person">{role}&nbsp;: <b>{who}</b>{family ? <span className="muted"> · tous les fonds de la famille de gestion</span> : null}</p>
+          <p className="dm-person">{role}&nbsp;: <b>{who}</b>{family ? <span className="muted"> · tous les fonds obligataires</span> : null}</p>
           {!family && <NameMatch match={data?.match ?? match} source="Product Info (gérant principal)" />}
         </div>
         {data?.available && data.aum != null && (
@@ -65,7 +65,8 @@ export function BoardBody({ b, compact = false }: { b: Board; compact?: boolean 
   }, [b.funds]);
   return (
     <div className="dm-grid">
-      <article className="dm-card dm-span-12"><PerfTable funds={b.funds} color={color} /></article>
+      <article className="dm-card dm-span-12"><PerfTable funds={b.funds} color={color} />
+        {b.perimeter && <p className="small muted dm-note">Périmètre : les {b.perimeter.family} fonds de la famille de gestion, plus {b.perimeter.asset_class} fonds rangés dans une autre famille (gamme Sélection, Multigestion…) mais dont la classe d'actifs Product Info est obligataire ou monétaire. Fonds sans encours à la date exclus.</p>}</article>
       <article className="dm-card dm-span-8"><AumStack b={b} color={color} /></article>
       <article className="dm-card dm-span-4"><Variation b={b} /></article>
       <article className={`dm-card ${compact ? "dm-span-12" : "dm-span-6"}`}><FundFlows funds={b.funds} color={color} />
@@ -124,7 +125,7 @@ export function PerfTable({ funds, color }: { funds: ManagerFund[]; color: Map<s
           <tbody>{funds.map((f) => (
             <tr key={f.id}>
               <td><Link to={`/fonds/${encodeURIComponent(f.id)}`} className="dm-pt__f"><i style={{ background: color.get(f.id) }} aria-hidden="true" /><span><b>{f.name}</b>
-                <em>{[f.range, f.asset_class, f.sfdr].filter(Boolean).join(" · ")}</em></span></Link></td>
+                <em>{[f.range, f.asset_class, f.sfdr].filter(Boolean).join(" · ")}{f.via_asset_class ? " · hors famille, retenu pour sa classe d'actifs" : ""}</em></span></Link></td>
               <td className="n num">{eur(f.aum)}</td>
               {PERF.map((p) => cell(f, p))}
               <td className="n num">{f.vol == null ? "—" : pctRaw(f.vol * 100, 1)}</td>
