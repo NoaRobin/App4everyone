@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { magnetic } from "../lib/gsap";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import * as I from "./Icon";
-import { JasmineMark } from "./JasmineLogo";
+import { EurekaMark } from "./EurekaLogo";
 import { useApp } from "../lib/context";
 import { date as fdate } from "../lib/format";
 import { motionPaused, setMotionPaused, useReducedMotion } from "../lib/motion";
@@ -38,10 +38,10 @@ export function Header() {
     <header className={`hdr hdr--night${scrolled ? " is-scrolled" : ""}${pano ? " hdr--pano" : ""}`}>
       <a href="#contenu" className="skip-link">Aller au contenu</a>
       <div className="hdr__in">
-        <Link to="/" className="brand brand--jasmine" aria-label="Jasmin, Rothschild & Co Asset Management — accueil">
-          <JasmineMark size={34} style={{ flex: "none" }} />
+        <Link to="/" className="brand brand--eureka" aria-label="Eureka, Rothschild & Co Asset Management — accueil">
+          <EurekaMark size={34} style={{ flex: "none" }} />
           <span className="brand__txt">
-            <span className="brand__name">Jasmin</span>
+            <span className="brand__name">Eureka</span>
             <span className="brand__sub">Rothschild &amp; Co · Asset Management</span>
           </span>
         </Link>

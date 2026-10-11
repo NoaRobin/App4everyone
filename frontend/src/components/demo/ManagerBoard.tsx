@@ -26,7 +26,7 @@ type RangeKey = (typeof RANGES)[number]["key"];
 
 export function ManagerBoard({ index, label, name, match, role = "Gérant principal", family = null }:
   { index: number; label: string; name: string; match: Match; role?: string; family?: string | null }) {
-  useEffect(() => { document.title = `${label} — Démo Jasmin`; }, [label]);
+  useEffect(() => { document.title = `${label} — Démo Eureka`; }, [label]);
   const { api } = useApp();
   const who = match.found ?? name;
   const { data, loading } = useApi<Board>(api(`/api/demo/gerant?nom=${encodeURIComponent(who)}${family ? `&famille=${encodeURIComponent(family)}` : ""}`));

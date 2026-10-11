@@ -6,10 +6,10 @@
 .hdr--night { color: var(--on-night); }
 .hdr--night.is-scrolled { background: color-mix(in srgb, var(--night) 72%, transparent); backdrop-filter: blur(14px); box-shadow: 0 1px 0 var(--night-line); }
 .brand { display: flex; flex-direction: column; line-height: 1; flex: none; }
-.brand--jasmine { flex-direction: row; align-items: center; gap: 12px; color: inherit; text-decoration: none; }
+.brand--eureka { flex-direction: row; align-items: center; gap: 12px; color: inherit; text-decoration: none; }
 .brand__txt { display: flex; flex-direction: column; line-height: 1; }
-.brand--jasmine .brand__name { font-size: 28px; letter-spacing: .01em; }
-.brand--jasmine .brand__sub { font-size: 10.5px; letter-spacing: .16em; }
+.brand--eureka .brand__name { font-size: 28px; letter-spacing: .01em; }
+.brand--eureka .brand__sub { font-size: 10.5px; letter-spacing: .16em; }
 .brand__name { font-family: var(--serif); font-size: 25px; letter-spacing: .01em; white-space: nowrap; }
 .brand__sub { font-size: 12px; letter-spacing: .18em; text-transform: uppercase; opacity: .62; margin-top: 5px; white-space: nowrap; }
 .nav { display: flex; gap: 4px; margin-left: 12px; }

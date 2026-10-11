@@ -36,7 +36,7 @@ function useMany<T>(urls: string[]): { data: (T | null)[]; loading: boolean } {
 /** Ventes · vue d'ensemble : les commerciaux côte à côte (une carte par thème), chacun mène à sa page. */
 export function SalesOverview({ index, people, pageOf }: { index: number; people: SalesPerson[]; pageOf: (p: SalesPerson) => string }) {
   const { api } = useApp();
-  useEffect(() => { document.title = "Ventes — Démo Jasmin"; }, []);
+  useEffect(() => { document.title = "Ventes — Démo Eureka"; }, []);
   const urls = useMemo(() => people.map((p) => api(territory(p))), [people, api]);
   const { data, loading } = useMany<SalesView>(urls);
   const [p, setP] = useState<P>("3M");
@@ -91,7 +91,7 @@ export function SalesPage({ index, person }: { index: number; person: SalesPerso
   const { api } = useApp();
   const { data: v, loading } = useApi<SalesView>(api(territory(person)));
   const [p, setP] = useState<P>("3M");
-  useEffect(() => { document.title = `Ventes · ${person.theme} — Démo Jasmin`; }, [person.theme]);
+  useEffect(() => { document.title = `Ventes · ${person.theme} — Démo Eureka`; }, [person.theme]);
   return (
     <section className="dm-chap" id={`ventes-${person.slug}`} aria-labelledby={`h-v-${person.slug}`}>
       <header className="dm-chap__head">

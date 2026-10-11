@@ -14,7 +14,7 @@ import { ManagerBoard } from "../components/demo/ManagerBoard";
 import { PrivateBank } from "../components/demo/PrivateBank";
 import { SalesOverview, SalesPage } from "../components/demo/Sales";
 import type { DemoPeople, SalesPerson } from "../components/demo/types";
-import { JasmineMark } from "../components/JasmineLogo";
+import { EurekaMark } from "../components/EurekaLogo";
 import { ErrorState, Loading } from "../components/ui";
 import { useApi } from "../lib/api";
 import { date as fdate } from "../lib/format";
@@ -123,7 +123,7 @@ function DemoNav({ pages }: { pages: Page[] }) {
 // ------------------------------------------------------------------ ouverture et sommaire
 function Index({ data, pages }: { data: DemoPeople; pages: Page[] }) {
   const root = useRef<HTMLElement>(null);
-  useEffect(() => { document.title = "Démo — Jasmin"; }, []);
+  useEffect(() => { document.title = "Démo — Eureka"; }, []);
   useLayoutEffect(() => {
     const el = root.current;
     if (!el || prefersReducedMotion()) return;
@@ -144,7 +144,7 @@ function Index({ data, pages }: { data: DemoPeople; pages: Page[] }) {
     <section ref={root} className="dm-hero" aria-labelledby="h-demo">
       <div className="dm-hero__bg" aria-hidden="true" />
       <div className="dm-hero__in">
-        <span className="dm-hero__mark"><JasmineMark size={64} title="Jasmin" style={{ display: "block" }} /></span>
+        <span className="dm-hero__mark"><EurekaMark size={64} title="Eureka" style={{ display: "block" }} /></span>
         <div className="dm-hero__k eyebrow">Rothschild &amp; Co Asset Management · démonstration{data.mock ? " · données fictives" : ""}</div>
         <h1 className="dm-hero__t" id="h-demo">Du gérant au client, en&nbsp;un&nbsp;seul&nbsp;endroit.</h1>
         <i className="dm-hero__rule" aria-hidden="true" />

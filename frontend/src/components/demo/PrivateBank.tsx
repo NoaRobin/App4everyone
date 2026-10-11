@@ -24,7 +24,7 @@ const rate = (r: number | null | undefined) => (r == null ? "—" : `${r.toLocal
 
 export function PrivateBank({ index, name }: { index: number; name: string }) {
   const { api } = useApp();
-  useEffect(() => { document.title = "Banque privée — Démo Jasmin"; }, []);
+  useEffect(() => { document.title = "Banque privée — Démo Eureka"; }, []);
   const { data: v, loading } = useApi<RmmBank>(api("/api/demo/banque-privee"));
   const rmm = useApi<ManagerBoardData>(api("/api/demo/fonds-rmm"));
   const y1 = v?.periods?.["1A"];
