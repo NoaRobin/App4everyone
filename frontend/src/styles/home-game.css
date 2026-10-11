@@ -196,43 +196,11 @@ html.city-lock, html.city-lock body { overflow: hidden; }
 }
 
 /* ---------------------------------------------------------------- Rothschild City : deux lectures (revenus, collecte) */
-.c3 { --flow-in: #cc9f53; --flow-out: #c2476f; }
 .c3__views { display: inline-flex; margin-top: 18px; border: 1px solid rgba(204, 159, 83, .45); background: rgba(6, 11, 21, .72); backdrop-filter: blur(8px); pointer-events: auto; }
 .c3__views button { min-height: 40px; padding: 0 16px; border: 0; background: none; color: var(--on-night-2); font: inherit; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; transition: color .25s, background .25s; }
 .c3__views button + button { border-left: 1px solid rgba(204, 159, 83, .3); }
 .c3__views button:hover { color: var(--on-night); }
 .c3__views button[aria-selected="true"] { background: var(--gold); color: #0a0f1a; }
-.c3f__in { color: var(--gold-ink); } .c3f__out { color: #ee8ea0; }
-.c3f__loading { position: absolute; inset: 0; background: radial-gradient(70% 60% at 50% 45%, #0d1728, #03060c); }
-.c3f__panel { position: absolute; z-index: 4; right: var(--gutter); top: calc(var(--header-h) + 22px); width: min(380px, 34vw); display: flex; flex-direction: column; gap: 8px;
-  padding: 16px 18px 14px; background: rgba(6, 11, 21, .78); border: 1px solid rgba(204, 159, 83, .35); backdrop-filter: blur(10px); }
-.c3f__tabs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--night-line); margin-bottom: 8px; }
-.c3f__tabs button { min-height: 36px; border: 0; background: none; color: var(--on-night-2); font: inherit; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
-.c3f__tabs button + button { border-left: 1px solid var(--night-line); }
-.c3f__tabs button:hover:not(:disabled) { color: var(--on-night); background: rgba(204, 159, 83, .1); }
-.c3f__tabs button[aria-checked="true"] { background: var(--gold); color: #0a0f1a; }
-.c3f__tabs button:disabled { opacity: .35; cursor: not-allowed; }
-.c3f__total { font-family: var(--serif); font-weight: 400; font-size: clamp(40px, 4vw, 58px); line-height: 1; letter-spacing: -.02em; }
-.c3f__lists { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--night-line); }
-.c3f__lists ol { list-style: none; margin: 6px 0 0; padding: 0; }
-.c3f__lists button { width: 100%; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 30px; padding: 3px 4px; border: 0; background: none; color: var(--on-night-2);
-  font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
-.c3f__lists button:hover, .c3f__lists button[aria-pressed="true"] { background: rgba(204, 159, 83, .1); color: var(--on-night); }
-.c3f__lists button:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
-.c3f__n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.c3f__lists b { font-size: 13px; }
-.c3f__legend { display: inline-flex; gap: 16px; font-size: 12px; color: var(--on-night-2); }
-.c3f__legend span { display: inline-flex; gap: 7px; align-items: center; }
-.c3f__legend i { width: 12px; height: 12px; display: inline-block; }
-.c3f__legend i.is-in { background: var(--flow-in); } .c3f__legend i.is-out { background: var(--flow-out); }
-.c3f__mgr { margin: 10px 0 12px; }
-.c3.is-flows .c3__card { top: calc(var(--header-h) + 22px); bottom: auto; right: calc(var(--gutter) + min(380px, 34vw) + 16px); }
-.fc3d__district { position: absolute; left: 0; top: 0; z-index: 1; font-size: 11px; letter-spacing: .24em; text-transform: uppercase; font-weight: 700; color: var(--c); white-space: nowrap; text-shadow: 0 1px 14px #000; transition: opacity .3s; }
-.fc3d__label { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; white-space: nowrap; padding: 6px 10px; background: rgba(4, 8, 16, .8);
-  border-top: 1px solid var(--flow-in); transition: opacity .25s; }
-.fc3d__label.is-down { border-top: 0; border-bottom: 1px solid var(--flow-out); }
-.fc3d__label b { font-size: 12.5px; font-weight: 600; color: var(--on-night); }
-.fc3d__label i { font-style: normal; font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.fc3d__label.is-up i { color: var(--gold-ink); } .fc3d__label.is-down i { color: #ee8ea0; }
-@media (max-width: 1100px) { .c3f__panel { top: auto; bottom: 84px; width: min(360px, calc(100% - 2 * var(--gutter))); } .c3f__lists { display: none; } .c3.is-flows .c3__card { right: var(--gutter); } }
-@media (max-width: 700px) { .c3f__legend { display: none; } }
+.c3__views { flex-wrap: wrap; }
+.rev3d__label.is-neg i { color: #ee8ea0; }
+.rev3d__label.is-neg .rev3d__rank { background: #a3284f; }

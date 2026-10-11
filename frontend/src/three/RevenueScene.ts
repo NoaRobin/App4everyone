@@ -47,7 +47,9 @@ const H_MAX = 46;
 const VIEW = { pos: [104, 74, 126] as const, target: [0, 15, 0] as const };
 
 type Tower = { f: RevFund; mesh: THREE.Mesh; cap: THREE.Mesh; mat: THREE.MeshStandardMaterial; capMat: THREE.MeshStandardMaterial;
-  ring: THREE.Mesh; ringMat: THREE.MeshBasicMaterial; ringBase: number; h: number; x: number; z: number; hover: number; dim: number; label?: HTMLDivElement };
+  ring: THREE.Mesh; ringMat: THREE.MeshBasicMaterial; ringBase: number; h: number; x: number; z: number; hover: number; dim: number; label?: HTMLDivElement;
+  /** Couleur de famille d'origine, hauteur « revenus » d'origine, et valeur affichée (revenus, ou collecte d'une période). */
+  base: THREE.Color; h0: number; val: number };
 
 const SPARK_VS = /* glsl */ `
   attribute float aSeed; attribute vec3 aBase; attribute float aH;
@@ -233,7 +235,7 @@ export class RevenueScene {
         ringM.position.set(x, 0.05, z);
         mesh.userData.i = this.towers.length;
         this.scene.add(mesh, capMesh, ringM);
-        this.towers.push({ f, mesh, cap: capMesh, mat, capMat, ring: ringM, ringMat, ringBase: 0, h, x, z, hover: 0, dim: 1 });
+        this.towers.push({ f, mesh, cap: capMesh, mat, capMat, ring: ringM, ringMat, ringBase: 0, h, x, z, hover: 0, dim: 1, base: color.clone(), h0: h, val: f.revenue });
         void i;
       });
     });
@@ -329,6 +331,43 @@ export class RevenueScene {
       .to(this.controls.target, { x: end.target.x, y: end.target.y, z: end.target.z, duration: 2.7, ease: "power3.inOut" }, 0.1);
     if (this.sparkMat) tl.to(this.sparkMat.uniforms.uIntro, { value: 1, duration: 1.2 }, 1.6);
     tl.to(this.intro, { k: 1, duration: 0.6 }, 2.2);
+  }
+
+  /**
+   * Vue de période (collecte nette d'1 mois, YTD, 1, 3 ou 5 ans) : chaque tour monte ou descend vers sa nouvelle
+   * hauteur (|valeur|, linéaire), la plus forte en premier, comme à l'ouverture ; une valeur négative passe en grenat.
+   * null : retour aux revenus. Les six étiquettes suivent les six plus fortes valeurs absolues.
+   */
+  setValues(values: Map<string, number | null> | null, fmt: (v: number) => string) {
+    const vals = this.towers.map((t) => (values ? values.get(t.f.id) ?? 0 : t.f.revenue));
+    const max = Math.max(1e-9, ...vals.map((v) => Math.abs(v ?? 0)));
+    const garnet = new THREE.Color("#6d1a35");
+    this.towers.forEach((t, i) => {
+      const v = vals[i] ?? 0;
+      t.val = v;
+      const target = values ? Math.max(0.6, (Math.abs(v) / max) * H_MAX) : t.h0;
+      const c = values && v < 0 ? garnet : t.base;
+      t.mat.color.copy(c).multiplyScalar(0.55);
+      t.mat.emissive.copy(c);
+      t.ringMat.color.copy(c);
+      // couronne : or pour une valeur positive, rose grenat pour une décollecte (lisible quelle que soit la famille)
+      const neg = !!values && v < 0;
+      t.capMat.color.set(neg ? 0xf2a7b8 : 0xf3dcaa);
+      t.capMat.emissive.set(neg ? 0xe0567c : 0xf3c56b);
+      gsap.killTweensOf(t, "h");
+      if (this.o.reduced || !this.played) { t.h = target; if (this.played) this.setHeight(t, 1); return; }
+      gsap.to(t, { h: target, duration: 1.3, ease: "expo.out", delay: Math.min(0.9, (1 - Math.abs(v) / max) * 0.9), onUpdate: () => this.setHeight(t, 1) });
+    });
+    this.towers.forEach((t) => { t.label?.remove(); t.label = undefined; });
+    [...this.towers].sort((a, b) => Math.abs(b.val) - Math.abs(a.val)).slice(0, 6).forEach((t, k) => {
+      const d = document.createElement("div");
+      d.className = `rev3d__label${values && t.val < 0 ? " is-neg" : ""}`;
+      d.innerHTML = `<span class="rev3d__rank">${k + 1}</span><b></b><i></i>`;
+      (d.querySelector("b") as HTMLElement).textContent = t.f.name;
+      (d.querySelector("i") as HTMLElement).textContent = fmt(t.val);
+      this.o.labelLayer.appendChild(d);
+      t.label = d;
+    });
   }
 
   private setHeight(t: Tower, k: number) {
@@ -536,7 +575,7 @@ export class RevenueScene {
       d.el.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px) translate(-50%, -50%)`;
     }
     const placed: [number, number, number, number][] = [];
-    const ranked = this.towers.filter((t) => t.label).sort((a, b) => b.f.revenue - a.f.revenue);
+    const ranked = this.towers.filter((t) => t.label).sort((a, b) => Math.abs(b.val) - Math.abs(a.val));
     for (const t of ranked) {
       const el = t.label!;
       let box = this.labelBox.get(el);
