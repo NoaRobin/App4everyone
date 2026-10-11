@@ -1,12 +1,12 @@
 import type { FamilyKey, Variation } from "../../lib/types";
 
 export type Match = { asked: string; found: string | null; exact: boolean; ambiguous?: boolean; score?: number; alternatives: { name: string; score: number }[] };
-export type SalesPerson = { name: string; theme: string; theme_source: "configuration" | "donnée"; slug: string; match: Match };
+export type SalesPerson = { theme: string; slug: string; name: string; title: string | null; countries: { iso: string; name: string }[] };
 export type DemoPeople = {
-  date: string; mock: boolean; commercials_available: boolean;
-  gerants: { key: string; label: string; name: string; match: Match }[];
+  date: string; mock: boolean;
+  gerants: { key: string; label: string; name: string; role: string; family: string | null; match: Match }[];
   commerciaux: SalesPerson[];
-  banque_privee: { name: string; match: Match };
+  banque_privee: { name: string };
 };
 
 export type PerfKey = "1M" | "YTD" | "1A" | "3A" | "5A";
@@ -20,7 +20,7 @@ export type ManagerFund = {
 export type CountryRow = { country: string; iso: string | null; encours: number; pct: number | null; positions?: number; clients?: number };
 export type ZoneHold = { zone: string; encours: number; pct: number | null; positions?: number; clients?: number; funds?: Record<string, number>; countries: CountryRow[] };
 export type Flow = { subscriptions: number; redemptions: number; net: number; n: number };
-export type FlowRow = Flow & { key: string; countries?: (Flow & { key: string; iso: string | null })[] };
+export type FlowRow = Flow & { key: string; iso?: string | null; countries?: (Flow & { key: string; iso: string | null })[] };
 export type PeriodFlows = Flow & { start: string; clients: number; zones?: FlowRow[]; funds?: (Flow & { fund: string | null; name: string })[] };
 export type Monthly = Flow & { m: string };
 export type Operation = {
@@ -51,19 +51,21 @@ export type ClientRow = {
 export type Segment = { segment: string; encours: number; pct: number | null; clients: number };
 export type HoldZone = { zone: string; encours: number; pct: number | null; clients: number; countries: CountryRow[] };
 export type SalesView = {
-  available: boolean; reason?: string; match: Match; name: string; as_of: string; flows_end: string | null; flows_available: boolean;
+  available: boolean; reason?: string; match?: Match; name?: string; as_of: string; flows_end: string | null; flows_available: boolean; countries_raw?: string[];
   encours: number; positions: number; clients_count: number; accounts: number;
   periods: Record<"1M" | "3M" | "YTD" | "1A", PeriodFlows>; monthly: Monthly[]; holdings_zones: HoldZone[]; clients: ClientRow[]; segments: Segment[];
 };
-export type PrivateBankView = {
-  available: boolean; reason?: string; match: Match; scope: "commercial" | "tous"; name: string | null; as_of: string; encours: number;
-  clients_count: number; positions: number; funds_count: number;
-  by_fund: { fund: string | null; name: string; encours: number; pct: number | null; clients: number; classe: string }[];
-  classes: { key: string; encours: number; pct: number | null }[]; zones: HoldZone[]; segments: Segment[];
-  vintage: { year: number; encours: number; pct: number | null }[]; new_money_ytd: number;
-  concentration: { top1: number | null; top5: number | null; top10: number | null };
-  matrix: { clients: string[]; funds: string[]; fund_ids: (string | null)[]; values: number[][] };
-  clients: ClientRow[]; flows_available: boolean; flows_end?: string;
-  periods?: Record<"1M" | "3M" | "YTD" | "1A", PeriodFlows>; monthly?: Monthly[];
-  rotation?: (Flow & { fund: string | null; name: string })[]; flow_classes?: FlowRow[]; latest?: Operation[];
+export type RmmRow = { key: string; encours: number; pct: number | null; revenue: number; positions?: number; iso?: string | null };
+export type RmmBank = {
+  available: boolean; reason?: string; as_of: string; rule: string; matched: { classifications: string[]; teneurs: string[] };
+  encours: number; share_of_passif: number | null; passif_total: number; revenue: number; rate: number | null; rate_coverage: number | null;
+  share_of_revenue: number | null; positions: number; accounts: number; clients_count: number;
+  segments: RmmRow[]; classes: RmmRow[]; countries: RmmRow[]; split: RmmRow[];
+  funds: { fund: string | null; name: string; encours: number; pct: number | null; revenue: number; rate: number | null; rmm_fund: boolean; classe: string }[];
+  funds_count: number;
+  shares: { isin: string | null; share: string | null; fund: string | null; encours: number; pct: number | null; rate: number | null; revenue: number }[];
+  vintage: { year: number; encours: number; pct: number | null }[];
+  flows_available: boolean; flows_end?: string; periods?: Record<"1M" | "3M" | "YTD" | "1A", PeriodFlows>; monthly?: Monthly[];
+  rotation?: (Flow & { fund: string | null; name: string })[]; flow_classes?: FlowRow[]; flow_segments?: FlowRow[]; latest?: Operation[];
+  clients: ClientRow[];
 };

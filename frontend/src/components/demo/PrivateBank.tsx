@@ -1,7 +1,9 @@
 /**
- * Démo — banque privée : ce que détiennent et ce qu'investissent les clients d'un commercial (ou de tout le segment
- * banque privée). Détention : classes d'actifs, fonds, zones, matrice clients × fonds, ancienneté des positions.
- * Investissement : souscriptions et rachats mois par mois, rotation entre fonds et classes d'actifs, dernières opérations.
+ * Démo — banque privée Rothschild Martin Maurel, lue comme un associé gérant la lit : un canal de distribution.
+ * Le canal RMM = les comptes du passif tenus par RMM ou classés RMM (jamais « hors RMM ») ; on y lit ce qu'il pèse
+ * (encours, part du passif), ce qu'il rapporte (encours × frais de la part détenue), où se trouvent ces revenus (fonds,
+ * parts, canaux, classes d'actifs, pays), comment il bouge (collecte, rotation) et les fonds Rothschild Martin Maurel
+ * eux-mêmes (règle Product Info). Rien n'est reconstruit : seuls les champs présents dans la donnée sont lus.
  */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -11,171 +13,189 @@ import { useApp } from "../../lib/context";
 import { CATEGORICAL, OTHER } from "../../lib/families";
 import { date as fdate, eur, pctRaw } from "../../lib/format";
 import { useWidth } from "../charts";
+import { Flag } from "../Flag";
 import { Loading } from "../ui";
-import { ClientTable, Kpi, NameMatch, Ops, PerfVal, PeriodTabs, ShareBar, signed, SplitRows, tone, TwinBars } from "./kit";
+import { ClientTable, Kpi, Ops, PeriodTabs, ShareBar, signed, SplitRows, tone, TwinBars } from "./kit";
 import { BoardBody } from "./ManagerBoard";
-import { HoldZones, SALES_PERIODS } from "./Sales";
-import type { ManagerBoard as ManagerBoardData, Match, PrivateBankView } from "./types";
+import { SALES_PERIODS } from "./Sales";
+import type { ManagerBoard as ManagerBoardData, RmmBank, RmmRow } from "./types";
 
-export function PrivateBank({ index, name, match }: { index: number; name: string; match: Match }) {
+const rate = (r: number | null | undefined) => (r == null ? "—" : `${r.toLocaleString("fr-FR", { maximumFractionDigits: 2, minimumFractionDigits: 2 })} %`);
+
+export function PrivateBank({ index, name }: { index: number; name: string }) {
   const { api } = useApp();
-  const [scope, setScope] = useState<"commercial" | "tous">("commercial");
   useEffect(() => { document.title = "Banque privée — Démo Jasmin"; }, []);
-  const who = match.found ?? name;
+  const { data: v, loading } = useApi<RmmBank>(api("/api/demo/banque-privee"));
   const rmm = useApi<ManagerBoardData>(api("/api/demo/fonds-rmm"));
-  const { data, loading } = useApi<PrivateBankView>(api(`/api/demo/banque-privee?nom=${encodeURIComponent(who)}&perimetre=${scope}`));
-  const b = rmm.data;
+  const y1 = v?.periods?.["1A"];
   return (
     <section className="dm-chap" id="banque-privee" aria-labelledby="h-bp">
       <header className="dm-chap__head">
         <span className="dm-chap__num" aria-hidden="true">{String(index).padStart(2, "0")}</span>
         <div className="dm-chap__title">
-          <div className="eyebrow dm-eyebrow">Rothschild Martin Maurel</div>
+          <div className="eyebrow dm-eyebrow">Rothschild Martin Maurel · canal banque privée</div>
           <h2 className="dm-chap__name" id="h-bp">Banque privée</h2>
-          <p className="dm-person">Les fonds Rothschild Martin Maurel · commercial&nbsp;: <b>{who}</b></p>
-          <NameMatch match={data?.match ?? match} source="la colonne Commercial du passif" />
+          <p className="dm-person">Interlocuteur banque privée&nbsp;: <b>{name}</b></p>
+          <p className="dm-chap__lede">Ce que la banque privée RMM apporte à la gestion&nbsp;: les encours qu'elle porte, les revenus qu'ils génèrent, les fonds et les parts où ils se trouvent, et la collecte qu'elle fait.</p>
         </div>
-        {b && b.aum != null && (
+        {v?.available && (
           <dl className="dm-kpis">
-            <Kpi label="Encours des fonds RMM" value={eur(b.aum)} sub={`${b.funds.length} fonds · ${b.countries ?? 0} pays d'autorisation`} />
-            <Kpi label="Collecte YTD" value={signed(b.var?.YTD?.flows)} tone={tone(b.var?.YTD?.flows)} sub={`1 an : ${signed(b.var?.["1A"]?.flows)}`} />
-            <Kpi label="Variation YTD" value={b.var?.YTD?.pct == null ? "—" : <PerfVal v={b.var.YTD.pct} />} sub={`marché : ${signed(b.var?.YTD?.market)}`} />
-            <Kpi label="Revenus estimés" value={eur(b.revenue)} sub="par an, encours × frais" />
+            <Kpi label="Encours via RMM" value={eur(v.encours)} sub={`${pctRaw(v.share_of_passif, 1)} du passif`} />
+            <Kpi label="Revenus estimés" value={eur(v.revenue)} sub={`par an · ${pctRaw(v.share_of_revenue, 0)} des revenus de la gestion`} />
+            <Kpi label="Taux moyen" value={rate(v.rate)} sub="frais des parts détenues, pondérés" />
+            <Kpi label="Collecte nette 12 mois" value={signed(y1?.net)} tone={tone(y1?.net)} sub={y1 ? `${eur(y1.subscriptions)} souscrits` : "transactions non publiées"} />
           </dl>
         )}
       </header>
-
-      <div className="dm-act"><span className="dm-act__n">I</span><h3 className="dm-act__t">Les fonds</h3></div>
-      {rmm.loading && !b ? <Loading h={360} /> : !b?.funds.length ? <div className="empty">Aucun fonds Rothschild Martin Maurel repéré dans Product Info.</div> : (
-        <>
-          <BoardBody b={b} compact />
-          {b.rule && <p className="small muted dm-note">Fonds Rothschild Martin Maurel : fonds de Product Info dont l'une des colonnes {b.rule.columns.join(", ")} contient « RMM » ou « Martin Maurel » (même règle que le filtre RMM de Distribution).</p>}
-        </>
-      )}
-
-      <div className="dm-act"><span className="dm-act__n">II</span><h3 className="dm-act__t">Les porteurs</h3>
-        <PeriodTabs value={scope} onChange={setScope} label="Porteurs" options={[{ key: "commercial", label: `Clients de ${who}` }, { key: "tous", label: "Tous les porteurs" }]} /></div>
-      <p className="small muted dm-note dm-scope">{scope === "commercial" ? <>Positions et opérations des clients de <b>{who}</b> dans les fonds Rothschild Martin Maurel.</> : <>Positions et opérations de tous les porteurs des fonds Rothschild Martin Maurel.</>}</p>
-      {loading && !data ? <Loading h={520} /> : !data?.available ? <div className="empty">{data?.reason ?? "Données indisponibles."}</div> : <Body v={data} />}
+      {loading && !v ? <Loading h={640} /> : !v?.available ? <div className="empty">{v?.reason ?? "Aucun compte RMM repéré dans le passif."}</div>
+        : <Body v={v} b={rmm.data} loadingB={rmm.loading} />}
     </section>
   );
 }
 
-function Body({ v }: { v: PrivateBankView }) {
+function Body({ v, b, loadingB }: { v: RmmBank; b: ManagerBoardData | null; loadingB: boolean }) {
   const [p, setP] = useState<"1M" | "3M" | "YTD" | "1A">("1A");
   const f = v.periods?.[p];
-  const cls = v.classes.map((c, i) => ({ key: c.key, value: c.encours, color: i < CATEGORICAL.length ? CATEGORICAL[i] : OTHER }));
-  const maxF = Math.max(1, ...v.by_fund.map((x) => x.encours));
+  const colored = (rows: RmmRow[]) => rows.map((c, i) => ({ key: c.key, value: c.encours, color: i < CATEGORICAL.length ? CATEGORICAL[i] : OTHER }));
+  const rmmSplit = v.split.find((x) => x.key === "Fonds Rothschild Martin Maurel");
+  const maxRev = Math.max(1, ...v.funds.map((y) => y.revenue));
   return (
-    <div className="dm-grid">
-      <dl className="dm-kpis dm-kpis--wide dm-span-12">
-        <Kpi label="Encours détenu" value={eur(v.encours)} sub={`au ${fdate(v.as_of)}`} />
-        <Kpi label="Clients" value={v.clients_count.toLocaleString("fr-FR")} sub={`${v.funds_count} fonds détenus`} />
-        <Kpi label="Collecte nette 12 mois" value={signed(v.periods?.["1A"]?.net)} tone={tone(v.periods?.["1A"]?.net)} sub={v.periods ? `${eur(v.periods["1A"].subscriptions)} souscrits` : undefined} />
-        <Kpi label="Argent nouveau" value={eur(v.new_money_ytd)} sub={`positions ouvertes en ${v.as_of.slice(0, 4)}`} />
-        <Kpi label="Concentration" value={pctRaw(v.concentration.top5, 0)} sub={`de l'encours chez les 5 premiers clients`} />
-      </dl>
+    <>
+      <div className="dm-act"><span className="dm-act__n">I</span><h3 className="dm-act__t">Ce que pèse le canal</h3></div>
+      <div className="dm-grid">
+        <dl className="dm-kpis dm-kpis--wide dm-span-12">
+          <Kpi label="Encours via RMM" value={eur(v.encours)} sub={`au ${fdate(v.as_of)} · passif total ${eur(v.passif_total)}`} />
+          <Kpi label="Part du passif" value={pctRaw(v.share_of_passif, 1)} sub="de l'encours détenu par les porteurs" />
+          <Kpi label="Part des revenus" value={pctRaw(v.share_of_revenue, 1)} sub={`${eur(v.revenue)} par an`} />
+          <Kpi label="Dans les fonds RMM" value={pctRaw(rmmSplit?.pct, 0)} sub={`${eur(rmmSplit?.encours ?? 0)} · le reste dans la gamme`} />
+          <Kpi label="Clients" value={v.clients_count.toLocaleString("fr-FR")} sub={`${v.accounts.toLocaleString("fr-FR")} comptes · ${v.positions.toLocaleString("fr-FR")} positions`} />
+        </dl>
+        <article className="dm-card dm-span-7">
+          <div className="dm-card__head"><div><div className="eyebrow">Canaux RMM · classification du compte</div><h3 className="dm-h3">Par où passe l'argent</h3></div></div>
+          <RevRows rows={v.segments} />
+          <div className="eyebrow dm-sub">Fonds Rothschild Martin Maurel ou reste de la gamme</div>
+          <RevRows rows={v.split} />
+        </article>
+        <article className="dm-card dm-span-5">
+          <div className="dm-card__head"><div><div className="eyebrow">Pays du compte</div><h3 className="dm-h3">Où sont les clients</h3></div></div>
+          <RevRows rows={v.countries.slice(0, 10)} flags />
+          <div className="eyebrow dm-sub">Classes d'actifs</div>
+          <ShareBar items={colored(v.classes)} label="Encours par classe d'actifs" />
+          <RevRows rows={v.classes} />
+        </article>
+      </div>
 
-      <div className="dm-span-12 dm-sact"><h4 className="dm-sact__t">Ce qu'ils détiennent</h4></div>
-      <article className="dm-card dm-span-7">
-        <div className="dm-card__head"><div><div className="eyebrow">Classes d'actifs</div><h3 className="dm-h3">Allocation de l'encours</h3></div></div>
-        <ShareBar items={cls} label="Encours par classe d'actifs" />
-        <div className="eyebrow dm-sub">Fonds détenus</div>
-        <ul className="dm-funds">
-          {v.by_fund.slice(0, 10).map((x) => (
-            <li key={x.name}>
-              <span className="dm-funds__n">{x.fund ? <Link to={`/fonds/${encodeURIComponent(x.fund)}`}>{x.name}</Link> : x.name}<em>{x.classe} · {x.clients} client{x.clients > 1 ? "s" : ""}</em></span>
-              <span className="dm-funds__bar" aria-hidden="true"><i style={{ width: `${(x.encours / maxF) * 100}%` }} /></span>
-              <b className="num">{eur(x.encours)}</b><span className="num muted">{pctRaw(x.pct, 1)}</span>
-            </li>
-          ))}
-        </ul>
-      </article>
-      <article className="dm-card dm-span-5">
-        <div className="dm-card__head"><div><div className="eyebrow">Pays du porteur</div><h3 className="dm-h3">Où sont ses clients</h3></div></div>
-        <HoldZones zones={v.zones} />
-        <div className="eyebrow dm-sub">Clientèle</div>
-        <ul className="dm-segs dm-segs--col">{v.segments.map((s) => <li key={s.segment}><span>{s.segment}</span><b className="num">{eur(s.encours)}</b><span className="muted num">{pctRaw(s.pct, 0)}</span></li>)}</ul>
-        <div className="eyebrow dm-sub">Concentration</div>
-        <ul className="dm-conc">
-          {([["Premier client", v.concentration.top1], ["5 premiers", v.concentration.top5], ["10 premiers", v.concentration.top10]] as [string, number | null][]).map(([k, x]) => (
-            <li key={k}><span>{k}</span><span className="dm-conc__bar" aria-hidden="true"><i style={{ width: `${x ?? 0}%` }} /></span><b className="num">{pctRaw(x, 0)}</b></li>
-          ))}
-        </ul>
-      </article>
-      <article className="dm-card dm-span-12"><Matrix v={v} /></article>
-      <article className="dm-card dm-span-12"><Vintage v={v} /></article>
+      <div className="dm-act"><span className="dm-act__n">II</span><h3 className="dm-act__t">D'où viennent les revenus</h3></div>
+      <div className="dm-grid">
+        <article className="dm-card dm-span-12">
+          <div className="dm-card__head"><div><div className="eyebrow">Fonds détenus via RMM · {v.funds_count} fonds</div><h3 className="dm-h3">Encours et revenus, fonds par fonds</h3></div></div>
+          <div className="dm-scroll">
+            <table className="t dm-rt">
+              <thead><tr><th>Fonds</th><th>Classe</th><th className="n">Encours</th><th className="n">Poids</th><th className="n">Taux</th><th className="n">Revenus / an</th><th className="dm-rt__bar"><span className="sr-only">Revenus relatifs</span></th></tr></thead>
+              <tbody>{v.funds.map((x) => (
+                <tr key={x.name}>
+                  <td>{x.fund ? <Link to={`/fonds/${encodeURIComponent(x.fund)}`}>{x.name}</Link> : x.name}{x.rmm_fund && <span className="dm-rmm" title="Fonds Rothschild Martin Maurel (Product Info)">RMM</span>}</td>
+                  <td className="muted">{x.classe}</td>
+                  <td className="n num">{eur(x.encours)}</td><td className="n num muted">{pctRaw(x.pct, 1)}</td>
+                  <td className="n num">{rate(x.rate)}</td><td className="n num"><b>{eur(x.revenue)}</b></td>
+                  <td className="dm-rt__bar"><span className="dm-funds__bar" aria-hidden="true"><i style={{ width: `${(x.revenue / maxRev) * 100}%` }} /></span></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <p className="small muted dm-note">Revenus estimés = encours détenu × frais de gestion de la part ({pctRaw(v.rate_coverage, 0)} de l'encours a un taux connu). « RMM » : fonds Rothschild Martin Maurel d'après Product Info.</p>
+        </article>
+        <article className="dm-card dm-span-12">
+          <div className="dm-card__head"><div><div className="eyebrow">Parts détenues</div><h3 className="dm-h3">Les parts qui rapportent le plus</h3></div></div>
+          <div className="dm-scroll">
+            <table className="t dm-rt">
+              <thead><tr><th>Part</th><th>ISIN</th><th className="n">Encours</th><th className="n">Poids</th><th className="n">Taux</th><th className="n">Revenus / an</th></tr></thead>
+              <tbody>{v.shares.map((x, i) => (
+                <tr key={x.isin ?? `${x.share}-${i}`}>
+                  <td>{x.fund ? <Link to={`/fonds/${encodeURIComponent(x.fund)}`}>{x.share ?? "—"}</Link> : x.share ?? "—"}</td>
+                  <td className="num muted">{x.isin ?? "—"}</td>
+                  <td className="n num">{eur(x.encours)}</td><td className="n num muted">{pctRaw(x.pct, 1)}</td>
+                  <td className="n num">{rate(x.rate)}</td><td className="n num"><b>{eur(x.revenue)}</b></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </article>
+      </div>
 
-      <div className="dm-span-12 dm-sact"><h4 className="dm-sact__t">Ce qu'ils investissent</h4>
+      <div className="dm-act"><span className="dm-act__n">III</span><h3 className="dm-act__t">Comment il bouge</h3>
         {v.flows_available && <PeriodTabs value={p} onChange={setP} options={SALES_PERIODS} />}</div>
-      {!v.flows_available || !f ? <div className="empty dm-span-12">Transactions du passif non publiées.</div> : (
-        <>
+      {!v.flows_available || !f ? <div className="empty">Transactions du passif non publiées.</div> : (
+        <div className="dm-grid">
+          <dl className="dm-kpis dm-kpis--wide dm-span-12">
+            <Kpi label="Souscriptions" value={eur(f.subscriptions)} sub={`${f.n.toLocaleString("fr-FR")} opérations`} />
+            <Kpi label="Rachats" value={eur(f.redemptions)} />
+            <Kpi label="Collecte nette" value={signed(f.net)} tone={tone(f.net)} sub={`depuis le ${fdate(f.start)}`} />
+            <Kpi label="Clients actifs" value={f.clients.toLocaleString("fr-FR")} sub="au moins une opération" />
+            <Kpi label="Taux de rachat" value={pctRaw(v.encours ? (f.redemptions / v.encours) * 100 : null, 0)} sub="rachats rapportés à l'encours actuel" />
+          </dl>
           <article className="dm-card dm-span-7">
-            <div className="dm-card__head"><div><div className="eyebrow">Mois par mois · au {fdate(v.flows_end)}</div><h3 className="dm-h3">Souscriptions et rachats</h3></div>
-              <dl className="dm-mini dm-mini--inline">
-                <div><dt>Souscrit</dt><dd className="num">{eur(f.subscriptions)}</dd></div>
-                <div><dt>Racheté</dt><dd className="num">{eur(f.redemptions)}</dd></div>
-                <div><dt>Net</dt><dd className={`num ${f.net >= 0 ? "up-t" : "down-t"}`}>{signed(f.net)}</dd></div>
-              </dl></div>
+            <div className="dm-card__head"><div><div className="eyebrow">Mois par mois · au {fdate(v.flows_end)}</div><h3 className="dm-h3">Souscriptions et rachats</h3></div></div>
             <TwinBars months={v.monthly ?? []} height={270} />
           </article>
           <article className="dm-card dm-span-5">
-            <div className="dm-card__head"><div><div className="eyebrow">Dernières opérations</div><h3 className="dm-h3">Trois derniers mois</h3></div></div>
-            <Ops ops={v.latest ?? []} showCommercial={v.scope === "tous"} />
+            <div className="dm-card__head"><div><div className="eyebrow">Par canal RMM · sur un an</div><h3 className="dm-h3">Qui collecte</h3></div></div>
+            <SplitRows rows={v.flow_segments ?? []} />
+            <div className="eyebrow dm-sub">Par classe d'actifs · sur un an</div>
+            <SplitRows rows={v.flow_classes ?? []} />
           </article>
           <article className="dm-card dm-span-7">
-            <div className="dm-card__head"><div><div className="eyebrow">Rotation · sur un an</div><h3 className="dm-h3">Les fonds qu'ils renforcent, ceux qu'ils allègent</h3></div></div>
+            <div className="dm-card__head"><div><div className="eyebrow">Rotation · sur un an</div><h3 className="dm-h3">Les fonds que la banque privée renforce, ceux qu'elle allège</h3></div></div>
             <SplitRows rows={(v.rotation ?? []).map((x) => ({ ...x, key: x.name }))} />
           </article>
           <article className="dm-card dm-span-5">
-            <div className="dm-card__head"><div><div className="eyebrow">Classes d'actifs · sur un an</div><h3 className="dm-h3">Vers quoi va l'argent</h3></div></div>
-            <SplitRows rows={v.flow_classes ?? []} />
+            <div className="dm-card__head"><div><div className="eyebrow">Dernières opérations</div><h3 className="dm-h3">Trois derniers mois</h3></div></div>
+            <Ops ops={v.latest ?? []} showCommercial={false} />
           </article>
+        </div>
+      )}
+
+      <div className="dm-act"><span className="dm-act__n">IV</span><h3 className="dm-act__t">Les fonds Rothschild Martin Maurel</h3></div>
+      {loadingB && !b ? <Loading h={360} /> : !b?.funds.length ? <div className="empty">Aucun fonds Rothschild Martin Maurel repéré dans Product Info.</div> : (
+        <>
+          <BoardBody b={b} compact />
+          {b.rule && <p className="small muted dm-note">Fonds Rothschild Martin Maurel : fonds de Product Info dont l'une des colonnes {b.rule.columns.join(", ")} contient « RMM » ou « Martin Maurel » (même règle que le filtre RMM de Distribution). Tous porteurs confondus.</p>}
         </>
       )}
 
-      <div className="dm-span-12 dm-sact"><h4 className="dm-sact__t">Les clients</h4></div>
-      <article className="dm-card dm-span-12"><ClientTable clients={v.clients} /></article>
-    </div>
-  );
-}
-
-// ------------------------------------------------------------------ matrice clients × fonds
-function Matrix({ v }: { v: PrivateBankView }) {
-  const [hover, setHover] = useState<[number, number] | null>(null);
-  const m = v.matrix;
-  const max = Math.max(1, ...m.values.flat());
-  if (!m.clients.length || !m.funds.length) return <div className="empty small">Pas assez de positions.</div>;
-  const h = hover ? { c: m.clients[hover[0]], f: m.funds[hover[1]], v: m.values[hover[0]][hover[1]] } : null;
-  return (
-    <>
-      <div className="dm-card__head"><div><div className="eyebrow">Matrice · premiers clients × premiers fonds</div><h3 className="dm-h3">Qui détient quoi, d'un coup d'œil</h3></div>
-        <div className="dm-mx__legend" aria-hidden="true"><span>0</span><i /><span>{eur(max)}</span></div></div>
-      <div className="dm-scroll">
-        <table className="dm-mx" onPointerLeave={() => setHover(null)}>
-          <thead><tr><th />{m.funds.map((f, j) => <th key={f} scope="col" className={hover?.[1] === j ? "is-on" : ""}><span>{m.fund_ids[j] ? <Link to={`/fonds/${encodeURIComponent(m.fund_ids[j]!)}`}>{f}</Link> : f}</span></th>)}</tr></thead>
-          <tbody>{m.clients.map((c, i) => (
-            <tr key={c}>
-              <th scope="row" className={hover?.[0] === i ? "is-on" : ""}>{c}</th>
-              {m.values[i].map((x, j) => {
-                const k = x / max;
-                return (
-                  <td key={j} onPointerEnter={() => setHover([i, j])} title={`${c} · ${m.funds[j]} : ${x ? eur(x) : "aucune position"}`}
-                    style={{ background: x ? `color-mix(in srgb, var(--gold) ${Math.round(12 + Math.sqrt(k) * 78)}%, var(--paper-2))` : undefined }}
-                    className={x ? "" : "is-zero"}>{x ? <span className="num">{eur(x)}</span> : ""}</td>
-                );
-              })}
-            </tr>
-          ))}</tbody>
-        </table>
+      <div className="dm-act"><span className="dm-act__n">V</span><h3 className="dm-act__t">Les clients</h3></div>
+      <div className="dm-grid">
+        <article className="dm-card dm-span-12"><Vintage v={v} /></article>
+        <article className="dm-card dm-span-12">
+          <div className="dm-card__head"><div><div className="eyebrow">Clients du canal RMM · au {fdate(v.as_of)}</div><h3 className="dm-h3">Qui est investi dans quoi</h3></div></div>
+          <ClientTable clients={v.clients} />
+        </article>
       </div>
-      <p className="small muted dm-note" aria-live="polite">{h ? <><b>{h.c}</b> · {h.f} : {h.v ? eur(h.v) : "aucune position"}</> : "Survolez une case. Intensité de l'or : encours détenu."}</p>
+      <p className="small muted dm-note">Canal RMM : comptes du passif dont le teneur ({v.matched.teneurs.join(", ") || "—"}) ou la classification ({v.matched.classifications.join(", ") || "—"}) désigne Rothschild Martin Maurel, hors mentions « hors RMM ». Vue nominative calculée à la demande, jamais conservée.</p>
     </>
   );
 }
 
+/** Lignes encours / revenus : libellé, barre d'encours, encours, revenus, poids. */
+function RevRows({ rows, flags = false }: { rows: RmmRow[]; flags?: boolean }) {
+  const max = Math.max(1, ...rows.map((r) => r.encours));
+  if (!rows.length) return <div className="empty small">Non renseigné.</div>;
+  return (
+    <ul className="dm-rev">
+      <li className="dm-rev__h" aria-hidden="true"><span /><span /><span>Encours</span><span>Revenus</span><span>Poids</span></li>
+      {rows.map((r) => (
+        <li key={r.key}>
+          <span className="dm-rev__n" title={r.key}>{flags && r.iso && <Flag iso={r.iso} className="dm-flag" />}{r.key}</span>
+          <span className="dm-funds__bar" aria-hidden="true"><i style={{ width: `${(r.encours / max) * 100}%` }} /></span>
+          <b className="num">{eur(r.encours)}</b><span className="num">{eur(r.revenue)}</span><span className="num muted">{pctRaw(r.pct, 1)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 // ------------------------------------------------------------------ ancienneté des positions
-function Vintage({ v }: { v: PrivateBankView }) {
+function Vintage({ v }: { v: RmmBank }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
   const ys = v.vintage;
@@ -185,7 +205,7 @@ function Vintage({ v }: { v: PrivateBankView }) {
   const recent = ys.filter((d) => d.year >= Number(v.as_of.slice(0, 4)) - 2).reduce((s, d) => s + (d.pct ?? 0), 0);
   return (
     <>
-      <div className="dm-card__head"><div><div className="eyebrow">Fidélité · année du premier achat</div><h3 className="dm-h3">Depuis quand ils sont là</h3></div>
+      <div className="dm-card__head"><div><div className="eyebrow">Fidélité · année du premier achat</div><h3 className="dm-h3">Depuis quand l'argent est là</h3></div>
         <p className="small muted dm-vin__s">{pctRaw(recent, 0)} de l'encours a été investi pour la première fois ces trois dernières années.</p></div>
       <div ref={ref} className="chart">
         {ys.length ? (

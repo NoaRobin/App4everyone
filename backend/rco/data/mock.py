@@ -37,8 +37,8 @@ MANAGERS = [
 # Page Démo : gérants nommés par l'équipe, posés sur des fonds fictifs (gamme renommée pour la démonstration).
 # Les chiffres restent fictifs ; sur les données réelles, les fonds viennent de Product Info (Portfolio_Manager).
 DEMO_MANAGERS = {
-    "Patrimoine Équilibre": ("Yoan Ignatiew", "Valor"), "Monde Convictions": ("Yoan Ignatiew", "Valor"),
-    "Allocation Flexible Monde": ("Yoan Ignatiew", "Valor"), "Amérique Leaders": ("Yoan Ignatiew", "Valor"),
+    "Patrimoine Équilibre": ("Yoann Ignatiew", "Valor"), "Monde Convictions": ("Yoann Ignatiew", "Valor"),
+    "Allocation Flexible Monde": ("Yoann Ignatiew", "Valor"), "Amérique Leaders": ("Yoann Ignatiew", "Valor"),
     "Crédit Euro Investment Grade": ("Emmanuel Petit", None), "Obligations Haut Rendement": ("Emmanuel Petit", None),
     "Crédit Court Terme": ("Emmanuel Petit", None), "Échéance 2028": ("Emmanuel Petit", None), "Échéance 2030": ("Emmanuel Petit", None),
     "Obligations Convertibles Europe": ("Emmanuel Petit", None),

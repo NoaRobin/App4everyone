@@ -1,7 +1,7 @@
 /**
- * Démo — les commerciaux. Les trois côte à côte sur la période choisie, puis l'un d'eux en détail : sa collecte par zone
- * et par pays (1 mois, 3 mois, YTD, 1 an), mois par mois, les fonds achetés et vendus par ses clients, l'encours de ses
- * clients par zone, et la liste de ses clients avec ce dans quoi ils sont investis. Vue nominative (passif).
+ * Démo — les ventes, par territoire. Le périmètre d'un responsable des ventes = les pays dont il a la charge (configurés,
+ * APP_DEMO_COMMERCIAUX) ; la page lit les porteurs dont le pays du compte est dans ce périmètre, tous canaux confondus :
+ * collecte par pays (1 mois, 3 mois, YTD, 1 an), mois par mois, fonds achetés et vendus, encours, clients. Vue nominative.
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -10,11 +10,15 @@ import { useApp } from "../../lib/context";
 import { date as fdate, eur, pctRaw } from "../../lib/format";
 import { Flag } from "../Flag";
 import { Loading } from "../ui";
-import { ClientTable, Kpi, NameMatch, PeriodTabs, signed, SplitRows, tone, TwinBars, type Opt } from "./kit";
+import { ClientTable, Kpi, PeriodTabs, signed, SplitRows, tone, TwinBars, type Opt } from "./kit";
 import type { HoldZone, SalesPerson, SalesView } from "./types";
 
 type P = "1M" | "3M" | "YTD" | "1A";
 export const SALES_PERIODS: Opt<P>[] = [{ key: "1M", label: "1 mois" }, { key: "3M", label: "3 mois" }, { key: "YTD", label: "YTD" }, { key: "1A", label: "1 an" }];
+const territory = (p: SalesPerson) => `/api/demo/territoire?pays=${p.countries.map((c) => c.iso).join(",")}`;
+const Countries = ({ p }: { p: SalesPerson }) => (
+  <span className="dm-terr">{p.countries.map((c) => <span key={c.iso} title={c.name}><Flag iso={c.iso} className="dm-flag" />{c.name}</span>)}</span>
+);
 const LONG: Record<P, string> = { "1M": "sur un mois", "3M": "sur trois mois", YTD: "depuis le 1er janvier", "1A": "sur un an" };
 
 function useMany<T>(urls: string[]): { data: (T | null)[]; loading: boolean } {
@@ -33,7 +37,7 @@ function useMany<T>(urls: string[]): { data: (T | null)[]; loading: boolean } {
 export function SalesOverview({ index, people, pageOf }: { index: number; people: SalesPerson[]; pageOf: (p: SalesPerson) => string }) {
   const { api } = useApp();
   useEffect(() => { document.title = "Ventes — Démo Jasmin"; }, []);
-  const urls = useMemo(() => people.map((p) => api(`/api/demo/commercial?nom=${encodeURIComponent(p.match.found ?? p.name)}`)), [people, api]);
+  const urls = useMemo(() => people.map((p) => api(territory(p))), [people, api]);
   const { data, loading } = useMany<SalesView>(urls);
   const [p, setP] = useState<P>("3M");
   const max = Math.max(1, ...data.map((d) => (d?.available ? Math.max(d.periods[p]?.subscriptions ?? 0, d.periods[p]?.redemptions ?? 0) : 0)));
@@ -44,7 +48,7 @@ export function SalesOverview({ index, people, pageOf }: { index: number; people
         <div className="dm-chap__title">
           <div className="eyebrow dm-eyebrow">Passif · vue nominative</div>
           <h2 className="dm-chap__name" id="h-ventes">Ventes</h2>
-          <p className="dm-chap__lede">La collecte des clients de chaque commercial, zone par zone, et ce dans quoi ces clients sont investis. Une page par périmètre&nbsp;; souscriptions et rachats lus dans la table Transaction (statuts retenus), encours dans la table Position.</p>
+          <p className="dm-chap__lede">Un territoire par responsable des ventes, défini par les pays dont il a la charge. Chaque page lit les porteurs domiciliés dans ces pays, tous canaux confondus&nbsp;: souscriptions et rachats de la table Transaction (statuts retenus), encours de la table Position.</p>
         </div>
         <PeriodTabs value={p} onChange={setP} options={SALES_PERIODS} />
       </header>
@@ -53,13 +57,14 @@ export function SalesOverview({ index, people, pageOf }: { index: number; people
           {people.map((x, k) => {
             const v = data[k];
             const f = v?.available ? v.periods[p] : null;
-            const zones = (f?.zones ?? []).filter((z) => z.key !== "Non renseigné").slice(0, 3);
+            const zones = (f?.zones ?? []).slice(0, 4);
             return (
               <Link key={x.slug} to={pageOf(x)} className="dm-trio__c">
-                <span className="dm-trio__k">{x.theme_source === "donnée" ? "Périmètre · d'après ses clients" : "Périmètre"}</span>
+                <span className="dm-trio__k">Territoire</span>
                 <span className="dm-trio__n">{x.theme}</span>
-                <span className="dm-trio__s small muted">{x.match.found ?? x.name}</span>
-                {!v?.available ? <span className="small muted">{v?.reason ?? "Introuvable dans le passif."}</span> : (
+                <span className="dm-trio__s small muted">{x.name}{x.title ? ` · ${x.title}` : ""}</span>
+                <Countries p={x} />
+                {!v?.available ? <span className="small muted">{v?.reason ?? "Aucun porteur dans ces pays."}</span> : (
                   <>
                     <b className={`dm-trio__v num ${(f?.net ?? 0) >= 0 ? "up-t" : "down-t"}`}>{signed(f?.net)}</b>
                     <span className="dm-trio__bars" aria-hidden="true">
@@ -67,7 +72,7 @@ export function SalesOverview({ index, people, pageOf }: { index: number; people
                       <span className="dm-trio__in"><i style={{ width: `${((f?.subscriptions ?? 0) / max) * 100}%` }} /></span>
                     </span>
                     <span className="dm-trio__s small">{eur(f?.subscriptions)} souscrits · {eur(f?.redemptions)} rachetés</span>
-                    <ul className="dm-trio__z">{zones.map((z) => <li key={z.key}><span>{z.key}</span><b className={`num ${z.net >= 0 ? "up-t" : "down-t"}`}>{signed(z.net)}</b></li>)}</ul>
+                    <ul className="dm-trio__z">{zones.map((z) => <li key={z.key}><span>{z.iso && <Flag iso={z.iso} className="dm-flag" />}{z.key}</span><b className={`num ${z.net >= 0 ? "up-t" : "down-t"}`}>{signed(z.net)}</b></li>)}</ul>
                     <span className="dm-trio__s small muted">{v.clients_count} clients · {eur(v.encours)} d'encours</span>
                   </>
                 )}
@@ -81,11 +86,10 @@ export function SalesOverview({ index, people, pageOf }: { index: number; people
   );
 }
 
-/** Ventes · une page par commercial, titrée par son périmètre (thème), jamais par son nom. */
+/** Ventes · une page par territoire, titrée par son thème, jamais par le nom de la personne. */
 export function SalesPage({ index, person }: { index: number; person: SalesPerson }) {
   const { api } = useApp();
-  const who = person.match.found ?? person.name;
-  const { data: v, loading } = useApi<SalesView>(api(`/api/demo/commercial?nom=${encodeURIComponent(who)}`));
+  const { data: v, loading } = useApi<SalesView>(api(territory(person)));
   const [p, setP] = useState<P>("3M");
   useEffect(() => { document.title = `Ventes · ${person.theme} — Démo Jasmin`; }, [person.theme]);
   return (
@@ -93,14 +97,14 @@ export function SalesPage({ index, person }: { index: number; person: SalesPerso
       <header className="dm-chap__head">
         <span className="dm-chap__num" aria-hidden="true">{String(index).padStart(2, "0")}</span>
         <div className="dm-chap__title">
-          <div className="eyebrow dm-eyebrow">Ventes · {person.theme_source === "donnée" ? "périmètre d'après les pays de ses clients" : "périmètre"}</div>
+          <div className="eyebrow dm-eyebrow">Ventes · territoire</div>
           <h2 className="dm-chap__name" id={`h-v-${person.slug}`}>{person.theme}</h2>
-          <p className="dm-person">Commercial&nbsp;: <b>{who}</b></p>
-          <NameMatch match={v?.match ?? person.match} source="la colonne Commercial du passif" />
+          <p className="dm-person">{person.title ?? "Responsable des ventes"}&nbsp;: <b>{person.name}</b></p>
+          <Countries p={person} />
         </div>
         <PeriodTabs value={p} onChange={setP} options={SALES_PERIODS} />
       </header>
-      {loading && !v ? <Loading h={480} /> : v?.available ? <SalesDetail v={v} p={p} /> : <div className="empty">{v?.reason ?? "Commercial introuvable dans le passif."}</div>}
+      {loading && !v ? <Loading h={480} /> : v?.available ? <SalesDetail v={v} p={p} /> : <div className="empty">{v?.reason ?? "Aucun porteur domicilié dans ces pays."}</div>}
     </section>
   );
 }
@@ -118,25 +122,25 @@ function SalesDetail({ v, p }: { v: SalesView; p: P }) {
         <Kpi label="Encours des clients" value={eur(v.encours)} sub={`au ${fdate(v.as_of)} · ${v.clients_count} clients`} />
       </dl>
       <article className="dm-card dm-span-7">
-        <div className="dm-card__head"><div><div className="eyebrow">Collecte par zone · {LONG[p]}</div><h3 className="dm-h3">Où ses clients investissent et désinvestissent</h3></div></div>
-        <SplitRows rows={f.zones ?? []} expandable />
-        <p className="small muted dm-note">Cliquez une zone pour le détail par pays. Pays du compte porteur.</p>
+        <div className="dm-card__head"><div><div className="eyebrow">Collecte par pays · {LONG[p]}</div><h3 className="dm-h3">Où le territoire investit et désinvestit</h3></div></div>
+        <SplitRows rows={f.zones ?? []} iso={(r) => r.iso} />
+        <p className="small muted dm-note">Pays du compte porteur.</p>
       </article>
       <article className="dm-card dm-span-5">
         <div className="dm-card__head"><div><div className="eyebrow">Mois par mois</div><h3 className="dm-h3">Souscriptions et rachats, 13 mois</h3></div></div>
         <TwinBars months={v.monthly} height={270} />
       </article>
       <article className="dm-card dm-span-5">
-        <div className="dm-card__head"><div><div className="eyebrow">Encours de ses clients · par zone</div><h3 className="dm-h3">{eur(v.encours)}</h3></div></div>
+        <div className="dm-card__head"><div><div className="eyebrow">Encours du territoire · par pays</div><h3 className="dm-h3">{eur(v.encours)}</h3></div></div>
         <HoldZones zones={v.holdings_zones} />
       </article>
       <article className="dm-card dm-span-7">
-        <div className="dm-card__head"><div><div className="eyebrow">Fonds · {LONG[p]}</div><h3 className="dm-h3">Ce que ses clients achètent et vendent</h3></div></div>
+        <div className="dm-card__head"><div><div className="eyebrow">Fonds · {LONG[p]}</div><h3 className="dm-h3">Ce que les clients du territoire achètent et vendent</h3></div></div>
         <SplitRows rows={(f.funds ?? []).map((x) => ({ ...x, key: x.name }))}
           label={(r) => { const fx = (f.funds ?? []).find((y) => y.name === r.key); return fx?.fund ? <Link to={`/fonds/${encodeURIComponent(fx.fund)}`}>{r.key}</Link> : r.key; }} />
       </article>
       <article className="dm-card dm-span-12">
-        <div className="dm-card__head"><div><div className="eyebrow">Ses clients · au {fdate(v.as_of)}</div><h3 className="dm-h3">Qui est investi dans quoi</h3></div>
+        <div className="dm-card__head"><div><div className="eyebrow">Les clients du territoire · au {fdate(v.as_of)}</div><h3 className="dm-h3">Qui est investi dans quoi</h3></div>
           <ul className="dm-segs">{v.segments.map((s) => <li key={s.segment}><span>{s.segment}</span><b className="num">{pctRaw(s.pct, 0)}</b></li>)}</ul></div>
         <ClientTable clients={v.clients} />
       </article>

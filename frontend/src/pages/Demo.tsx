@@ -3,10 +3,10 @@
  *   /demo                 l'ouverture et le sommaire
  *   /demo/<gestion>       une page par gestion (Valor, Fixed Income…) : performances 1 mois → 5 ans, encours, collecte,
  *                         souscriptions, zones, portefeuille
- *   /demo/ventes          les commerciaux côte à côte ; /demo/ventes/<périmètre> : une page par commercial
- *   /demo/banque-privee   ce que les clients détiennent, ce qu'ils investissent
- * Les pages portent un thème, jamais le nom d'une personne ; la personne est retrouvée telle qu'elle est écrite dans la
- * donnée (voir /api/demo) et nommée dans la page.
+ *   /demo/ventes          les territoires côte à côte ; /demo/ventes/<territoire> : les pays d'un responsable des ventes
+ *   /demo/banque-privee   le canal Rothschild Martin Maurel : encours, revenus, collecte, fonds RMM
+ * Les pages portent un thème, jamais le nom d'une personne. Les gérants sont retrouvés tels qu'ils sont écrits dans
+ * Product Info ; les territoires et la banque privée se lisent sur le passif (pays, teneur, classification).
  */
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
@@ -32,9 +32,9 @@ function pagesOf(d: DemoPeople): Page[] {
   const num = () => String(++n).padStart(2, "0");
   d.gerants.forEach((g) => out.push({ path: `/demo/${slugify(g.label)}`, n: num(), kicker: "Gestion", title: g.label,
     line: "Performances de 1 mois à 5 ans, écart à l'indicateur, encours, collecte, souscriptions, zones, portefeuille" }));
-  out.push({ path: "/demo/ventes", n: num(), kicker: "Commerciaux", title: "Ventes", line: "La collecte par zone et par pays, les clients et ce dans quoi ils sont investis",
+  out.push({ path: "/demo/ventes", n: num(), kicker: "Commerciaux", title: "Ventes", line: "Un territoire par responsable des ventes : la collecte pays par pays, les clients et ce dans quoi ils sont investis",
     children: d.commerciaux.map((c) => ({ path: `/demo/ventes/${c.slug}`, n: "", kicker: "Ventes", title: c.theme, line: "" })) });
-  out.push({ path: "/demo/banque-privee", n: num(), kicker: "Banque privée", title: "Banque privée", line: "Ce que les clients détiennent, ce qu'ils investissent" });
+  out.push({ path: "/demo/banque-privee", n: num(), kicker: "Rothschild Martin Maurel", title: "Banque privée", line: "Le canal RMM : encours, revenus, fonds et parts, collecte, fonds Rothschild Martin Maurel" });
   return out;
 }
 
@@ -54,7 +54,7 @@ export default function Demo() {
         <Route index element={<Index data={data} pages={pages} />} />
         <Route path="ventes" element={<Shell pages={pages}><SalesOverview index={salesIndex} people={data.commerciaux} pageOf={(p) => `/demo/ventes/${p.slug}`} /></Shell>} />
         <Route path="ventes/:slug" element={<SalesRoute data={data} pages={pages} index={salesIndex} />} />
-        <Route path="banque-privee" element={<Shell pages={pages}><PrivateBank index={salesIndex + 1} name={data.banque_privee.name} match={data.banque_privee.match} /></Shell>} />
+        <Route path="banque-privee" element={<Shell pages={pages}><PrivateBank index={salesIndex + 1} name={data.banque_privee.name} /></Shell>} />
         <Route path=":slug" element={<ManagerRoute data={data} pages={pages} />} />
       </Routes>
     </div>
@@ -66,7 +66,7 @@ function ManagerRoute({ data, pages }: { data: DemoPeople; pages: Page[] }) {
   const i = data.gerants.findIndex((g) => slugify(g.label) === slug);
   if (i < 0) return <Navigate to="/demo" replace />;
   const g = data.gerants[i];
-  return <Shell pages={pages}><ManagerBoard key={g.key} index={i + 1} label={g.label} name={g.name} match={g.match} /></Shell>;
+  return <Shell pages={pages}><ManagerBoard key={g.key} index={i + 1} label={g.label} name={g.name} match={g.match} role={g.role} family={g.family} /></Shell>;
 }
 
 function SalesRoute({ data, pages, index }: { data: DemoPeople; pages: Page[]; index: number }) {

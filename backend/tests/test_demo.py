@@ -30,7 +30,7 @@ def test_homonymes_departages_par_le_poids_et_signales():
 
 
 def test_nom_absent_aucune_correspondance_inventee():
-    r = D.resolve("Yoan Ignatiew", {"Claire Vasseur": 3, "Marc Aubry": 2})
+    r = D.resolve("Yoann Ignatiew", {"Claire Vasseur": 3, "Marc Aubry": 2})
     assert r["found"] is None
 
 
@@ -41,12 +41,18 @@ def test_zones():
 
 
 def test_configuration_par_variables(monkeypatch):
-    monkeypatch.setenv("APP_DEMO_GERANTS", "Valor:Yoan Ignatiew;Taux:Emmanuel Petit")
-    monkeypatch.setenv("APP_DEMO_COMMERCIAUX", "Italie:Fausto Trevisian, Alessio Coppola")
+    monkeypatch.setenv("APP_DEMO_GERANTS", "Valor:Yoann Ignatiew;Taux:Emmanuel Petit:famille=fi")
+    monkeypatch.setenv("APP_DEMO_COMMERCIAUX", "France:Fausto Trevisan:FR,MC;Europe du Sud:Alessio Coppola:IT,ES")
     c = D.config()
-    assert [g["label"] for g in c["gerants"]] == ["Valor", "Taux"]
-    assert c["commerciaux"] == [{"theme": "Italie", "name": "Fausto Trevisian"}, {"theme": None, "name": "Alessio Coppola"}]
-    assert D.slug("Italie & Suisse") == "italie-suisse"
+    assert [(g["label"], g["family"]) for g in c["gerants"]] == [("Valor", None), ("Taux", "fi")]
+    assert c["commerciaux"][0] == {"theme": "France", "name": "Fausto Trevisan", "title": None, "countries": ["FR", "MC"]}
+    assert D.slug("Europe du Sud") == "europe-du-sud"
+
+
+def test_perimetres_par_defaut():
+    c = D.config()
+    assert [x["theme"] for x in c["commerciaux"]] == ["France", "Europe du Sud", "Europe du Nord"]
+    assert c["gerants"][1]["family"] == "fi"
 
 
 # ---------------------------------------------------------------- vues du passif (données fictives)
@@ -57,43 +63,30 @@ def dp():
     return D.DemoPassif(p)
 
 
-def test_commerciaux_lus_dans_le_passif(dp):
-    names = dp.commercials()
-    assert {"Fausto Trevisian", "Alessio Coppola", "Quentin Piloy", "Alain Massiera"} <= set(names)
-
-
-def test_themes_tires_de_la_donnee_et_distincts(dp):
-    t = dp.themes(["Fausto Trevisian", "Alessio Coppola", "Quentin Piloy"])
-    assert set(t) == {"Fausto Trevisian", "Alessio Coppola", "Quentin Piloy"}
-    assert len(set(t.values())) == 3
-    assert t["Quentin Piloy"].startswith("France")
-    assert all("Trevisian" not in v and "Coppola" not in v for v in t.values())     # un thème, jamais un nom
-    assert dp.themes(["Personne inconnue"]) == {}
-
-
-def test_vue_commercial_sommes_coherentes(dp):
-    v = dp.commercial("Fausto Trevisian")
-    assert v["available"] and v["nominatif"] and v["encours"] > 0
+def test_territoire_par_pays(dp):
+    """Un périmètre de ventes = les porteurs dont le pays du compte est dans le périmètre (tous canaux)."""
+    v = dp.territory(["IT", "ES", "PT"])
+    assert v["available"] and v["encours"] > 0
+    assert {D.country_info(x)[1] for x in v["countries_raw"]} <= {"IT", "ES", "PT"}
     assert sum(c["encours"] for c in v["clients"]) == pytest.approx(v["encours"])
-    for c in v["clients"]:
-        assert c["encours"] == pytest.approx(sum(f["encours"] for f in c["funds"]))
     for p, s in v["periods"].items():
         assert s["net"] == pytest.approx(s["subscriptions"] - s["redemptions"])
         assert sum(z["net"] for z in s["zones"]) == pytest.approx(s["net"])
-    assert v["periods"]["1M"]["subscriptions"] <= v["periods"]["1A"]["subscriptions"] + 1e-6
-    assert len(v["monthly"]) == 13
+        assert {z["iso"] for z in s["zones"]} <= {"IT", "ES", "PT", None}
+    assert dp.territory(["JP"])["available"] is False
 
 
-def test_banque_privee(dp):
-    v = dp.private_bank("Alain Massiera")
-    assert v["available"] and v["encours"] > 0 and v["flows_available"]
-    assert sum(c["encours"] for c in v["classes"]) == pytest.approx(v["encours"])
-    assert all(r["sens"] in P.ENTREES | P.SORTIES for r in v["latest"])
-    tous = dp.private_bank(None, "tous", ["PR1"])                 # tous les porteurs d'un ensemble de fonds
-    assert tous["encours"] > 0 and {f["fund"] for f in tous["by_fund"]} == {"PR1"}
-    mine = dp.private_bank("Alain Massiera", "commercial", ["PR1"])
-    assert mine["encours"] <= tous["encours"] + 1e-6
-    assert dp.private_bank(None, "tous", ["INCONNU"])["available"] is False
+def test_banque_privee_rmm(dp):
+    """Canal RMM : comptes tenus ou classés RMM (jamais « hors RMM ») ; revenus = encours × taux de la part."""
+    v = dp.rmm_bank({"FR0000000001": 1.5, "FR0000000002": 0.5}, {"PR1"}, house_revenue=1e12)
+    assert v["available"] and v["encours"] > 0
+    assert not any("hors" in c.lower() for c in v["matched"]["classifications"])
+    assert sum(x["encours"] for x in v["segments"]) == pytest.approx(v["encours"])
+    assert sum(x["encours"] for x in v["split"]) == pytest.approx(v["encours"])
+    exp = sum(x["encours"] * {"FR0000000001": 1.5, "FR0000000002": 0.5}.get(x["isin"], 0) / 100 for x in v["shares"])
+    assert v["revenue"] == pytest.approx(exp, rel=1e-6)
+    assert {"Fonds Rothschild Martin Maurel", "Autres fonds de la gamme"} >= {x["key"] for x in v["split"]}
+    assert v["flows_available"] and v["periods"]["1A"]["net"] == pytest.approx(v["periods"]["1A"]["subscriptions"] - v["periods"]["1A"]["redemptions"])
 
 
 def test_requetes_demo_parametrees():

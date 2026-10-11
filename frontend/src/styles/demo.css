@@ -367,3 +367,20 @@
 .dm-sact { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 18px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .dm-sact__t { font-family: var(--serif); font-weight: 400; font-size: 30px; margin: 0; letter-spacing: -.01em; }
 .dm-chap > .dm-grid + .dm-act, .dm-chap > .dm-note + .dm-act { margin-top: 56px; }
+
+/* territoires (ventes) */
+.dm-terr { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; font-size: 12.5px; color: var(--ink-2); }
+.dm-terr > span { display: inline-flex; align-items: center; gap: 6px; }
+/* banque privée : lignes encours / revenus, tableau des revenus */
+.dm-rev { list-style: none; margin: 14px 0 0; padding: 0; }
+.dm-rev li { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(50px, 1fr) 84px 84px 50px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.dm-rev li > :nth-child(n+3) { text-align: right; }
+.dm-rev__h { border-bottom: 1px solid var(--line-2) !important; padding: 0 0 6px !important; font-size: 10.5px !important; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+.dm-rev__n { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dm-rt td a { color: var(--ink); } .dm-rt td a:hover { color: var(--gold-ink); }
+.dm-rt__bar { width: 18%; min-width: 90px; }
+.dm-rmm { display: inline-block; margin-left: 8px; padding: 1px 6px; font-size: 10px; letter-spacing: .12em; font-weight: 700; color: var(--gold-ink); border: 1px solid var(--gold); vertical-align: 1px; }
+@media (max-width: 640px) {
+  .dm-rev li { grid-template-columns: minmax(0, 1fr) 76px 76px; }
+  .dm-rev li > :nth-child(2), .dm-rev li > :nth-child(5) { display: none; }
+}

@@ -275,46 +275,38 @@ def passif_clients(q: str = ""):
 
 # ---------------------------------------------------------------- page Démo
 def _demo():
-    from .domain import demo as D
+    from .domain import demo as D  # noqa: N812
     return D, D.DemoPassif(passif_obj())
-
-
-def _demo_sales(D, dp, people: list[dict], comms: dict[str, float]) -> list[dict]:
-    """Commerciaux de la démo : nom retrouvé dans la donnée et thème de leur page (donné, ou tiré de leurs pays)."""
-    rows = [{**c, "match": D.resolve(c["name"], comms)} for c in people]
-    derived = dp.themes([r["match"]["found"] for r in rows if r["match"]["found"] and not r["theme"]])
-    out, used = [], set()
-    for i, r in enumerate(rows):
-        theme = r["theme"] or derived.get(r["match"]["found"] or "") or f"Ventes {i + 1}"
-        sl = D.slug(theme)
-        while sl in used:
-            sl += "-2"
-        used.add(sl)
-        out.append({"name": r["name"], "theme": theme, "theme_source": "configuration" if r["theme"] else "donnée", "slug": sl, "match": r["match"]})
-    return out
 
 
 @app.get("/api/demo")
 def demo_people():
+    from .domain import labels as L  # noqa: N812
     """Personnes de la démo, retrouvées telles qu'elles sont écrites dans la donnée (gérants : Product Info ; commerciaux
     et banque privée : colonne Commercial du passif), avec les variantes proches à valider."""
     svc = _api_service()
     D, dp = _demo()
     cfg = D.config()
     managers = svc.demo_managers()
-    comms = dp.commercials()
     return _ok({"date": svc.end(None).date().isoformat(), "mock": load_settings().data_source != "fabric",
-                "gerants": [{**g, "match": D.resolve(g["name"], managers)} for g in cfg["gerants"]],
-                "commerciaux": _demo_sales(D, dp, cfg["commerciaux"], comms),
-                "banque_privee": {"name": cfg["banque_privee"], "match": D.resolve(cfg["banque_privee"], comms)},
-                "commercials_available": bool(comms)})
+                "gerants": [{**g, "match": D.resolve(g["name"], managers) if not g["family"] else {"asked": g["name"], "found": g["name"], "exact": True, "alternatives": []}}
+                            for g in cfg["gerants"]],
+                "commerciaux": [{"theme": c["theme"], "slug": D.slug(c["theme"]), "name": c["name"], "title": c["title"],
+                                 "countries": [{"iso": i, "name": L.country_iso_name(i)} for i in c["countries"]]} for c in cfg["commerciaux"]],
+                "banque_privee": {"name": cfg["banque_privee"]},
+})
 
 
 @app.get("/api/demo/gerant")
-def demo_manager(nom: str, date: str | None = None):
-    """Tableau de bord d'un gérant : JUMP (encours, performances, collecte, portefeuille) et passif (zones, souscriptions)."""
+def demo_manager(nom: str = "", famille: str | None = None, date: str | None = None):
+    """Tableau de bord d'une gestion : les fonds d'un gérant principal, ou toute une famille de gestion (famille=fi).
+    JUMP (encours, performances, collecte, portefeuille) et passif (zones, souscriptions)."""
     svc = _api_service()
     D, dp = _demo()
+    if famille:
+        out = dict(svc.demo_family(famille, date))
+        out["passif"] = dp.funds_side([f["id"] for f in out["funds"]])
+        return _ok({"available": True, "match": {"asked": nom, "found": nom, "exact": True, "alternatives": []}, **out})
     match = D.resolve(nom, svc.demo_managers())
     if not match["found"]:
         return _ok({"available": False, "match": match, "reason": f"« {nom} » n'apparaît pas comme gérant dans Product Info."})
@@ -329,31 +321,26 @@ def flow_city(date: str | None = None):
     return _ok(_api_service().flow_city(date))
 
 
-@app.get("/api/demo/commercial")
-def demo_commercial(nom: str):
-    """Un commercial : collecte par zone et par période, encours de ses clients et ce qu'ils détiennent (vue nominative)."""
+@app.get("/api/demo/territoire")
+def demo_territory(pays: str):
+    """Ventes d'un périmètre géographique (codes ISO séparés par des virgules) : collecte par pays et par période,
+    encours des porteurs, ce dans quoi ils sont investis (vue nominative, à la demande)."""
     _api_service()
-    D, dp = _demo()
-    match = D.resolve(nom, dp.commercials())
-    if not match["found"]:
-        return _ok({"available": False, "match": match, "reason": f"« {nom} » n'apparaît pas dans la colonne Commercial du passif."})
-    return _ok({**dp.commercial(match["found"]), "match": match})
+    _, dp = _demo()
+    isos = [x.strip().upper() for x in pays.split(",") if x.strip()]
+    if not isos:
+        raise HTTPException(400, "Périmètre vide")
+    return _ok(dp.territory(isos))
 
 
 @app.get("/api/demo/banque-privee")
-def demo_private_bank(nom: str = "", perimetre: str = "commercial"):
-    """Banque privée : les porteurs des fonds Rothschild Martin Maurel (clients d'un commercial, ou tous) — ce qu'ils
-    détiennent et ce qu'ils investissent dans ces fonds."""
+def demo_private_bank(date: str | None = None):
+    """Banque privée Rothschild Martin Maurel : ce que le canal RMM détient et investit dans nos fonds, ce que cela
+    rapporte (encours × frais), ses clients (vue nominative, à la demande)."""
     svc = _api_service()
-    D, dp = _demo()
-    if perimetre not in ("commercial", "tous"):
-        raise HTTPException(400, "Périmètre inconnu")
-    match = D.resolve(nom, dp.commercials()) if nom else {"asked": "", "found": None, "alternatives": []}
-    if perimetre == "commercial" and not match["found"]:
-        return _ok({"available": False, "match": match, "reason": f"« {nom} » n'apparaît pas dans la colonne Commercial du passif."})
-    if not svc.rmm:
-        return _ok({"available": False, "match": match, "reason": "Aucun fonds Rothschild Martin Maurel repéré dans Product Info (règle du filtre RMM)."})
-    return _ok({**dp.private_bank(match["found"], perimetre, sorted(svc.rmm)), "match": match})
+    _, dp = _demo()
+    house = svc.revenue(date).get("total")
+    return _ok(dp.rmm_bank(svc.isin_rates(), set(svc.rmm), house))
 
 
 @app.get("/api/demo/fonds-rmm")

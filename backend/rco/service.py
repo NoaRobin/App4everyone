@@ -1184,6 +1184,26 @@ class Service:
         return out
 
     @lru_cache(maxsize=8)
+    def demo_family(self, family: str, d: str | None) -> dict:
+        """Tous les fonds d'une famille de gestion (Fixed Income…), même tableau de bord que pour un gérant."""
+        fam = self.m.funds["family"] if "family" in self.m.funds else pd.Series(dtype=object)
+        out = dict(self._funds_board(tuple(sorted(fam[fam == family].index)), d))
+        out.update({"name": self._family_label(family), "co_managed": []})
+        return out
+
+    @lru_cache(maxsize=1)
+    def isin_rates(self) -> dict[str, float]:
+        """ISIN de part → taux annuel de frais de gestion (%) retenu pour les revenus estimés."""
+        from .domain.revenue import part_rates
+        r = part_rates(self.m)["rate"]
+        out: dict[str, float] = {}
+        for jp, isin in self.m.link["CODE_ISIN_PART"].items():
+            v = r.get(jp)
+            if isinstance(isin, str) and v is not None and v == v:
+                out.setdefault(isin.strip().upper().replace(" ", ""), float(v))
+        return out
+
+    @lru_cache(maxsize=8)
     def demo_rmm(self, d: str | None) -> dict:
         """Les fonds Rothschild Martin Maurel (règle du filtre RMM : colonnes et motif de Product Info), même tableau de bord."""
         out = dict(self._funds_board(tuple(sorted(self.rmm)), d))

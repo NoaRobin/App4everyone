@@ -24,11 +24,12 @@ const FLOWS: Opt<FlowKey>[] = [{ key: "1M", label: "1 mois" }, { key: "3M", labe
 const RANGES = [{ key: "1A", label: "1 an", months: 13 }, { key: "3A", label: "3 ans", months: 37 }, { key: "5A", label: "5 ans", months: 61 }] as const;
 type RangeKey = (typeof RANGES)[number]["key"];
 
-export function ManagerBoard({ index, label, name, match }: { index: number; label: string; name: string; match: Match }) {
+export function ManagerBoard({ index, label, name, match, role = "Gérant principal", family = null }:
+  { index: number; label: string; name: string; match: Match; role?: string; family?: string | null }) {
   useEffect(() => { document.title = `${label} — Démo Jasmin`; }, [label]);
   const { api } = useApp();
   const who = match.found ?? name;
-  const { data, loading } = useApi<Board>(api(`/api/demo/gerant?nom=${encodeURIComponent(who)}`));
+  const { data, loading } = useApi<Board>(api(`/api/demo/gerant?nom=${encodeURIComponent(who)}${family ? `&famille=${encodeURIComponent(family)}` : ""}`));
   const id = `gerant-${index}`;
   return (
     <section className="dm-chap" id={id} aria-labelledby={`h-${id}`}>
@@ -37,8 +38,8 @@ export function ManagerBoard({ index, label, name, match }: { index: number; lab
         <div className="dm-chap__title">
           <div className="eyebrow dm-eyebrow">Gestion</div>
           <h2 className="dm-chap__name" id={`h-${id}`}>{label}</h2>
-          <p className="dm-person">Gérant principal&nbsp;: <b>{who}</b></p>
-          <NameMatch match={data?.match ?? match} source="Product Info (gérant principal)" />
+          <p className="dm-person">{role}&nbsp;: <b>{who}</b>{family ? <span className="muted"> · tous les fonds de la famille de gestion</span> : null}</p>
+          {!family && <NameMatch match={data?.match ?? match} source="Product Info (gérant principal)" />}
         </div>
         {data?.available && data.aum != null && (
           <dl className="dm-kpis">
@@ -50,7 +51,7 @@ export function ManagerBoard({ index, label, name, match }: { index: number; lab
         )}
       </header>
       {loading && !data ? <Loading h={420} /> : !data?.available ? <div className="empty">{data?.reason ?? "Données indisponibles."}</div>
-        : !data.funds.length ? <div className="empty">Aucun fonds avec encours dont {who} est le gérant principal.</div>
+        : !data.funds.length ? <div className="empty">{family ? "Aucun fonds avec encours dans cette famille." : `Aucun fonds avec encours dont ${who} est le gérant principal.`}</div>
         : <BoardBody b={data} />}
     </section>
   );

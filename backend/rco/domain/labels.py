@@ -84,6 +84,12 @@ COUNTRIES = {
 }
 
 
+def country_iso_name(iso: str) -> str:
+    """Code ISO → nom français (premier libellé connu), sinon le code."""
+    iso = (iso or "").upper()
+    return next((fr for fr, i in COUNTRIES.values() if i == iso), iso)
+
+
 def country(label: Any) -> tuple[str, str]:
     """(libellé français, ISO2). Un pays inconnu garde son libellé d'origine, code '??'."""
     key = norm(label)
