@@ -49,7 +49,7 @@ export default function Demo() {
   const salesIndex = data.gerants.length + 1;
   return (
     <div className="dm">
-      <DemoNav pages={pages} />
+      <DemoNav pages={pages} date={data.date} />
       <Routes>
         <Route index element={<Index data={data} pages={pages} />} />
         <Route path="ventes" element={<Shell pages={pages}><SalesOverview index={salesIndex} people={data.commerciaux} pageOf={(p) => `/demo/ventes/${p.slug}`} /></Shell>} />
@@ -97,7 +97,7 @@ function Shell({ pages, children }: { pages: Page[]; children: React.ReactNode }
 }
 
 // ------------------------------------------------------------------ navigation par thème
-function DemoNav({ pages }: { pages: Page[] }) {
+function DemoNav({ pages, date }: { pages: Page[]; date: string }) {
   const loc = useLocation();
   const sales = pages.find((p) => p.children);
   const inSales = loc.pathname.startsWith("/demo/ventes");
@@ -109,6 +109,7 @@ function DemoNav({ pages }: { pages: Page[] }) {
         {pages.map((p) => (
           <li key={p.path}><NavLink to={p.path} end={!p.children} className={on}><span className="num">{p.n}</span><span className="dm-bar__t">{p.title}</span></NavLink></li>
         ))}
+        <li className="dm-bar__date"><span>Données au</span> <b className="num">{fdate(date)}</b></li>
       </ol>
       {inSales && sales?.children && (
         <ol className="dm-bar__sub" aria-label="Pages Ventes">

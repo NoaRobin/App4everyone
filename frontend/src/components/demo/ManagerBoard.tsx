@@ -118,14 +118,15 @@ export function PerfTable({ funds, color }: { funds: ManagerFund[]; color: Map<s
       <div className="dm-scroll">
         <table className="t dm-pt">
           <thead><tr>
-            <th>Fonds</th><th className="n">Encours</th>
+            <th>Fonds · part retenue pour la performance</th><th className="n">Encours du fonds</th>
             {PERF.map((p) => <th key={p.key} className="n">{p.label}{p.annual && base === "ann" ? <sup>a</sup> : null}</th>)}
             <th className="n">Volatilité 1 an</th><th className="n">Perte max 1 an</th><th className="n">SRI</th>
           </tr></thead>
           <tbody>{funds.map((f) => (
             <tr key={f.id}>
               <td><Link to={`/fonds/${encodeURIComponent(f.id)}`} className="dm-pt__f"><i style={{ background: color.get(f.id) }} aria-hidden="true" /><span><b>{f.name}</b>
-                <em>{[f.range, f.asset_class, f.sfdr].filter(Boolean).join(" · ")}{f.via_asset_class ? " · hors famille, retenu pour sa classe d'actifs" : ""}</em></span></Link></td>
+                <em>{[f.range, f.asset_class, f.sfdr].filter(Boolean).join(" · ")}{f.via_asset_class ? " · hors famille, retenu pour sa classe d'actifs" : ""}</em>
+                {f.share_name && <em className="dm-pt__share">Part : {f.share_name}{f.share_isin ? ` · ${f.share_isin}` : ""}</em>}</span></Link></td>
               <td className="n num">{eur(f.aum)}</td>
               {PERF.map((p) => cell(f, p))}
               <td className="n num">{f.vol == null ? "—" : pctRaw(f.vol * 100, 1)}</td>
@@ -135,7 +136,7 @@ export function PerfTable({ funds, color }: { funds: ManagerFund[]; color: Map<s
           ))}</tbody>
         </table>
       </div>
-      <p className="small muted dm-note">{base === "ann" ? <><sup>a</sup> annualisée (3 et 5 ans). </> : "Performances cumulées sur chaque période. "}Part principale de chaque fonds (la plus grosse en encours), coupons réinvestis ; « ind. » : son indicateur de référence sur la même période.
+      <p className="small muted dm-note">{base === "ann" ? <><sup>a</sup> annualisée (3 et 5 ans). </> : "Performances cumulées sur chaque période. "}Performances de la part indiquée sous chaque fonds (la plus grosse en encours), coupons réinvestis ; l'encours est celui du fonds, toutes parts confondues ; « ind. » : son indicateur de référence sur la même période.
         {funds.some((f) => f.perf["5A"] == null) ? " — : historique insuffisant pour la période." : ""}</p>
     </>
   );

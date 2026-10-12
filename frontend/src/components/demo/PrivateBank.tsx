@@ -171,7 +171,7 @@ function Body({ v, b, loadingB }: { v: RmmBank; b: ManagerBoardData | null; load
           <ClientTable clients={v.clients} />
         </article>
       </div>
-      <p className="small muted dm-note">Canal RMM : comptes du passif dont le teneur ({v.matched.teneurs.join(", ") || "—"}) ou la classification ({v.matched.classifications.join(", ") || "—"}) désigne Rothschild Martin Maurel, hors mentions « hors RMM ». Vue nominative calculée à la demande, jamais conservée.</p>
+      <p className="small muted dm-note">Canal RMM : seulement Rothschild Martin Maurel : comptes classés RMM ({v.matched.classifications.join(", ") || "—"}) ou tenus par RMM ({v.matched.teneurs.join(", ") || "—"}) sans autre classification ; les classifications qui ne font que mentionner RMM (EOC, TA, « hors RMM ») ne sont pas comptées. Vue nominative calculée à la demande, jamais conservée.</p>
     </>
   );
 }

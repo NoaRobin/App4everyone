@@ -13,7 +13,7 @@ export type PerfKey = "1M" | "YTD" | "1A" | "3A" | "5A";
 export type FlowKey = "1M" | "3M" | "YTD" | "1A" | "3A" | "5A";
 export type ManagerFund = {
   id: string; name: string; family: FamilyKey; range: string | null; asset_class: string | null; aum: number | null; sri: string | null; sfdr: string | null;
-  n_parts: number | null; countries: number; share: string | null; bench_name: string | null;
+  n_parts: number | null; countries: number; share: string | null; share_name?: string | null; share_isin?: string | null; share_aum?: number | null; bench_name: string | null;
   perf: Record<PerfKey, number | null>; bench: Record<PerfKey, number | null>; flows: Record<FlowKey, number | null>;
   vol: number | null; mdd: number | null; te: number | null; via_asset_class?: boolean; revenue: number | null; rate: number | null; lines: number | null; top10: number | null; flows_off: boolean;
 };

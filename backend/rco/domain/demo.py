@@ -451,8 +451,15 @@ class DemoPassif:
         de gestion de la part (même règle que les revenus de la maison). Fonds RMM : la règle du filtre RMM."""
         import re
         rx = re.compile(pattern, re.I)
-        # « OPC déposé hors RMM » mentionne RMM mais n'en relève pas
-        hit = lambda v: bool(v) and bool(rx.search(fold(v))) and not re.search(r"hors\s+rmm", fold(v))   # noqa: E731
+        # Seulement Rothschild Martin Maurel : teneur RMM, ou classification dont RMM est la catégorie (« RMM/OPC »,
+        # « RMM/Banque Privée »…). Les classifications qui ne font que mentionner RMM (« EOC/Passage Global RMM »,
+        # « TA/… déposés RMM », « … hors RMM ») relèvent d'un autre canal et ne sont pas comptées.
+        own = re.compile(r"^\s*(rmm|rothschild\s*martin\s*maurel|martin\s*maurel)\b", re.I)
+        hit_ten = lambda v: bool(v) and bool(rx.search(fold(v))) and not re.search(r"hors\s+rmm", fold(v))   # noqa: E731
+        hit_cls = lambda v: bool(v) and bool(own.search(fold(v)))   # noqa: E731
+        hit = hit_cls
+        # comptes tenus par RMM : retenus seulement si leur classification ne les range pas déjà (RMM ou autre canal RMM)
+        mentions = lambda v: bool(v) and bool(rx.search(fold(v)))   # noqa: E731
         ctx = self._ctx()
         if ctx is None:
             return {"available": False, "reason": "Passif non publié."}
@@ -463,7 +470,7 @@ class DemoPassif:
         g = g.copy()
         g["v"] = pd.to_numeric(g["v"], errors="coerce").fillna(0.0)
         tot_all = float(g["v"].sum())
-        g["rmm"] = g["classification"].map(hit) | g["teneur"].map(hit)
+        g["rmm"] = g["classification"].map(hit_cls) | (g["teneur"].map(hit_ten) & ~g["classification"].map(mentions))
         ch = g[g["rmm"]].copy()
         if ch.empty:
             return {"available": False, "reason": "Aucun compte tenu ou classé Rothschild Martin Maurel au passif."}
@@ -475,7 +482,7 @@ class DemoPassif:
         rev = float(ch["rev"].sum())
         rated = float(ch.loc[ch["rate"].notna(), "v"].sum())
         matched_cls = sorted({str(x) for x in ch["classification"].dropna() if hit(x)})
-        matched_ten = sorted({str(x) for x in ch["teneur"].dropna() if hit(x)})
+        matched_ten = sorted({str(x) for x in ch["teneur"].dropna() if hit_ten(x)})
 
         def grp(key: str, label=lambda v: _label(v), top: int | None = None) -> list[dict]:
             x = ch.assign(k=ch[key].map(label)).groupby("k").agg(v=("v", "sum"), rev=("rev", "sum"), n=("n", "sum")).reset_index().sort_values("v", ascending=False)
@@ -519,7 +526,7 @@ class DemoPassif:
             parts.append(self._positions(ctx, {"classification": matched_cls}))
         if matched_ten:
             q = self._positions(ctx, {"teneur": matched_ten})
-            parts.append(q[~q["classification"].map(hit)] if len(q) else q)
+            parts.append(q[~q["classification"].map(mentions)] if len(q) else q)
         pos = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
         # Flux du canal
         trx = ctx["trx"]
@@ -532,7 +539,7 @@ class DemoPassif:
                 fl.append(self._flows_rmm(ctx, {"classification": matched_cls}, st["1A"]))
             if matched_ten:
                 q = self._flows_rmm(ctx, {"teneur": matched_ten}, st["1A"])
-                fl.append(q[~q["classification"].map(hit)] if len(q) else q)
+                fl.append(q[~q["classification"].map(mentions)] if len(q) else q)
             flows = pd.concat(fl, ignore_index=True) if fl else None
             if flows is not None and len(flows):
                 out.update({"flows_available": True, "flows_end": end,

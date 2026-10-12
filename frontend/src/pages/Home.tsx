@@ -72,7 +72,7 @@ export default function Home() {
 // ------------------------------------------------------------------ par où commencer (un chemin par métier)
 const PATHS: { who: string; what: string; links: { to: string; label: string }[] }[] = [
   { who: "Direction", what: "Ce qui rapporte, ce qui grossit, ce qui décroche.", links: [
-    { to: "#h-rank", label: "Les fonds qui rapportent le plus" }, { to: "#h-city", label: "Rothschild City" }, { to: "/comparateur", label: "Comparer des fonds" }] },
+    { to: "#h-rank", label: "Les fonds qui rapportent le plus" }, { to: "#h-city", label: "Rothschild & Co City" }, { to: "/comparateur", label: "Comparer des fonds" }] },
   { who: "Commercial & distribution", what: "Quelle part proposer, où, et à qui.", links: [
     { to: "/distribution", label: "Pays et autorisations" }, { to: "/passif", label: "Qui détient nos fonds" }, { to: "/comparateur", label: "Comparateur de performance" }] },
   { who: "Gestion", what: "La fiche, le portefeuille, les performances.", links: [

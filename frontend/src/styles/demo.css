@@ -384,3 +384,8 @@
   .dm-rev li { grid-template-columns: minmax(0, 1fr) 76px 76px; }
   .dm-rev li > :nth-child(2), .dm-rev li > :nth-child(5) { display: none; }
 }
+
+/* date d'arrêté dans la barre de la démo ; part retenue dans le tableau des performances */
+.dm-bar__date { margin-left: auto; display: flex; align-items: center; gap: 6px; padding: 0 0 0 18px; font-size: 12px; color: var(--ink-3); white-space: nowrap; letter-spacing: .04em; }
+.dm-bar__date b { color: var(--gold); font-weight: 600; font-size: 13px; }
+.dm-pt__f em.dm-pt__share { color: var(--ink-2); }

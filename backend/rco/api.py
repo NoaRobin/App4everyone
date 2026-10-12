@@ -317,7 +317,7 @@ def demo_manager(nom: str = "", famille: str | None = None, date: str | None = N
 
 @app.get("/api/cite/collecte")
 def flow_city(date: str | None = None):
-    """Rothschild City, vue collecte : collecte nette estimée (JUMP) de chaque fonds sur 1 mois, YTD, 1, 3 et 5 ans."""
+    """Rothschild & Co City, vue collecte : collecte nette estimée (JUMP) de chaque fonds sur 1 mois, YTD, 1, 3 et 5 ans."""
     return _ok(_api_service().flow_city(date))
 
 

@@ -1241,10 +1241,12 @@ class Service:
             risk = (perf or {}).get("risk") or {}
             comp = H.composition_summary(m, fid, end)
             rv = rev.get(fid) or {}
+            sb = self._share_brief(jp, end) if jp else {}
             funds.append({
                 "id": fid, "name": r["name"], "family": r["family"], "range": r.get("range"), "asset_class": r.get("asset_class"),
                 "aum": _num(r["aum"]), "sri": r.get("sri"), "sfdr": L.sfdr_short(r.get("sfdr")) or r.get("sfdr"), "n_parts": r.get("n_parts"),
-                "countries": len(r.get("countries") or []), "share": jp, "bench_name": (perf or {}).get("bench_name"),
+                "countries": len(r.get("countries") or []), "share": jp, "share_name": sb.get("name"), "share_isin": sb.get("isin"), "share_aum": sb.get("aum"),
+                "bench_name": (perf or {}).get("bench_name"),
                 "perf": {p: finite_or_none(fperf.get(p)) for p in self._DEMO_PERF},
                 "bench": {p: finite_or_none(bench.get(p)) for p in self._DEMO_PERF},
                 "flows": {p: _num(r.get(f"flows_{p}")) for p in self._DEMO_FLOWS},
@@ -1280,7 +1282,7 @@ class Service:
 
     @lru_cache(maxsize=8)
     def flow_city(self, d: str | None) -> dict:
-        """Rothschild City, vue collecte : chaque fonds, sa collecte nette estimée (JUMP) sur 1 mois, YTD, 1, 3 et 5 ans."""
+        """Rothschild & Co City, vue collecte : chaque fonds, sa collecte nette estimée (JUMP) sur 1 mois, YTD, 1, 3 et 5 ans."""
         m, end = self.m, self.end(d)
         df = self._fund_table(d)
         off = self._flows_off_funds()

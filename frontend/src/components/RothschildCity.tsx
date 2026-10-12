@@ -1,5 +1,5 @@
 /**
- * Accueil, en bas de page — Rothschild City : la cité des revenus, et des vues de collecte sur la même scène.
+ * Accueil, en bas de page — Rothschild & Co City : la cité des revenus, et des vues de collecte sur la même scène.
  *  · Revenus (vue d'origine) : hauteur = revenus annuels estimés.
  *  · YTD, 1 mois, 1 an, 3 ans, 5 ans : hauteur = collecte nette estimée (JUMP) de la période ; décollecte en grenat.
  *
@@ -206,8 +206,8 @@ export function RothschildCity({ funds, total, date, mock }: Props) {
       <i className="c3__scan" aria-hidden="true" />
 
       <header className="c3__head">
-        <div className="eyebrow c3__eyebrow">Rothschild City · au {new Date(`${date}T00:00:00Z`).toLocaleDateString("fr-FR", { timeZone: "UTC" })}{mock ? " · données fictives" : ""}</div>
-        <h2 className="c3__title" id="h-city"><span>Rothschild</span> <span>City.</span></h2>
+        <div className="eyebrow c3__eyebrow">Rothschild & Co City · au {new Date(`${date}T00:00:00Z`).toLocaleDateString("fr-FR", { timeZone: "UTC" })}{mock ? " · données fictives" : ""}</div>
+        <h2 className="c3__title" id="h-city"><span>Rothschild&nbsp;&amp;&nbsp;Co</span> <span>City.</span></h2>
         <p className="c3__lede">{view === "REV"
           ? <>Une tour par fonds&nbsp;: sa hauteur, ce qu'il rapporte chaque année&nbsp;; son emprise, son encours&nbsp;; sa couronne, son taux de frais. Un quartier par famille de gestion.</>
           : <>Une tour par fonds&nbsp;: sa hauteur, sa collecte nette estimée {VIEWS.find((x) => x.key === view)!.long}&nbsp;; en or s'il collecte, en grenat s'il décollecte. Un quartier par famille de gestion.</>}</p>

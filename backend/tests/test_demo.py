@@ -77,10 +77,10 @@ def test_territoire_par_pays(dp):
 
 
 def test_banque_privee_rmm(dp):
-    """Canal RMM : comptes tenus ou classés RMM (jamais « hors RMM ») ; revenus = encours × taux de la part."""
+    """Seulement Rothschild Martin Maurel : classification RMM/… ou teneur RMM ; jamais « EOC/… RMM », « TA/… RMM », « hors RMM »."""
     v = dp.rmm_bank({"FR0000000001": 1.5, "FR0000000002": 0.5}, {"PR1"}, house_revenue=1e12)
     assert v["available"] and v["encours"] > 0
-    assert not any("hors" in c.lower() for c in v["matched"]["classifications"])
+    assert v["matched"]["classifications"] and all(c.upper().startswith("RMM") for c in v["matched"]["classifications"])
     assert sum(x["encours"] for x in v["segments"]) == pytest.approx(v["encours"])
     assert sum(x["encours"] for x in v["split"]) == pytest.approx(v["encours"])
     exp = sum(x["encours"] * {"FR0000000001": 1.5, "FR0000000002": 0.5}.get(x["isin"], 0) / 100 for x in v["shares"])

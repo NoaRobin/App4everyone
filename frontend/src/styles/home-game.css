@@ -1,5 +1,5 @@
 /* ================================================================
-   Accueil — ouverture NEXUS, traversée des espaces, Rothschild City
+   Accueil — ouverture NEXUS, traversée des espaces, Rothschild & Co City
    ================================================================ */
 
 /* ---------------------------------------------------------------- ouverture */
@@ -101,7 +101,7 @@
   .nx__floor::before, .nx__cue i, .vz--matrix i.on, .vz--cards i { animation: none; }
 }
 
-/* ---------------------------------------------------------------- Rothschild City */
+/* ---------------------------------------------------------------- Rothschild & Co City */
 html.city-lock, html.city-lock body { overflow: hidden; }
 .c3 { position: relative; height: 100vh; height: 100dvh; min-height: 720px; overflow: hidden; background: #03060c; color: var(--on-night); border-top: 1px solid var(--night-line); isolation: isolate; }
 .c3.is-game { position: fixed; inset: 0; z-index: 150; min-height: 0; border: 0; }
@@ -118,8 +118,8 @@ html.city-lock, html.city-lock body { overflow: hidden; }
 .c3__head { position: absolute; z-index: 4; left: var(--gutter); top: calc(var(--header-h) + 22px); max-width: 520px; pointer-events: none; }
 .c3.is-game .c3__head { top: 22px; }
 .c3__eyebrow { color: var(--gold-ink); letter-spacing: .22em; }
-.c3__title { margin: 10px 0 10px; font-family: var(--serif); font-weight: 400; font-size: clamp(48px, 6vw, 96px); line-height: .9; letter-spacing: -.02em; }
-.c3__title span { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: .06em; }
+.c3__title { margin: 10px 0 22px; font-family: var(--serif); font-weight: 400; font-size: clamp(48px, 6vw, 96px); line-height: .9; letter-spacing: -.02em; }
+.c3__title span { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: .16em; }
 .c3__title span:last-child { color: var(--gold); }
 .c3__lede { margin: 0; color: var(--on-night-2); font-size: 14px; line-height: 1.55; max-width: 46ch; }
 .c3.is-game .c3__lede { display: none; }
@@ -195,7 +195,7 @@ html.city-lock, html.city-lock body { overflow: hidden; }
   .c3__btns { margin-left: 0; }
 }
 
-/* ---------------------------------------------------------------- Rothschild City : deux lectures (revenus, collecte) */
+/* ---------------------------------------------------------------- Rothschild & Co City : deux lectures (revenus, collecte) */
 .c3__views { display: inline-flex; margin-top: 18px; border: 1px solid rgba(204, 159, 83, .45); background: rgba(6, 11, 21, .72); backdrop-filter: blur(8px); pointer-events: auto; }
 .c3__views button { min-height: 40px; padding: 0 16px; border: 0; background: none; color: var(--on-night-2); font: inherit; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; transition: color .25s, background .25s; }
 .c3__views button + button { border-left: 1px solid rgba(204, 159, 83, .3); }

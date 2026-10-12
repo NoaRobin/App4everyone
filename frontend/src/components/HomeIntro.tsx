@@ -150,7 +150,7 @@ export function HomeIntro({ ov, dist, revenue, mock, date, afterOpening }: Props
             ))}
           </dl>
         </div>
-        <div className="nx__cue" aria-hidden="true"><span>Rothschild City</span><i /></div>
+        <div className="nx__cue" aria-hidden="true"><span>Rothschild & Co City</span><i /></div>
         <div className="nx__curtain" aria-hidden="true"><i className="nx__sweep" /></div>
       </section>
 
