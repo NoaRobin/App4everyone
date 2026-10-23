@@ -336,6 +336,9 @@ les hausses et baisses portent toujours un signe et une flèche. Tout est dans `
 
 ## Architecture
 
+Documentation détaillée du code : [`docs/`](docs/README.md) (architecture, back end, API, règles métier, front end,
+sécurité, exploitation).
+
 ```
 backend/rco/
   config.py            variables d'environnement
